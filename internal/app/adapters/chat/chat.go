@@ -117,7 +117,7 @@ func (c *Chat) listen() {
 			c.log.Error("Rate limit exceeded", nil, slog.String("line", line))
 		case strings.Contains(line, "PRIVMSG"):
 			irc := ParseIRC(line)
-			//c.log.Info("New message", slog.String("username", irc.Username), slog.String("text", irc.Text))
+			c.log.Debug("New message", slog.String("username", irc.Username), slog.String("text", irc.Text))
 
 			adminAction := c.admin.FindMessages(irc)
 			if adminAction != admin.None {

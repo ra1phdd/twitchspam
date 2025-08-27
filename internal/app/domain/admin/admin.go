@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/shirou/gopsutil/cpu"
 	"log/slog"
+	"math"
 	"runtime"
 	"slices"
 	"strconv"
@@ -18,12 +19,17 @@ const (
 	None                   ports.ActionType = "none"
 	Success                ports.ActionType = "успешно"
 	NotFound               ports.ActionType = "неизвестная команда"
+	ErrFound               ports.ActionType = "неизвестная ошибка"
 	NonParametr            ports.ActionType = "не указан параметр"
+	NonValue               ports.ActionType = "неверное значение"
 	ErrSimilarityThreshold ports.ActionType = "значение должно быть от 0.0 до 1.0"
 	ErrMessageLimit        ports.ActionType = "значение должно быть от 2 до 15"
 	ErrCheckWindowSeconds  ports.ActionType = "значение должно быть от 0 до 300"
-	ErrMaxWordLength       ports.ActionType = "значение должно быть больше или равно 0"
+	ErrMaxWordLength       ports.ActionType = "значение должно быть от 0 до 500"
+	ErrMaxWordTimeoutTime  ports.ActionType = "значение должно быть от 0 до 1209600"
 	ErrMinGapMessages      ports.ActionType = "значение должно быть от 0 до 15"
+	ErrResetTimeoutSeconds ports.ActionType = "значение должно быть от 1 до 86400"
+	ErrDelayAutomod        ports.ActionType = "значение должно быть от 1 до 10"
 )
 
 type Admin struct {
@@ -96,24 +102,39 @@ func (a *Admin) FindMessages(irc *ports.IRCMessage) ports.ActionType {
 		case "to":
 			var timeouts []int
 			for _, s := range args {
-				if t, err := strconv.Atoi(s); err == nil && t > 0 {
+				if t, err := strconv.Atoi(s); err == nil {
 					timeouts = append(timeouts, t)
+				} else {
+					actionUpdate = NonValue
+					break
 				}
 			}
+
 			if len(timeouts) > 0 {
 				cfg.Spam.Timeouts = timeouts
+			} else {
+				actionUpdate = NonValue
 			}
 
 		case "rto":
-			if val, ok := parseIntArg(args, 1, -1); ok {
+			if val, ok := parseIntArg(args, 1, 86400); ok {
 				cfg.Spam.ResetTimeoutSeconds = val
+			} else {
+				actionUpdate = ErrResetTimeoutSeconds
 			}
 
-		case "max_word":
-			if val, ok := parseIntArg(args, 0, -1); ok {
+		case "mw":
+			if val, ok := parseIntArg(args, 0, 500); ok {
 				cfg.Spam.MaxWordLength = val
 			} else {
 				actionUpdate = ErrMaxWordLength
+			}
+
+		case "mwt":
+			if val, ok := parseIntArg(args, 0, 1209600); ok {
+				cfg.Spam.MaxWordTimeoutTime = val
+			} else {
+				actionUpdate = ErrMaxWordTimeoutTime
 			}
 
 		case "min_gap":
@@ -121,6 +142,23 @@ func (a *Admin) FindMessages(irc *ports.IRCMessage) ports.ActionType {
 				cfg.Spam.MinGapMessages = val
 			} else {
 				actionUpdate = ErrMinGapMessages
+			}
+
+		case "da":
+			if val, ok := parseIntArg(args, 0, 10); ok {
+				cfg.Spam.DelayAutomod = val
+			} else {
+				actionUpdate = ErrDelayAutomod
+			}
+
+		case "reset":
+			err := a.manager.Update(func(cfg *config.Config) {
+				def := a.manager.GetDefault()
+				cfg.Spam = def.Spam
+			})
+			if err != nil {
+				a.log.Error("Failed update config", err, slog.String("msg", irc.Text))
+				actionUpdate = ErrFound
 			}
 
 		case "add":
@@ -183,5 +221,6 @@ func parseFloatArg(args []string, min, max float64) (float64, bool) {
 	if err != nil || val < min || val > max {
 		return 0, false
 	}
-	return val, true
+
+	return math.Round(val*100) / 100, true
 }

@@ -21,7 +21,6 @@ type App struct {
 
 type Spam struct {
 	Enabled             bool           `json:"enabled"`               // !am - включить/выключить автомод
-	PauseSeconds        int            `json:"pause_seconds"`         // !am <кол-во сек> - приостановка антифлуда
 	Mode                string         `json:"mode"`                  // !am online/always - только на стриме/всегда
 	SimilarityThreshold float64        `json:"similarity_threshold"`  // !am sim <0.0-1.0> - степень схожести сообщений
 	MessageLimit        int            `json:"message_limit"`         // !am msg <кол-во сообщений (2-15) или off>
@@ -56,7 +55,7 @@ func New(path string) (*Manager, error) {
 	m.cfg, err = m.readParseValidate(path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			m.cfg = &Config{}
+			m.cfg = m.GetDefault()
 			data, err := json.MarshalIndent(m.cfg, "", "  ")
 			if err != nil {
 				return nil, fmt.Errorf("marshal config: %w", err)
@@ -93,6 +92,29 @@ func (m *Manager) Update(modify func(cfg *Config)) error {
 	}
 
 	return m.saveLocked()
+}
+
+func (m *Manager) GetDefault() *Config {
+	return &Config{
+		App: App{},
+		Spam: Spam{
+			Enabled:             true,
+			Mode:                "online",
+			SimilarityThreshold: 0.7,
+			MessageLimit:        3,
+			CheckWindowSeconds:  60,
+			VIPEnabled:          false,
+			Timeouts:            []int{600, 1800, 3600},
+			ResetTimeoutSeconds: 60,
+			MaxWordLength:       100,
+			MaxWordTimeoutTime:  30,
+			MinGapMessages:      3,
+			WhitelistUsers:      []string{},
+			SpamExceptions:      map[string]int{},
+			DelayAutomod:        0,
+		},
+		Banwords: []string{},
+	}
 }
 
 func (m *Manager) readParseValidate(path string) (*Config, error) {
@@ -136,9 +158,6 @@ func (m *Manager) validate(cfg *Config) error {
 
 	if cfg.Spam.SimilarityThreshold < 0 || cfg.Spam.SimilarityThreshold > 1 {
 		return errors.New("spam.similarity_threshold must be in [0,1]")
-	}
-	if cfg.Spam.PauseSeconds < 0 {
-		return errors.New("spam.pause_seconds must be >= 0")
 	}
 	if cfg.Spam.Mode != "online" && cfg.Spam.Mode != "always" {
 		return errors.New("spam.mode must be 'online' or 'always'")
