@@ -45,6 +45,9 @@ func ParseIRC(line string) *ports.IRCMessage {
 	}
 
 	// Извлекаем полезное из тегов
+	if v, ok := msg.Tags["badges"]; ok && strings.Contains(v, "broadcaster") {
+		msg.IsMod = true
+	}
 	if v, ok := msg.Tags["mod"]; ok && v == "1" {
 		msg.IsMod = true
 	}

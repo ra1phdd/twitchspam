@@ -18,30 +18,38 @@ const (
 	Timeout ports.ActionType = "timeout"
 )
 
-type Checker struct {
-	log logger.Logger
+type Empty struct{}
 
-	messages ports.StorePort
+type Checker struct {
+	log    logger.Logger
+	cfg    *config.Config
+	stream ports.StreamPort
+
+	timeouts ports.StorePort[Empty]
+	messages ports.StorePort[string]
 	bwords   ports.BanwordsPort
 }
 
-func NewCheck(log logger.Logger, cfg *config.Config) *Checker {
+func NewCheck(log logger.Logger, cfg *config.Config, stream ports.StreamPort) *Checker {
 	return &Checker{
 		log:      log,
-		messages: storage.New(runtime.NumCPU(), 500*time.Millisecond),
+		cfg:      cfg,
+		stream:   stream,
+		timeouts: storage.New[Empty](runtime.NumCPU(), 500*time.Millisecond),
+		messages: storage.New[string](runtime.NumCPU(), 500*time.Millisecond),
 		bwords:   banwords.New(cfg.Banwords),
 	}
 }
 
-func (c *Checker) Check(irc *ports.IRCMessage, cfg *config.Config) *ports.Action {
-	text := strings.ToLower(domain.NormalizeText(irc.Text))
-
-	if irc.IsMod {
-		return &ports.Action{Type: None}
+func (c *Checker) Check(irc *ports.IRCMessage) *ports.CheckerAction {
+	if irc.IsMod || !c.cfg.Spam.Enabled || (c.cfg.Spam.Mode == "online" && !c.stream.IsLive()) {
+		return &ports.CheckerAction{Type: None}
 	}
+	text := strings.ToLower(domain.NormalizeText(irc.Text))
+	words := strings.Fields(text)
 
-	if c.bwords.CheckMessage(text) {
-		return &ports.Action{
+	if c.bwords.CheckMessage(words) {
+		return &ports.CheckerAction{
 			Type:     Ban,
 			Reason:   "банворд",
 			UserID:   irc.UserID,
@@ -50,33 +58,66 @@ func (c *Checker) Check(irc *ports.IRCMessage, cfg *config.Config) *ports.Action
 		}
 	}
 
-	if irc.IsVIP && !cfg.Spam.VIPEnabled {
-		return &ports.Action{Type: None}
+	for _, user := range c.cfg.Spam.WhitelistUsers {
+		if strings.ToLower(user) == strings.ToLower(irc.Username) {
+			return &ports.CheckerAction{Type: None}
+		}
 	}
 
-	var countSpam int
-	c.messages.ForEach(irc.Username, func(msg *storage.Message) {
-		similarity := domain.JaccardSimilarity(text, msg.Text)
-
-		if similarity >= cfg.Spam.SimilarityThreshold {
-			countSpam++
+	for _, word := range words {
+		if c.cfg.Spam.MaxWordLength == 0 || len(word) < c.cfg.Spam.MaxWordLength || c.cfg.Spam.MaxWordTimeoutTime == 0 {
+			continue
 		}
-	})
 
-	// кол-во спама -1 новый
-	if countSpam >= cfg.Spam.MessageLimit-1 {
-		c.messages.CleanupUser(irc.Username)
-
-		return &ports.Action{
+		return &ports.CheckerAction{
 			Type:     Timeout,
-			Reason:   "спам",
-			Duration: 600 * time.Second,
+			Reason:   "превышена максимальная длина слова",
+			Duration: time.Duration(c.cfg.Spam.MaxWordTimeoutTime) * time.Second,
 			UserID:   irc.UserID,
 			Username: irc.Username,
 			Text:     irc.Text,
 		}
 	}
 
-	c.messages.Push(irc.Username, text, time.Duration(cfg.Spam.CheckWindowSeconds)*time.Second)
-	return &ports.Action{Type: None}
+	if irc.IsVIP && !c.cfg.Spam.VIPEnabled {
+		return &ports.CheckerAction{Type: None}
+	}
+
+	var countSpam, gap int
+	c.messages.ForEach(irc.Username, func(item *storage.Item[string]) {
+		similarity := domain.JaccardSimilarity(text, item.Data)
+
+		if similarity >= c.cfg.Spam.SimilarityThreshold {
+			if gap < c.cfg.Spam.MinGapMessages {
+				countSpam++
+			}
+			gap = 0
+		} else {
+			gap++
+		}
+	})
+
+	// кол-во спама -1 новый
+	if countSpam >= c.cfg.Spam.MessageLimit-1 {
+		c.messages.CleanupUser(irc.Username)
+
+		dur := time.Duration(c.cfg.Spam.SpamExceptions[text]) * time.Second
+		if dur == 0 {
+			sec := domain.GetByIndexOrLast(c.cfg.Spam.Timeouts, c.timeouts.Len(irc.Username))
+			dur = time.Duration(sec) * time.Second
+		}
+
+		c.timeouts.Push(irc.Username, Empty{}, time.Duration(c.cfg.Spam.ResetTimeoutSeconds)*time.Second)
+		return &ports.CheckerAction{
+			Type:     Timeout,
+			Reason:   "спам",
+			Duration: dur,
+			UserID:   irc.UserID,
+			Username: irc.Username,
+			Text:     irc.Text,
+		}
+	}
+
+	c.messages.Push(irc.Username, text, time.Duration(c.cfg.Spam.CheckWindowSeconds)*time.Second)
+	return &ports.CheckerAction{Type: None}
 }

@@ -1,4 +1,4 @@
-package automod
+package event_sub
 
 import "encoding/json"
 

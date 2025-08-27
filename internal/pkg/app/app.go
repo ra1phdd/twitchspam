@@ -21,17 +21,18 @@ func New() error {
 		client: &http.Client{Timeout: 10 * time.Second},
 	}
 
-	var err error
-	a.cfg, err = config.Load("config.json")
+	manager, err := config.New("config.json")
 	if err != nil {
 		a.log.Fatal("Error loading config", err)
 	}
+
+	a.cfg = manager.Get()
 	a.log.SetLogLevel(a.cfg.App.LogLevel)
 
 	for _, channel := range a.cfg.App.ModChannels {
 		log := logger.NewPrefixedLogger(a.log, channel)
 
-		c, err := chat.New(log, a.client, channel)
+		c, err := chat.New(log, manager, a.client, channel)
 		if err != nil {
 			return err
 		}

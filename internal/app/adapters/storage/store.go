@@ -5,19 +5,26 @@ import (
 	"time"
 )
 
-type Store struct {
-	shards      []Shard
+type Store[T any] struct {
+	shards      []Shard[T]
 	granularity time.Duration
 }
 
-func New(nShards int, granularity time.Duration) *Store {
-	s := &Store{
-		shards:      make([]Shard, nShards),
+type Item[T any] struct {
+	Username string
+	Data     T
+	Time     int64
+	TTL      int64
+}
+
+func New[T any](nShards int, granularity time.Duration) *Store[T] {
+	s := &Store[T]{
+		shards:      make([]Shard[T], nShards),
 		granularity: granularity,
 	}
 	for i := range s.shards {
-		s.shards[i].userData = make(map[string][]*Message)
-		s.shards[i].expHeap = make(MsgHeap, 0)
+		s.shards[i].userData = make(map[string][]*Item[T])
+		s.shards[i].expHeap = make(ItemHeap[T], 0)
 		heap.Init(&s.shards[i].expHeap)
 	}
 	go func() {
@@ -30,24 +37,32 @@ func New(nShards int, granularity time.Duration) *Store {
 	return s
 }
 
-func (s *Store) Push(username, text string, ttl time.Duration) {
+func (s *Store[T]) Len(username string) int {
+	sh := s.getShard(username)
+	sh.mu.RLock()
+	defer sh.mu.RUnlock()
+
+	return len(sh.userData[username])
+}
+
+func (s *Store[T]) Push(username string, data T, ttl time.Duration) {
 	now := time.Now().UnixNano()
 	expire := now + ttl.Nanoseconds()
-	msg := &Message{
+	item := &Item[T]{
 		Username: username,
-		Text:     text,
+		Data:     data,
 		Time:     now,
 		TTL:      expire,
 	}
 
 	sh := s.getShard(username)
 	sh.mu.Lock()
-	sh.userData[username] = append(sh.userData[username], msg)
-	heap.Push(&sh.expHeap, msg)
+	sh.userData[username] = append(sh.userData[username], item)
+	heap.Push(&sh.expHeap, item)
 	sh.mu.Unlock()
 }
 
-func (s *Store) ForEach(username string, fn func(msg *Message)) {
+func (s *Store[T]) ForEach(username string, fn func(item *Item[T])) {
 	sh := s.getShard(username)
 	sh.mu.RLock()
 	msgs, ok := sh.userData[username]
@@ -61,36 +76,36 @@ func (s *Store) ForEach(username string, fn func(msg *Message)) {
 	sh.mu.RUnlock()
 }
 
-func (s *Store) Cleanup() {
+func (s *Store[T]) Cleanup() {
 	now := time.Now().UnixNano()
 	for i := range s.shards {
 		sh := &s.shards[i]
 		sh.mu.Lock()
 		for len(sh.expHeap) > 0 {
-			msg := sh.expHeap[0]
-			if msg.TTL > now {
+			item := sh.expHeap[0]
+			if item.TTL > now {
 				break
 			}
 			heap.Pop(&sh.expHeap)
 
-			userMsgs := sh.userData[msg.Username]
-			n := userMsgs[:0]
-			for _, m := range userMsgs {
-				if m != msg {
-					n = append(n, m)
+			userItems := sh.userData[item.Username]
+			newItems := userItems[:0]
+			for _, it := range userItems {
+				if it != item {
+					newItems = append(newItems, it)
 				}
 			}
-			if len(n) == 0 {
-				delete(sh.userData, msg.Username)
+			if len(newItems) == 0 {
+				delete(sh.userData, item.Username)
 			} else {
-				sh.userData[msg.Username] = n
+				sh.userData[item.Username] = newItems
 			}
 		}
 		sh.mu.Unlock()
 	}
 }
 
-func (s *Store) CleanupUser(username string) {
+func (s *Store[T]) CleanupUser(username string) {
 	sh := s.getShard(username)
 	sh.mu.Lock()
 	defer sh.mu.Unlock()

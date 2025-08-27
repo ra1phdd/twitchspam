@@ -50,3 +50,18 @@ func NormalizeText(s string) string {
 	}
 	return strings.ToLower(b.String())
 }
+
+func GetByIndexOrLast(arr []int, idx int) int {
+	if len(arr) == 0 {
+		return 600
+	}
+
+	if idx >= len(arr) {
+		return arr[len(arr)-1]
+	}
+
+	if idx < 0 {
+		return arr[0]
+	}
+	return arr[idx]
+}

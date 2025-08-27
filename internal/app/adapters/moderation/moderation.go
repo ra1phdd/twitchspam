@@ -8,24 +8,24 @@ import (
 	"log/slog"
 	"net/http"
 	"twitchspam/config"
+	"twitchspam/internal/app/ports"
 	"twitchspam/pkg/logger"
 )
 
 type Moderation struct {
-	log logger.Logger
-
-	ModeratorID string
-	ChannelID   string
+	log    logger.Logger
+	cfg    *config.Config
+	stream ports.StreamPort
 
 	client *http.Client
 }
 
-func New(log logger.Logger, moderatorID, channelID string, client *http.Client) *Moderation {
+func New(log logger.Logger, cfg *config.Config, stream ports.StreamPort, client *http.Client) *Moderation {
 	return &Moderation{
-		log:         log,
-		ModeratorID: moderatorID,
-		ChannelID:   channelID,
-		client:      client,
+		log:    log,
+		cfg:    cfg,
+		stream: stream,
+		client: client,
 	}
 }
 
@@ -44,16 +44,15 @@ func (m *Moderation) Timeout(userID string, duration int, reason string) {
 		return
 	}
 
-	url := fmt.Sprintf("https://api.twitch.tv/helix/moderation/bans?broadcaster_id=%s&moderator_id=%s", m.ChannelID, m.ModeratorID)
+	url := fmt.Sprintf("https://api.twitch.tv/helix/moderation/bans?broadcaster_id=%s&moderator_id=%s", m.stream.ChannelID(), m.cfg.App.UserID)
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonBody))
 	if err != nil {
 		m.log.Error("Failed to create timeout request", err)
 		return
 	}
 
-	cfg := config.Get()
-	req.Header.Set("Authorization", "Bearer "+cfg.App.OAuth)
-	req.Header.Set("Client-Id", cfg.App.ClientID)
+	req.Header.Set("Authorization", "Bearer "+m.cfg.App.OAuth)
+	req.Header.Set("Client-Id", m.cfg.App.ClientID)
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := m.client.Do(req)

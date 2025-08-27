@@ -5,9 +5,10 @@ import (
 	"twitchspam/internal/app/adapters/storage"
 )
 
-type StorePort interface {
-	Push(username, text string, ttl time.Duration)
-	ForEach(username string, fn func(msg *storage.Message))
+type StorePort[T any] interface {
+	Len(username string) int
+	Push(username string, data T, ttl time.Duration)
+	ForEach(username string, fn func(item *storage.Item[T]))
 	Cleanup()
 	CleanupUser(username string)
 }

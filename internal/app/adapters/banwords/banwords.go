@@ -21,8 +21,7 @@ func New(list []string) *Banwords {
 	return bw
 }
 
-func (bw *Banwords) CheckMessage(text string) bool {
-	words := strings.Fields(text)
+func (bw *Banwords) CheckMessage(words []string) bool {
 	for _, word := range words {
 		if _, ok := bw.bwords[word]; ok {
 			return true
