@@ -42,7 +42,7 @@ func NewCheck(log logger.Logger, cfg *config.Config, stream ports.StreamPort) *C
 }
 
 func (c *Checker) Check(irc *ports.IRCMessage) *ports.CheckerAction {
-	if irc.IsMod || !c.cfg.Spam.Enabled || (c.cfg.Spam.Mode == "online" && !c.stream.IsLive()) {
+	if irc.IsMod || !c.cfg.Spam.SettingsDefault.Enabled || (c.cfg.Spam.Mode == "online" && !c.stream.IsLive()) {
 		return &ports.CheckerAction{Type: None}
 	}
 	text := strings.ToLower(domain.NormalizeText(irc.Text))
@@ -65,30 +65,35 @@ func (c *Checker) Check(irc *ports.IRCMessage) *ports.CheckerAction {
 	}
 
 	for _, word := range words {
-		if c.cfg.Spam.MaxWordLength == 0 || len(word) < c.cfg.Spam.MaxWordLength || c.cfg.Spam.MaxWordTimeoutTime == 0 {
+		if c.cfg.Spam.SettingsDefault.MaxWordLength == 0 || len(word) < c.cfg.Spam.SettingsDefault.MaxWordLength || c.cfg.Spam.SettingsDefault.MaxWordTimeoutTime == 0 {
 			continue
 		}
 
 		return &ports.CheckerAction{
 			Type:     Timeout,
 			Reason:   "превышена максимальная длина слова",
-			Duration: time.Duration(c.cfg.Spam.MaxWordTimeoutTime) * time.Second,
+			Duration: time.Duration(c.cfg.Spam.SettingsDefault.MaxWordTimeoutTime) * time.Second,
 			UserID:   irc.UserID,
 			Username: irc.Username,
 			Text:     irc.Text,
 		}
 	}
 
-	if irc.IsVIP && !c.cfg.Spam.VIPEnabled {
-		return &ports.CheckerAction{Type: None}
+	settings := c.cfg.Spam.SettingsDefault
+	if irc.IsVIP {
+		settings = c.cfg.Spam.SettingsVIP
+
+		if !c.cfg.Spam.SettingsVIP.Enabled {
+			return &ports.CheckerAction{Type: None}
+		}
 	}
 
 	var countSpam, gap int
 	c.messages.ForEach(irc.Username, func(item *storage.Item[string]) {
 		similarity := domain.JaccardSimilarity(text, item.Data)
 
-		if similarity >= c.cfg.Spam.SimilarityThreshold {
-			if gap < c.cfg.Spam.MinGapMessages {
+		if similarity >= settings.SimilarityThreshold {
+			if gap < settings.MinGapMessages {
 				countSpam++
 			}
 			gap = 0
@@ -98,16 +103,16 @@ func (c *Checker) Check(irc *ports.IRCMessage) *ports.CheckerAction {
 	})
 
 	// кол-во спама -1 новый
-	if countSpam >= c.cfg.Spam.MessageLimit-1 {
+	if countSpam >= settings.MessageLimit-1 {
 		c.messages.CleanupUser(irc.Username)
 
 		dur := time.Duration(c.cfg.Spam.SpamExceptions[text]) * time.Second
 		if dur == 0 {
-			sec := domain.GetByIndexOrLast(c.cfg.Spam.Timeouts, c.timeouts.Len(irc.Username))
+			sec := domain.GetByIndexOrLast(settings.Timeouts, c.timeouts.Len(irc.Username))
 			dur = time.Duration(sec) * time.Second
 		}
 
-		c.timeouts.Push(irc.Username, Empty{}, time.Duration(c.cfg.Spam.ResetTimeoutSeconds)*time.Second)
+		c.timeouts.Push(irc.Username, Empty{}, time.Duration(settings.ResetTimeoutSeconds)*time.Second)
 		return &ports.CheckerAction{
 			Type:     Timeout,
 			Reason:   "спам",

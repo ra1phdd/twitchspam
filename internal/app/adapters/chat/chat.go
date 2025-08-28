@@ -15,8 +15,8 @@ import (
 	"twitchspam/internal/app/adapters/event_sub"
 	"twitchspam/internal/app/adapters/moderation"
 	"twitchspam/internal/app/domain"
-	"twitchspam/internal/app/domain/admin"
 	"twitchspam/internal/app/domain/antispam"
+	"twitchspam/internal/app/domain/messages/admin"
 	"twitchspam/internal/app/domain/stream"
 	"twitchspam/internal/app/ports"
 	"twitchspam/pkg/logger"
@@ -149,7 +149,7 @@ func (c *Chat) listen() {
 				c.moderation.Ban(action.UserID, action.Reason)
 			case antispam.Timeout:
 				c.log.Warn("Spam is found", slog.String("username", action.Username), slog.String("text", action.Text), slog.Int("duration", int(action.Duration.Seconds())))
-				if c.cfg.Spam.Enabled {
+				if c.cfg.Spam.SettingsDefault.Enabled {
 					c.moderation.Timeout(action.UserID, int(action.Duration.Seconds()), action.Reason)
 				}
 			}

@@ -20,20 +20,34 @@ type App struct {
 }
 
 type Spam struct {
-	Enabled             bool           `json:"enabled"`               // !am - включить/выключить автомод
-	Mode                string         `json:"mode"`                  // !am online/always - только на стриме/всегда
-	SimilarityThreshold float64        `json:"similarity_threshold"`  // !am sim <0.0-1.0> - степень схожести сообщений
-	MessageLimit        int            `json:"message_limit"`         // !am msg <кол-во сообщений (2-15) или off>
-	CheckWindowSeconds  int            `json:"check_window_seconds"`  // !am time <секунды, макс 300> - за какой период проверять сообщения
-	VIPEnabled          bool           `json:"vip_enabled"`           // !am vip - работать на випов
-	Timeouts            []int          `json:"timeouts"`              // !am to <значения через пробел> - длительности таймаутов
-	ResetTimeoutSeconds int            `json:"reset_timeout_seconds"` // !am rto <значение> - время сброса таймаутов
-	MaxWordLength       int            `json:"max_word_length"`       // !am mw <значение или 0 для оффа> - максимальная длина слова
-	MaxWordTimeoutTime  int            `json:"max_word_timeout_time"` // !am mwt <кол-во сек>
-	MinGapMessages      int            `json:"min_gap_messages"`      // !am min_gap <значение от 0 до 15> - сколько сообщений между спамом должно быть чтобы это не считалось спамом
-	WhitelistUsers      []string       `json:"whitelist_users"`       // !am add/del <пользователи через запятую>
-	SpamExceptions      map[string]int `json:"spam_exceptions"`       // !am except <слова/фразы через запятую> <таймаут в секундах> - исключения из спама (таймаут за ку 30 сек пример)
-	DelayAutomod        int            `json:"delay_automod"`         // !am da <кол-во сек от 0 до 10> - задержка срабатывания на автомод (чтобы модеры не обленились)
+	Mode               string            `json:"mode"`                 // !am online/always - только на стриме/всегда
+	CheckWindowSeconds int               `json:"check_window_seconds"` // !am time <секунды, макс 300>
+	DelayAutomod       int               `json:"delay_automod"`        // !am da <0-10> - задержка срабатывания
+	WhitelistUsers     []string          `json:"whitelist_users"`      // !am add/del <список>
+	SpamExceptions     map[string]int    `json:"spam_exceptions"`      // !am except <фразы> <таймаут>
+	SettingsDefault    SpamSettings      `json:"settings_default"`
+	SettingsVIP        SpamSettings      `json:"settings_vip"`
+	SettingsEmotes     SpamSettingsEmote `json:"settings_emotes"`
+}
+
+type SpamSettings struct {
+	Enabled             bool    `json:"enabled"`
+	SimilarityThreshold float64 `json:"similarity_threshold"`  // !am sim <0.0-1.0>
+	MessageLimit        int     `json:"message_limit"`         // !am msg <2-15 или off>
+	Timeouts            []int   `json:"timeouts"`              // !am to <значения через пробел>
+	ResetTimeoutSeconds int     `json:"reset_timeout_seconds"` // !am rto <значение>
+	MaxWordLength       int     `json:"max_word_length"`       // !am mw <значение или 0>
+	MaxWordTimeoutTime  int     `json:"max_word_timeout_time"` // !am mwt <секунды>
+	MinGapMessages      int     `json:"min_gap_messages"`      // !am min_gap <0-15>
+}
+
+type SpamSettingsEmote struct {
+	Enabled              bool  `json:"enabled"`
+	MessageLimit         int   `json:"message_limit"`
+	Timeouts             []int `json:"timeouts"`
+	ResetTimeoutSeconds  int   `json:"reset_timeout_seconds"`
+	MaxEmotesLength      int   `json:"max_emotes_length"`
+	MaxEmotesTimeoutTime int   `json:"max_emotes_timeout_time"`
 }
 
 type Config struct {
@@ -98,20 +112,39 @@ func (m *Manager) GetDefault() *Config {
 	return &Config{
 		App: App{},
 		Spam: Spam{
-			Enabled:             true,
-			Mode:                "online",
-			SimilarityThreshold: 0.7,
-			MessageLimit:        3,
-			CheckWindowSeconds:  60,
-			VIPEnabled:          false,
-			Timeouts:            []int{600, 1800, 3600},
-			ResetTimeoutSeconds: 60,
-			MaxWordLength:       100,
-			MaxWordTimeoutTime:  30,
-			MinGapMessages:      3,
-			WhitelistUsers:      []string{},
-			SpamExceptions:      map[string]int{},
-			DelayAutomod:        0,
+			Mode:               "online",
+			CheckWindowSeconds: 60,
+			SettingsDefault: SpamSettings{
+				Enabled:             true,
+				SimilarityThreshold: 0.7,
+				MessageLimit:        3,
+				Timeouts:            []int{600, 1800, 3600},
+				ResetTimeoutSeconds: 3600,
+				MaxWordLength:       100,
+				MaxWordTimeoutTime:  30,
+				MinGapMessages:      3,
+			},
+			SettingsVIP: SpamSettings{
+				Enabled:             false,
+				SimilarityThreshold: 0.7,
+				MessageLimit:        3,
+				Timeouts:            []int{600, 1800, 3600},
+				ResetTimeoutSeconds: 3600,
+				MaxWordLength:       100,
+				MaxWordTimeoutTime:  30,
+				MinGapMessages:      3,
+			},
+			SettingsEmotes: SpamSettingsEmote{
+				Enabled:              false,
+				MessageLimit:         3,
+				Timeouts:             []int{600, 1800, 3600},
+				ResetTimeoutSeconds:  3600,
+				MaxEmotesLength:      10,
+				MaxEmotesTimeoutTime: 600,
+			},
+			WhitelistUsers: []string{},
+			SpamExceptions: map[string]int{},
+			DelayAutomod:   0,
 		},
 		Banwords: []string{},
 	}
@@ -156,25 +189,25 @@ func (m *Manager) validate(cfg *Config) error {
 		return errors.New("app.mod_channels is required")
 	}
 
-	if cfg.Spam.SimilarityThreshold < 0 || cfg.Spam.SimilarityThreshold > 1 {
+	if cfg.Spam.SettingsDefault.SimilarityThreshold < 0 || cfg.Spam.SettingsDefault.SimilarityThreshold > 1 {
 		return errors.New("spam.similarity_threshold must be in [0,1]")
 	}
 	if cfg.Spam.Mode != "online" && cfg.Spam.Mode != "always" {
 		return errors.New("spam.mode must be 'online' or 'always'")
 	}
-	if cfg.Spam.MessageLimit < 2 || cfg.Spam.MessageLimit > 15 {
+	if cfg.Spam.SettingsDefault.MessageLimit < 2 || cfg.Spam.SettingsDefault.MessageLimit > 15 {
 		return errors.New("spam.message_limit must be 2..15")
 	}
 	if cfg.Spam.CheckWindowSeconds < 1 || cfg.Spam.CheckWindowSeconds > 300 {
 		return errors.New("spam.check_window_seconds must be 1..300")
 	}
-	if cfg.Spam.ResetTimeoutSeconds < 0 {
+	if cfg.Spam.SettingsDefault.ResetTimeoutSeconds < 0 {
 		return errors.New("spam.reset_timeout_seconds must be >= 0")
 	}
-	if cfg.Spam.MaxWordLength < 0 {
+	if cfg.Spam.SettingsDefault.MaxWordLength < 0 {
 		return errors.New("spam.max_word must be >= 0")
 	}
-	if cfg.Spam.MinGapMessages < 0 || cfg.Spam.MinGapMessages > 15 {
+	if cfg.Spam.SettingsDefault.MinGapMessages < 0 || cfg.Spam.SettingsDefault.MinGapMessages > 15 {
 		return errors.New("spam.min_gap_messages must be in 0..15")
 	}
 
