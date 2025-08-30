@@ -22,21 +22,23 @@ import (
 type Automod struct {
 	log        logger.Logger
 	cfg        *config.Config
+	stream     ports.StreamPort
 	moderation ports.ModerationPort
 	bwords     ports.BanwordsPort
-	stream     ports.StreamPort
+	stats      ports.StatsPort
 
 	client *http.Client
 }
 
 var ErrForbidden = errors.New("forbidden: subscription missing proper authorization")
 
-func NewEventSub(log logger.Logger, cfg *config.Config, stream ports.StreamPort, client *http.Client) *Automod {
+func NewEventSub(log logger.Logger, cfg *config.Config, stream ports.StreamPort, stats ports.StatsPort, client *http.Client) *Automod {
 	return &Automod{
 		log:        log,
 		cfg:        cfg,
 		moderation: moderation.New(log, cfg, stream, client),
 		bwords:     banwords.New(cfg.Banwords),
+		stats:      stats,
 		stream:     stream,
 		client:     client,
 	}
@@ -110,6 +112,13 @@ func (a *Automod) connectAndHandleEvents() error {
 				a.log.Error("Failed to subscribe to event", err, slog.String("event", "stream.offline"))
 				return err
 			}
+
+			if err := a.subscribeEvent("channel.update", "2", map[string]string{
+				"broadcaster_user_id": a.stream.ChannelID(),
+			}, payload.Session.ID); err != nil {
+				a.log.Error("Failed to subscribe to event", err, slog.String("event", "channel.update"))
+				return err
+			}
 			break
 		case "session_keepalive":
 			a.log.Trace("Received session_keepalive on EventSub")
@@ -117,28 +126,51 @@ func (a *Automod) connectAndHandleEvents() error {
 		case "notification":
 			a.log.Debug("Received notification on EventSub")
 
-			var amEvent Message
-			if err := json.Unmarshal(event.Payload, &amEvent); err != nil {
-				a.log.Error("Failed to decode notification payload", err, slog.String("event", string(msgBytes)))
+			var envelope EventSubEnvelope
+			if err := json.Unmarshal(event.Payload, &envelope); err != nil {
+				a.log.Error("Failed to decode EventSub envelope", err)
 				break
 			}
 
-			switch amEvent.Subscription.Type {
+			switch envelope.Subscription.Type {
 			case "automod.message.hold":
-				a.log.Info("AutoMod held message", slog.String("user_id", amEvent.Event.UserID), slog.String("message_id", amEvent.Event.MessageID), slog.String("text", amEvent.Event.Message.Text))
-				text := strings.ToLower(domain.NormalizeText(amEvent.Event.Message.Text))
+				var am AutomodHoldEvent
+				if err := json.Unmarshal(envelope.Event, &am); err != nil {
+					a.log.Error("Failed to decode automod event", err)
+					break
+				}
+				a.log.Info("AutoMod held message", slog.String("user_id", am.UserID), slog.String("message_id", am.MessageID), slog.String("text", am.Message.Text))
+
+				text := strings.ToLower(domain.NormalizeText(am.Message.Text))
 				words := strings.Fields(text)
 
 				if a.bwords.CheckMessage(words) {
 					time.Sleep(time.Duration(a.cfg.Spam.DelayAutomod) * time.Second)
-					a.moderation.Ban(amEvent.Event.UserID, "банворд")
+					a.moderation.Ban(am.UserID, "банворд")
+				}
+
+				if a.cfg.PunishmentOnline && a.bwords.CheckOnline(text) {
+					a.moderation.Ban(am.UserID, "тупое")
 				}
 			case "stream.online":
 				a.log.Info("Stream started")
 				a.stream.SetIslive(true)
+				a.stats.SetStartTime(time.Now())
 			case "stream.offline":
 				a.log.Info("Stream ended")
 				a.stream.SetIslive(false)
+				a.stats.SetEndTime(time.Now())
+			case "channel.update":
+				var upd ChannelUpdateEvent
+				if err := json.Unmarshal(envelope.Event, &upd); err != nil {
+					a.log.Error("Failed to decode channel.update event", err)
+					break
+				}
+				a.log.Info("Channel updated", slog.String("title", upd.Title), slog.String("category", upd.CategoryName), slog.String("lang", upd.Language))
+
+				if upd.CategoryName != "" { // TODO
+					a.stream.SetCategory(upd.CategoryName)
+				}
 			}
 		case "session_reconnect":
 			a.log.Debug("Received session_reconnect on EventSub")

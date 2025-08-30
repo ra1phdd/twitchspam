@@ -30,17 +30,20 @@ const (
 	ErrMinGapMessages      ports.ActionType = "значение должно быть от 0 до 15"
 	ErrResetTimeoutSeconds ports.ActionType = "значение должно быть от 1 до 86400"
 	ErrDelayAutomod        ports.ActionType = "значение должно быть от 1 до 10"
+	NoStream               ports.ActionType = "стрим выключен"
 )
 
 type Admin struct {
 	log     logger.Logger
 	manager *config.Manager
+	stream  ports.StreamPort
 }
 
-func New(log logger.Logger, manager *config.Manager) *Admin {
+func New(log logger.Logger, manager *config.Manager, stream ports.StreamPort) *Admin {
 	return &Admin{
 		log:     log,
 		manager: manager,
+		stream:  stream,
 	}
 }
 
@@ -64,23 +67,29 @@ func (a *Admin) FindMessages(irc *ports.IRCMessage) ports.ActionType {
 	}
 
 	handlers := map[string]cmdHandler{
-		"on":      a.handleOnOff,
-		"off":     a.handleOnOff,
-		"online":  a.handleMode,
-		"always":  a.handleMode,
-		"sim":     a.handleSim,
-		"msg":     a.handleMsg,
-		"time":    a.handleTime,
-		"to":      a.handleTo,
-		"rto":     a.handleRto,
-		"mw":      a.handleMw,
-		"mwt":     a.handleMwt,
-		"min_gap": a.handleMinGap,
-		"da":      a.handleDelayAutomod,
-		"reset":   a.handleReset,
-		"add":     a.handleAdd,
-		"del":     a.handleDel,
-		"vip":     a.handleVip,
+		"on": func(cfg *config.Config, _ []string, cmd string) ports.ActionType {
+			return handleOnOffSettings(cmd, &cfg.Spam.SettingsDefault)
+		},
+		"off": func(cfg *config.Config, _ []string, cmd string) ports.ActionType {
+			return handleOnOffSettings(cmd, &cfg.Spam.SettingsDefault)
+		},
+		"online":   a.handleMode,
+		"always":   a.handleMode,
+		"sim":      a.handleSim,
+		"msg":      a.handleMsg,
+		"time":     a.handleTime,
+		"to":       a.handleTo,
+		"rto":      a.handleRto,
+		"mw":       a.handleMw,
+		"mwt":      a.handleMwt,
+		"min_gap":  a.handleMinGap,
+		"da":       a.handleDelayAutomod,
+		"reset":    a.handleReset,
+		"add":      a.handleAdd,
+		"del":      a.handleDel,
+		"vip":      a.handleVip,
+		"category": a.handleCategory,
+		"mword":    a.handleOnline,
 	}
 
 	handler, ok := handlers[cmd]
@@ -111,11 +120,6 @@ func (a *Admin) handlePing() ports.ActionType {
 
 	percent, _ := cpu.Percent(0, false)
 	return ports.ActionType(fmt.Sprintf("бот работает %v • загрузка CPU %.2f%% • потребление ОЗУ %v MB", uptime.Truncate(time.Second), percent[0], m.Sys/1024/1024))
-}
-
-func (a *Admin) handleOnOff(cfg *config.Config, _ []string, cmd string) ports.ActionType {
-	cfg.Spam.SettingsDefault.Enabled = cmd == "on"
-	return None
 }
 
 func (a *Admin) handleMode(cfg *config.Config, _ []string, cmd string) ports.ActionType {
@@ -149,6 +153,11 @@ func (a *Admin) handleMwt(cfg *config.Config, args []string, _ string) ports.Act
 
 func (a *Admin) handleMinGap(cfg *config.Config, args []string, _ string) ports.ActionType {
 	return handleMinGapSettings(args, &cfg.Spam.SettingsDefault)
+}
+
+func handleOnOffSettings(cmd string, s *config.SpamSettings) ports.ActionType {
+	s.Enabled = cmd == "on"
+	return None
 }
 
 func handleSimSettings(args []string, s *config.SpamSettings) ports.ActionType {
@@ -238,26 +247,89 @@ func (a *Admin) handleTime(cfg *config.Config, args []string, _ string) ports.Ac
 }
 
 func (a *Admin) handleAdd(cfg *config.Config, args []string, _ string) ports.ActionType {
-	for _, u := range strings.Split(args[0], ",") {
+	if len(args) == 0 {
+		return NonParametr
+	}
+
+	var added []string
+	var alreadyExists []string
+
+	for _, u := range args {
 		u = strings.TrimSpace(u)
-		if u != "" && !slices.Contains(cfg.Spam.WhitelistUsers, u) {
+		if u == "" {
+			continue
+		}
+		if slices.Contains(cfg.Spam.WhitelistUsers, u) {
+			alreadyExists = append(alreadyExists, u)
+		} else {
 			cfg.Spam.WhitelistUsers = append(cfg.Spam.WhitelistUsers, u)
+			added = append(added, u)
 		}
 	}
-	return None
+
+	var msgParts []string
+	if len(added) > 0 {
+		msgParts = append(msgParts, fmt.Sprintf("добавлены в список: %s", strings.Join(added, ", ")))
+	}
+	if len(alreadyExists) > 0 {
+		msgParts = append(msgParts, fmt.Sprintf("уже в списке: %s", strings.Join(alreadyExists, ", ")))
+	}
+
+	if len(msgParts) == 0 {
+		return None
+	}
+
+	return ports.ActionType(strings.Join(msgParts, " • "))
 }
 
 func (a *Admin) handleDel(cfg *config.Config, args []string, _ string) ports.ActionType {
-	users := strings.Split(args[0], ",")
+	if len(args) == 0 {
+		return NonParametr
+	}
+
+	var removed []string
+	var notFound []string
+
 	cfg.Spam.WhitelistUsers = slices.DeleteFunc(cfg.Spam.WhitelistUsers, func(w string) bool {
-		for _, u := range users {
-			if strings.TrimSpace(u) == w {
+		for _, u := range args {
+			u = strings.TrimSpace(u)
+			if u == w {
+				removed = append(removed, w)
 				return true
 			}
 		}
 		return false
 	})
-	return None
+
+	for _, u := range args {
+		u = strings.TrimSpace(u)
+		if u == "" {
+			continue
+		}
+		found := false
+		for _, r := range removed {
+			if u == r {
+				found = true
+				break
+			}
+		}
+		if !found {
+			notFound = append(notFound, u)
+		}
+	}
+
+	var msgParts []string
+	if len(removed) > 0 {
+		msgParts = append(msgParts, fmt.Sprintf("удалены из списка: %s", strings.Join(removed, ", ")))
+	}
+	if len(notFound) > 0 {
+		msgParts = append(msgParts, fmt.Sprintf("нет в списке: %s", strings.Join(notFound, ", ")))
+	}
+
+	if len(msgParts) == 0 {
+		return None
+	}
+	return ports.ActionType(strings.Join(msgParts, " • "))
 }
 
 func (a *Admin) handleVip(cfg *config.Config, args []string, _ string) ports.ActionType {
@@ -267,6 +339,12 @@ func (a *Admin) handleVip(cfg *config.Config, args []string, _ string) ports.Act
 	vipCmd, vipArgs := args[0], args[1:]
 
 	handlers := map[string]func([]string, *config.SpamSettings) ports.ActionType{
+		"on": func(_ []string, settings *config.SpamSettings) ports.ActionType {
+			return handleOnOffSettings(vipCmd, settings)
+		},
+		"off": func(_ []string, settings *config.SpamSettings) ports.ActionType {
+			return handleOnOffSettings(vipCmd, settings)
+		},
 		"sim":     handleSimSettings,
 		"msg":     handleMsgSettings,
 		"to":      handleToSettings,
@@ -279,6 +357,24 @@ func (a *Admin) handleVip(cfg *config.Config, args []string, _ string) ports.Act
 	if handler, ok := handlers[vipCmd]; ok {
 		return handler(vipArgs, &cfg.Spam.SettingsVIP)
 	}
+	return NotFound
+}
+
+func (a *Admin) handleCategory(_ *config.Config, args []string, _ string) ports.ActionType {
+	if !a.stream.IsLive() {
+		return NoStream
+	}
+
+	a.stream.SetCategory(strings.Join(args, " "))
+	return Success
+}
+
+func (a *Admin) handleOnline(cfg *config.Config, args []string, _ string) ports.ActionType {
+	if len(args) > 0 && args[0] == "online" {
+		cfg.PunishmentOnline = !cfg.PunishmentOnline
+		return Success
+	}
+
 	return NotFound
 }
 

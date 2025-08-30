@@ -4,6 +4,7 @@ type Stream struct {
 	channelID   string
 	channelName string
 	isLive      bool
+	category    string
 }
 
 func NewStream(channelID string, channelName string) *Stream {
@@ -27,4 +28,12 @@ func (s *Stream) ChannelID() string {
 
 func (s *Stream) ChannelName() string {
 	return s.channelName
+}
+
+func (s *Stream) SetCategory(category string) {
+	s.category = category
+}
+
+func (s *Stream) Category() string {
+	return s.category
 }

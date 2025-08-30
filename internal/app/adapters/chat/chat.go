@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"crypto/tls"
 	"fmt"
-	"golang.org/x/time/rate"
 	"log/slog"
 	"net"
 	"net/http"
@@ -14,9 +13,10 @@ import (
 	"twitchspam/config"
 	"twitchspam/internal/app/adapters/event_sub"
 	"twitchspam/internal/app/adapters/moderation"
-	"twitchspam/internal/app/domain"
+	"twitchspam/internal/app/adapters/stats"
 	"twitchspam/internal/app/domain/antispam"
 	"twitchspam/internal/app/domain/messages/admin"
+	"twitchspam/internal/app/domain/messages/user"
 	"twitchspam/internal/app/domain/stream"
 	"twitchspam/internal/app/ports"
 	"twitchspam/pkg/logger"
@@ -25,11 +25,13 @@ import (
 type Chat struct {
 	log        logger.Logger
 	cfg        *config.Config
+	stream     ports.StreamPort
 	automod    ports.AutomodPort
 	moderation ports.ModerationPort
 	checker    ports.CheckerPort
 	admin      ports.AdminPort
-	stream     ports.StreamPort
+	user       ports.UserPort
+	stats      ports.StatsPort
 
 	isListen sync.Once
 	conn     net.Conn
@@ -37,32 +39,51 @@ type Chat struct {
 }
 
 func New(log logger.Logger, manager *config.Manager, client *http.Client, modChannel string) (*Chat, error) {
-	cfg := manager.Get()
-
-	channelID, err := GetChannelID(modChannel, cfg.App.OAuth, cfg.App.ClientID)
-	if err != nil {
-		return nil, err
-	}
-
-	isLive, err := IsLive(modChannel, cfg.App.OAuth, cfg.App.ClientID)
-	if err != nil {
-		return nil, err
-	}
-
-	st := stream.NewStream(channelID, modChannel)
-	st.SetIslive(isLive)
-
 	c := &Chat{
-		log:        log,
-		cfg:        cfg,
-		stream:     st,
-		automod:    event_sub.NewEventSub(log, cfg, st, client),
-		moderation: moderation.New(log, cfg, st, client),
-		checker:    antispam.NewCheck(log, cfg, st),
-		admin:      admin.New(log, manager),
+		log: log,
+		cfg: manager.Get(),
 	}
 
+	channelID, err := GetChannelID(modChannel, c.cfg.App.OAuth, c.cfg.App.ClientID)
+	if err != nil {
+		return nil, err
+	}
+
+	viewerCount, isLive, err := GetOnline(modChannel, c.cfg.App.OAuth, c.cfg.App.ClientID)
+	if err != nil {
+		return nil, err
+	}
+
+	c.stream = stream.NewStream(channelID, modChannel)
+	c.stream.SetIslive(isLive)
+
+	//stv := seventv.New(log, st)
+	//stv.GetUserChannel()
+
+	c.stats = stats.New(log)
+	if isLive {
+		c.stats.SetOnline(viewerCount)
+	}
+
+	c.automod = event_sub.NewEventSub(log, c.cfg, c.stream, c.stats, client)
+	c.moderation = moderation.New(log, c.cfg, c.stream, client)
+	c.checker = antispam.NewCheck(log, c.cfg, c.stream, c.stats)
+	c.admin = admin.New(log, manager, c.stream)
+	c.user = user.New(log, manager, c.stream, c.stats)
+
+	go func() {
+		ticker := time.NewTicker(30 * time.Second)
+		for range ticker.C {
+			viewerCount, _, err := GetOnline(modChannel, c.cfg.App.OAuth, c.cfg.App.ClientID)
+			if err != nil {
+				log.Error("Error getting viewer count", err)
+				return
+			}
+			c.stats.SetOnline(viewerCount)
+		}
+	}()
 	go c.automod.RunEventLoop()
+
 	return c, nil
 }
 
@@ -93,7 +114,6 @@ func (c *Chat) Connect(modChannel string) error {
 func (c *Chat) listen() {
 	c.log.Info("Listening on IRC chat Twitch")
 
-	limiter := rate.NewLimiter(rate.Every(30*time.Second), 1)
 	for {
 		line, err := c.reader.ReadString('\n')
 		if err != nil {
@@ -119,27 +139,14 @@ func (c *Chat) listen() {
 			irc := ParseIRC(line)
 			c.log.Debug("New message", slog.String("username", irc.Username), slog.String("text", irc.Text))
 
-			adminAction := c.admin.FindMessages(irc)
-			if adminAction != admin.None {
+			if adminAction := c.admin.FindMessages(irc); adminAction != admin.None {
 				c.Say(fmt.Sprintf("@%s, %s!", irc.Username, adminAction), c.stream.ChannelName())
 				continue
 			}
 
-			text := strings.ToLower(domain.NormalizeText(irc.Text))
-			if (strings.Contains(text, "че за игра") || strings.Contains(text, "чё за игра") || strings.Contains(text, "что за игра") ||
-				strings.Contains(text, "как игра называется") || strings.Contains(text, "как игра называеться")) && limiter.Allow() {
-				c.Say(fmt.Sprintf("@%s, !g", irc.Username), c.stream.ChannelName())
+			if userAction := c.user.FindMessages(irc); userAction != user.None {
+				c.Say(fmt.Sprintf("@%s, %s", irc.Username, userAction), c.stream.ChannelName())
 				continue
-			}
-
-			if strings.Contains(text, "афсигга плохой бот") || strings.Contains(text, "афсига плохой бот") ||
-				strings.Contains(text, "афсугга плохой бот") || strings.Contains(text, "афсуга плохой бот") {
-				c.Say(fmt.Sprintf("@%s, ((", irc.Username), c.stream.ChannelName())
-			}
-
-			if strings.Contains(text, "афсигга хороший бот") || strings.Contains(text, "афсига хороший бот") ||
-				strings.Contains(text, "афсугга хороший бот") || strings.Contains(text, "афсуга хороший бот") {
-				c.Say(fmt.Sprintf("@%s, nya", irc.Username), c.stream.ChannelName())
 			}
 
 			action := c.checker.Check(irc)
@@ -154,7 +161,18 @@ func (c *Chat) listen() {
 				}
 			}
 		case strings.Contains(line, "CLEARCHAT"):
-			c.log.Debug("User muted", slog.String("line", line))
+			irc := ParseIRC(line)
+			c.log.Info("User muted", slog.String("moderator", irc.Channel))
+
+			if !c.stream.IsLive() {
+				break
+			}
+
+			if irc.BanDuration != 0 {
+				c.stats.AddTimeout(irc.Channel)
+				break
+			}
+			c.stats.AddBan(irc.Channel)
 		case strings.Contains(line, "USERNOTICE"):
 			c.log.Debug("New sub", slog.String("line", line))
 		case strings.Contains(line, "JOIN"):

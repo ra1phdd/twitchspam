@@ -5,4 +5,6 @@ type StreamPort interface {
 	SetIslive(isLive bool)
 	ChannelID() string
 	ChannelName() string
+	SetCategory(category string)
+	Category() string
 }

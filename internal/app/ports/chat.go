@@ -17,5 +17,9 @@ type IRCMessage struct {
 	IsSubscriber bool
 	IsMod        bool
 	IsVIP        bool
+	EmoteOnly    bool
+	Emotes       string
+	BanDuration  int
+	Channel      string
 	Tags         map[string]string
 }

@@ -6,6 +6,7 @@ import (
 	"time"
 	"twitchspam/config"
 	"twitchspam/internal/app/adapters/banwords"
+	"twitchspam/internal/app/adapters/seventv"
 	"twitchspam/internal/app/adapters/storage"
 	"twitchspam/internal/app/domain"
 	"twitchspam/internal/app/ports"
@@ -21,32 +22,47 @@ const (
 type Empty struct{}
 
 type Checker struct {
-	log    logger.Logger
-	cfg    *config.Config
-	stream ports.StreamPort
+	log logger.Logger
+	cfg *config.Config
 
+	stream   ports.StreamPort
+	stats    ports.StatsPort
 	timeouts ports.StorePort[Empty]
 	messages ports.StorePort[string]
 	bwords   ports.BanwordsPort
+	sevenTV  ports.SevenTVPort
 }
 
-func NewCheck(log logger.Logger, cfg *config.Config, stream ports.StreamPort) *Checker {
+func NewCheck(log logger.Logger, cfg *config.Config, stream ports.StreamPort, stats ports.StatsPort) *Checker {
 	return &Checker{
 		log:      log,
 		cfg:      cfg,
 		stream:   stream,
+		stats:    stats,
 		timeouts: storage.New[Empty](runtime.NumCPU(), 500*time.Millisecond),
 		messages: storage.New[string](runtime.NumCPU(), 500*time.Millisecond),
 		bwords:   banwords.New(cfg.Banwords),
+		sevenTV:  seventv.New(log, stream),
 	}
 }
 
 func (c *Checker) Check(irc *ports.IRCMessage) *ports.CheckerAction {
-	if irc.IsMod || !c.cfg.Spam.SettingsDefault.Enabled || (c.cfg.Spam.Mode == "online" && !c.stream.IsLive()) {
+	if c.stream.IsLive() {
+		c.stats.AddMessage(irc.Username)
+		if irc.IsFirst {
+			c.stats.CountFirstMessages()
+		}
+	}
+
+	if irc.IsMod || !c.cfg.Spam.SettingsDefault.Enabled || (c.cfg.Spam.Mode == "online" && !c.stream.IsLive()) || (!c.cfg.Spam.SettingsEmotes.Enabled && irc.EmoteOnly) {
 		return &ports.CheckerAction{Type: None}
 	}
 	text := strings.ToLower(domain.NormalizeText(irc.Text))
 	words := strings.Fields(text)
+
+	if !c.cfg.Spam.SettingsEmotes.Enabled && c.sevenTV.IsOnlyEmotes(words) {
+		return &ports.CheckerAction{Type: None}
+	}
 
 	if c.bwords.CheckMessage(words) {
 		return &ports.CheckerAction{
@@ -61,6 +77,16 @@ func (c *Checker) Check(irc *ports.IRCMessage) *ports.CheckerAction {
 	for _, user := range c.cfg.Spam.WhitelistUsers {
 		if strings.ToLower(user) == strings.ToLower(irc.Username) {
 			return &ports.CheckerAction{Type: None}
+		}
+	}
+
+	if c.cfg.PunishmentOnline && c.bwords.CheckOnline(text) {
+		return &ports.CheckerAction{
+			Type:     Ban,
+			Reason:   "тупое",
+			UserID:   irc.UserID,
+			Username: irc.Username,
+			Text:     irc.Text,
 		}
 	}
 

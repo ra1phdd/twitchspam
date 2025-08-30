@@ -51,9 +51,10 @@ type SpamSettingsEmote struct {
 }
 
 type Config struct {
-	App      App      `json:"app"`
-	Spam     Spam     `json:"spam"`
-	Banwords []string `json:"banwords"`
+	App              App      `json:"app"`
+	Spam             Spam     `json:"spam"`
+	PunishmentOnline bool     `json:"punishment_online"`
+	Banwords         []string `json:"banwords"`
 }
 
 type Manager struct {

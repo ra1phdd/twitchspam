@@ -40,8 +40,19 @@ func ParseIRC(line string) *ports.IRCMessage {
 
 			if excl := strings.IndexByte(prefix, '!'); excl != -1 {
 				msg.Username = prefix[:excl]
+			} else {
+				msg.Username = prefix
 			}
 		}
+	}
+
+	parts := strings.SplitN(line, " ", 3)
+	if len(parts) > 1 && strings.HasPrefix(parts[1], "#") {
+		msg.Channel = parts[1][1:] // убираем #
+	}
+
+	if idx := strings.Index(line, " :"); idx != -1 {
+		msg.Text = line[idx+2:]
 	}
 
 	// Извлекаем полезное из тегов
@@ -72,10 +83,11 @@ func ParseIRC(line string) *ports.IRCMessage {
 	if v, ok := msg.Tags["room-id"]; ok {
 		msg.RoomID = v
 	}
-
-	// Текст сообщения (после " :")
-	if idx := strings.Index(line, " :"); idx != -1 {
-		msg.Text = line[idx+2:]
+	if v, ok := msg.Tags["emote-only"]; ok && v == "1" {
+		msg.EmoteOnly = true
+	}
+	if v, ok := msg.Tags["emotes"]; ok {
+		msg.Emotes = v
 	}
 
 	return msg
