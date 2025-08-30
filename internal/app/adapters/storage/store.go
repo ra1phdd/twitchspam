@@ -6,8 +6,9 @@ import (
 )
 
 type Store[T any] struct {
-	shards      []Shard[T]
-	granularity time.Duration
+	shards          []Shard[T]
+	granularity     time.Duration
+	getLimitPerUser func() int
 }
 
 type Item[T any] struct {
@@ -17,10 +18,11 @@ type Item[T any] struct {
 	TTL      int64
 }
 
-func New[T any](nShards int, granularity time.Duration) *Store[T] {
+func New[T any](nShards int, granularity time.Duration, getLimitPerUser func() int) *Store[T] {
 	s := &Store[T]{
-		shards:      make([]Shard[T], nShards),
-		granularity: granularity,
+		shards:          make([]Shard[T], nShards),
+		granularity:     granularity,
+		getLimitPerUser: getLimitPerUser,
 	}
 	for i := range s.shards {
 		s.shards[i].userData = make(map[string][]*Item[T])
@@ -39,8 +41,9 @@ func New[T any](nShards int, granularity time.Duration) *Store[T] {
 
 func (s *Store[T]) Len(username string) int {
 	sh := s.getShard(username)
-	sh.mu.RLock()
-	defer sh.mu.RUnlock()
+
+	sh.userMu.RLock()
+	defer sh.userMu.RUnlock()
 
 	return len(sh.userData[username])
 }
@@ -54,40 +57,60 @@ func (s *Store[T]) Push(username string, data T, ttl time.Duration) {
 		Time:     now,
 		TTL:      expire,
 	}
-
 	sh := s.getShard(username)
-	sh.mu.Lock()
-	sh.userData[username] = append(sh.userData[username], item)
+
+	sh.userMu.Lock()
+	q := sh.userData[username]
+	q = append(q, item)
+	messageLimitPerUser := s.getLimitPerUser()
+
+	if len(q) > messageLimitPerUser {
+		q = q[len(q)-messageLimitPerUser:]
+	}
+	sh.userMu.Unlock()
+
+	sh.heapMu.Lock()
 	heap.Push(&sh.expHeap, item)
-	sh.mu.Unlock()
+	sh.heapMu.Unlock()
 }
 
 func (s *Store[T]) ForEach(username string, fn func(item *Item[T])) {
 	sh := s.getShard(username)
-	sh.mu.RLock()
+
+	sh.userMu.RLock()
 	msgs, ok := sh.userData[username]
 	if !ok {
-		sh.mu.RUnlock()
+		sh.userMu.RUnlock()
 		return
 	}
+
 	for _, msg := range msgs {
 		fn(msg)
 	}
-	sh.mu.RUnlock()
+	sh.userMu.RUnlock()
 }
 
 func (s *Store[T]) Cleanup() {
 	now := time.Now().UnixNano()
 	for i := range s.shards {
 		sh := &s.shards[i]
-		sh.mu.Lock()
-		for len(sh.expHeap) > 0 {
+
+		for {
+			sh.heapMu.Lock()
+			if len(sh.expHeap) == 0 {
+				sh.heapMu.Unlock()
+				break
+			}
+
 			item := sh.expHeap[0]
 			if item.TTL > now {
+				sh.heapMu.Unlock()
 				break
 			}
 			heap.Pop(&sh.expHeap)
+			sh.heapMu.Unlock()
 
+			sh.userMu.Lock()
 			userItems := sh.userData[item.Username]
 			newItems := userItems[:0]
 			for _, it := range userItems {
@@ -100,18 +123,27 @@ func (s *Store[T]) Cleanup() {
 			} else {
 				sh.userData[item.Username] = newItems
 			}
+			sh.userMu.Unlock()
 		}
-		sh.mu.Unlock()
 	}
 }
 
 func (s *Store[T]) CleanupUser(username string) {
 	sh := s.getShard(username)
-	sh.mu.Lock()
-	defer sh.mu.Unlock()
 
+	sh.userMu.Lock()
 	msgs, ok := sh.userData[username]
 	if !ok {
+		sh.userMu.Unlock()
+		return
+	}
+	delete(sh.userData, username)
+	sh.userMu.Unlock()
+
+	sh.heapMu.Lock()
+	defer sh.heapMu.Unlock()
+
+	if len(sh.expHeap) == 0 {
 		return
 	}
 
@@ -130,6 +162,4 @@ func (s *Store[T]) CleanupUser(username string) {
 	}
 	sh.expHeap = newHeap
 	heap.Init(&sh.expHeap)
-
-	delete(sh.userData, username)
 }

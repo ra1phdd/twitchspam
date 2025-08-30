@@ -19,7 +19,7 @@ import (
 	"twitchspam/pkg/logger"
 )
 
-type Automod struct {
+type EventSub struct {
 	log        logger.Logger
 	cfg        *config.Config
 	stream     ports.StreamPort
@@ -32,8 +32,8 @@ type Automod struct {
 
 var ErrForbidden = errors.New("forbidden: subscription missing proper authorization")
 
-func NewEventSub(log logger.Logger, cfg *config.Config, stream ports.StreamPort, stats ports.StatsPort, client *http.Client) *Automod {
-	return &Automod{
+func NewEventSub(log logger.Logger, cfg *config.Config, stream ports.StreamPort, stats ports.StatsPort, client *http.Client) *EventSub {
+	return &EventSub{
 		log:        log,
 		cfg:        cfg,
 		moderation: moderation.New(log, cfg, stream, client),
@@ -44,91 +44,100 @@ func NewEventSub(log logger.Logger, cfg *config.Config, stream ports.StreamPort,
 	}
 }
 
-func (a *Automod) RunEventLoop() {
+func (e *EventSub) RunEventLoop() {
 	for {
-		err := a.connectAndHandleEvents()
+		err := e.connectAndHandleEvents()
 		if err != nil {
 			if errors.Is(err, ErrForbidden) {
-				a.log.Error("Stopping EventLoop due to 403 Forbidden", err)
+				e.log.Error("Stopping EventLoop due to 403 Forbidden", err)
 				return
 			}
 
-			a.log.Warn("Websocket connection lost, retrying...", slog.String("error", err.Error()))
+			e.log.Warn("Websocket connection lost, retrying...", slog.String("error", err.Error()))
 			time.Sleep(5 * time.Second)
 		}
 	}
 }
 
-func (a *Automod) connectAndHandleEvents() error {
+func (e *EventSub) connectAndHandleEvents() error {
 	ws, _, err := websocket.DefaultDialer.Dial("wss://eventsub.wss.twitch.tv/ws", nil)
 	if err != nil {
-		a.log.Error("Failed to connect to Twitch EventSub", err)
+		e.log.Error("Failed to connect to Twitch EventSub", err)
 		return err
 	}
 	defer ws.Close()
 
-	a.log.Info("Connected to Twitch EventSub WebSocket")
+	e.log.Info("Connected to Twitch EventSub WebSocket")
 	for {
 		_, msgBytes, err := ws.ReadMessage()
 		if err != nil {
-			a.log.Error("Error while reading websocket message", err)
+			e.log.Error("Error while reading websocket message", err)
 			return err
 		}
 
 		var event EventSubMessage
 		if err := json.Unmarshal(msgBytes, &event); err != nil {
-			a.log.Error("Failed to decode EventSub message", err, slog.String("event", string(msgBytes)))
+			e.log.Error("Failed to decode EventSub message", err, slog.String("event", string(msgBytes)))
 			continue
 		}
 
 		switch event.Metadata.MessageType {
 		case "session_welcome":
-			a.log.Debug("Received session_welcome on EventSub")
+			e.log.Debug("Received session_welcome on EventSub")
 
 			var payload SessionWelcomePayload
 			if err := json.Unmarshal(event.Payload, &payload); err != nil {
-				a.log.Error("Failed to decode session_welcome payload", err, slog.String("event", string(msgBytes)))
+				e.log.Error("Failed to decode session_welcome payload", err, slog.String("event", string(msgBytes)))
 				break
 			}
 
-			if err := a.subscribeEvent("automod.message.hold", "1", map[string]string{
-				"broadcaster_user_id": a.stream.ChannelID(),
-				"moderator_user_id":   a.cfg.App.UserID,
+			if err := e.subscribeEvent("automod.message.hold", "1", map[string]string{
+				"broadcaster_user_id": e.stream.ChannelID(),
+				"moderator_user_id":   e.cfg.App.UserID,
 			}, payload.Session.ID); err != nil {
-				a.log.Error("Failed to subscribe to event", err, slog.String("event", "automod.message.hold"))
+				e.log.Error("Failed to subscribe to event", err, slog.String("event", "automod.message.hold"))
 				return err
 			}
 
-			if err := a.subscribeEvent("stream.online", "1", map[string]string{
-				"broadcaster_user_id": a.stream.ChannelID(),
+			if err := e.subscribeEvent("stream.online", "1", map[string]string{
+				"broadcaster_user_id": e.stream.ChannelID(),
 			}, payload.Session.ID); err != nil {
-				a.log.Error("Failed to subscribe to event", err, slog.String("event", "stream.online"))
+				e.log.Error("Failed to subscribe to event", err, slog.String("event", "stream.online"))
 				return err
 			}
 
-			if err := a.subscribeEvent("stream.offline", "1", map[string]string{
-				"broadcaster_user_id": a.stream.ChannelID(),
+			if err := e.subscribeEvent("stream.offline", "1", map[string]string{
+				"broadcaster_user_id": e.stream.ChannelID(),
 			}, payload.Session.ID); err != nil {
-				a.log.Error("Failed to subscribe to event", err, slog.String("event", "stream.offline"))
+				e.log.Error("Failed to subscribe to event", err, slog.String("event", "stream.offline"))
 				return err
 			}
 
-			if err := a.subscribeEvent("channel.update", "2", map[string]string{
-				"broadcaster_user_id": a.stream.ChannelID(),
+			if err := e.subscribeEvent("channel.update", "2", map[string]string{
+				"broadcaster_user_id": e.stream.ChannelID(),
 			}, payload.Session.ID); err != nil {
-				a.log.Error("Failed to subscribe to event", err, slog.String("event", "channel.update"))
+				e.log.Error("Failed to subscribe to event", err, slog.String("event", "channel.update"))
 				return err
 			}
+
+			if err := e.subscribeEvent("channel.moderate", "2", map[string]string{
+				"broadcaster_user_id": e.stream.ChannelID(),
+				"moderator_user_id":   e.cfg.App.UserID,
+			}, payload.Session.ID); err != nil {
+				e.log.Error("Failed to subscribe to event", err, slog.String("event", "channel.moderate"))
+				return err
+			}
+
 			break
 		case "session_keepalive":
-			a.log.Trace("Received session_keepalive on EventSub")
+			e.log.Trace("Received session_keepalive on EventSub")
 			break
 		case "notification":
-			a.log.Debug("Received notification on EventSub")
+			e.log.Debug("Received notification on EventSub")
 
 			var envelope EventSubEnvelope
 			if err := json.Unmarshal(event.Payload, &envelope); err != nil {
-				a.log.Error("Failed to decode EventSub envelope", err)
+				e.log.Error("Failed to decode EventSub envelope", err)
 				break
 			}
 
@@ -136,50 +145,65 @@ func (a *Automod) connectAndHandleEvents() error {
 			case "automod.message.hold":
 				var am AutomodHoldEvent
 				if err := json.Unmarshal(envelope.Event, &am); err != nil {
-					a.log.Error("Failed to decode automod event", err)
+					e.log.Error("Failed to decode automod event", err)
 					break
 				}
-				a.log.Info("AutoMod held message", slog.String("user_id", am.UserID), slog.String("message_id", am.MessageID), slog.String("text", am.Message.Text))
+				e.log.Info("AutoMod held message", slog.String("user_id", am.UserID), slog.String("message_id", am.MessageID), slog.String("text", am.Message.Text))
 
 				text := strings.ToLower(domain.NormalizeText(am.Message.Text))
 				words := strings.Fields(text)
 
-				if a.bwords.CheckMessage(words) {
-					time.Sleep(time.Duration(a.cfg.Spam.DelayAutomod) * time.Second)
-					a.moderation.Ban(am.UserID, "банворд")
+				if e.bwords.CheckMessage(words) {
+					time.Sleep(time.Duration(e.cfg.Spam.DelayAutomod) * time.Second)
+					e.moderation.Ban(am.UserID, "банворд")
 				}
 
-				if a.cfg.PunishmentOnline && a.bwords.CheckOnline(text) {
-					a.moderation.Ban(am.UserID, "тупое")
+				if e.cfg.PunishmentOnline && e.bwords.CheckOnline(text) {
+					e.moderation.Ban(am.UserID, "тупое")
 				}
 			case "stream.online":
-				a.log.Info("Stream started")
-				a.stream.SetIslive(true)
-				a.stats.SetStartTime(time.Now())
+				e.log.Info("Stream started")
+				e.stream.SetIslive(true)
+				e.stats.SetStartTime(time.Now())
 			case "stream.offline":
-				a.log.Info("Stream ended")
-				a.stream.SetIslive(false)
-				a.stats.SetEndTime(time.Now())
+				e.log.Info("Stream ended")
+				e.stream.SetIslive(false)
+				e.stats.SetEndTime(time.Now())
 			case "channel.update":
 				var upd ChannelUpdateEvent
 				if err := json.Unmarshal(envelope.Event, &upd); err != nil {
-					a.log.Error("Failed to decode channel.update event", err)
+					e.log.Error("Failed to decode channel.update event", err)
 					break
 				}
-				a.log.Info("Channel updated", slog.String("title", upd.Title), slog.String("category", upd.CategoryName), slog.String("lang", upd.Language))
+				e.log.Info("Channel updated", slog.String("title", upd.Title), slog.String("category", upd.CategoryName), slog.String("lang", upd.Language))
 
 				if upd.CategoryName != "" { // TODO
-					a.stream.SetCategory(upd.CategoryName)
+					e.stream.SetCategory(upd.CategoryName)
 				}
+			case "channel.moderate":
+				var modEvent ChannelModerateEvent
+				if err := json.Unmarshal(envelope.Event, &modEvent); err != nil {
+					e.log.Error("Failed to decode channel.moderate event", err)
+					break
+				}
+
+				switch modEvent.Action {
+				case "timeout":
+					e.log.Info("User muted", slog.String("mod_username", modEvent.ModeratorUserName), slog.String("username", modEvent.Timeout.Username), slog.Time("expires_at", modEvent.Timeout.ExpiresAt), slog.String("reason", modEvent.Timeout.Reason))
+					e.stats.AddTimeout(modEvent.ModeratorUserName)
+				case "ban":
+					e.log.Info("User banned", slog.String("mod_username", modEvent.ModeratorUserName), slog.String("username", modEvent.Ban.Username), slog.String("reason", modEvent.Ban.Reason))
+					e.stats.AddBan(modEvent.ModeratorUserName)
+				}
+			case "session_reconnect":
+				e.log.Debug("Received session_reconnect on EventSub")
+				return nil
 			}
-		case "session_reconnect":
-			a.log.Debug("Received session_reconnect on EventSub")
-			return nil
 		}
 	}
 }
 
-func (a *Automod) subscribeEvent(eventType, version string, condition map[string]string, sessionID string) error {
+func (e *EventSub) subscribeEvent(eventType, version string, condition map[string]string, sessionID string) error {
 	body := map[string]interface{}{
 		"type":      eventType,
 		"version":   version,
@@ -200,11 +224,11 @@ func (a *Automod) subscribeEvent(eventType, version string, condition map[string
 		return fmt.Errorf("create subscription request: %w", err)
 	}
 
-	req.Header.Set("Authorization", "Bearer "+a.cfg.App.OAuth)
-	req.Header.Set("Client-Id", a.cfg.App.ClientID)
+	req.Header.Set("Authorization", "Bearer "+e.cfg.App.OAuth)
+	req.Header.Set("Client-Id", e.cfg.App.ClientID)
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := a.client.Do(req)
+	resp, err := e.client.Do(req)
 	if err != nil {
 		return fmt.Errorf("send subscription request: %w", err)
 	}

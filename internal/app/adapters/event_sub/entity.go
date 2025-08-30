@@ -70,3 +70,28 @@ type ChannelUpdateMessage struct {
 	} `json:"subscription"`
 	Event ChannelUpdateEvent `json:"event"`
 }
+
+type ChannelModerateEvent struct {
+	BroadcasterUserID string `json:"broadcaster_user_id"`
+	ModeratorUserID   string `json:"moderator_user_id"`
+	ModeratorUserName string `json:"moderator_user_name"`
+	Action            string `json:"action"`
+	Timeout           *struct {
+		UserID    string    `json:"user_id"`
+		Username  string    `json:"user_name"`
+		ExpiresAt time.Time `json:"expires_at"`
+		Reason    string    `json:"reason"`
+	} `json:"timeout,omitempty"`
+	Ban *struct {
+		UserID   string `json:"user_id"`
+		Username string `json:"user_name"`
+		Reason   string `json:"reason"`
+	} `json:"ban,omitempty"`
+	Unban *struct {
+		UserID string `json:"user_id"`
+	} `json:"unban,omitempty"`
+	Warn *struct {
+		UserID string `json:"user_id"`
+		Reason string `json:"reason"`
+	} `json:"warn,omitempty"`
+}

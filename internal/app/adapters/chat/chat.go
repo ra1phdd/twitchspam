@@ -57,11 +57,11 @@ func New(log logger.Logger, manager *config.Manager, client *http.Client, modCha
 	c.stream = stream.NewStream(channelID, modChannel)
 	c.stream.SetIslive(isLive)
 
-	//stv := seventv.New(log, st)
-	//stv.GetUserChannel()
-
 	c.stats = stats.New(log)
 	if isLive {
+		c.log.Info("Stream started")
+		c.stream.SetIslive(true)
+		c.stats.SetStartTime(time.Now())
 		c.stats.SetOnline(viewerCount)
 	}
 
@@ -162,17 +162,7 @@ func (c *Chat) listen() {
 			}
 		case strings.Contains(line, "CLEARCHAT"):
 			irc := ParseIRC(line)
-			c.log.Info("User muted", slog.String("moderator", irc.Channel))
-
-			if !c.stream.IsLive() {
-				break
-			}
-
-			if irc.BanDuration != 0 {
-				c.stats.AddTimeout(irc.Channel)
-				break
-			}
-			c.stats.AddBan(irc.Channel)
+			c.log.Debug("User muted", slog.String("moderator", irc.Channel))
 		case strings.Contains(line, "USERNOTICE"):
 			c.log.Debug("New sub", slog.String("line", line))
 		case strings.Contains(line, "JOIN"):

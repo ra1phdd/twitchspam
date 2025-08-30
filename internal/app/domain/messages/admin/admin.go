@@ -178,7 +178,11 @@ func handleMsgSettings(args []string, s *config.SpamSettings) ports.ActionType {
 
 func handleToSettings(args []string, s *config.SpamSettings) ports.ActionType {
 	var timeouts []int
-	for _, str := range args {
+	for i, str := range args {
+		if i >= 15 {
+			break
+		}
+
 		if t, err := strconv.Atoi(str); err == nil {
 			timeouts = append(timeouts, t)
 		} else {

@@ -6,9 +6,11 @@ import (
 )
 
 type Shard[T any] struct {
-	mu       sync.RWMutex
+	userMu   sync.RWMutex
 	userData map[string][]*Item[T]
-	expHeap  ItemHeap[T]
+
+	heapMu  sync.Mutex
+	expHeap ItemHeap[T]
 }
 
 func (s *Store[T]) getShard(username string) *Shard[T] {

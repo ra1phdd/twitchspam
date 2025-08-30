@@ -35,14 +35,21 @@ type Checker struct {
 
 func NewCheck(log logger.Logger, cfg *config.Config, stream ports.StreamPort, stats ports.StatsPort) *Checker {
 	return &Checker{
-		log:      log,
-		cfg:      cfg,
-		stream:   stream,
-		stats:    stats,
-		timeouts: storage.New[Empty](runtime.NumCPU(), 500*time.Millisecond),
-		messages: storage.New[string](runtime.NumCPU(), 500*time.Millisecond),
-		bwords:   banwords.New(cfg.Banwords),
-		sevenTV:  seventv.New(log, stream),
+		log:    log,
+		cfg:    cfg,
+		stream: stream,
+		stats:  stats,
+		timeouts: storage.New[Empty](runtime.NumCPU(), 500*time.Millisecond, func() int {
+			return 15
+		}),
+		messages: storage.New[string](runtime.NumCPU(), 500*time.Millisecond, func() int {
+			defLimit := float64(cfg.Spam.SettingsDefault.MessageLimit*cfg.Spam.SettingsDefault.MinGapMessages) / cfg.Spam.SettingsDefault.SimilarityThreshold
+			vipLimit := float64(cfg.Spam.SettingsVIP.MessageLimit*cfg.Spam.SettingsVIP.MinGapMessages) / cfg.Spam.SettingsVIP.SimilarityThreshold
+
+			return int(max(defLimit, vipLimit))
+		}),
+		bwords:  banwords.New(cfg.Banwords),
+		sevenTV: seventv.New(log, stream),
 	}
 }
 
