@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"twitchspam/internal/app/ports"
 	"twitchspam/pkg/logger"
 )
@@ -53,7 +54,9 @@ func (sv *SevenTV) GetUserChannel() (*ports.User, error) {
 	return &user, nil
 }
 
-func (sv *SevenTV) IsOnlyEmotes(words []string) bool {
+func (sv *SevenTV) IsOnlyEmotes(text string) bool {
+	words := strings.Fields(text)
+
 	if len(words) == 0 {
 		return false
 	}

@@ -66,7 +66,7 @@ func (c *Checker) Check(msg *ports.ChatMessage) *ports.CheckerAction {
 	text := strings.ToLower(domain.NormalizeText(msg.Message.Text))
 	words := strings.Fields(text)
 
-	if !c.cfg.Spam.SettingsEmotes.Enabled && c.sevenTV.IsOnlyEmotes(words) {
+	if !c.cfg.Spam.SettingsEmotes.Enabled && c.sevenTV.IsOnlyEmotes(msg.Message.Text) {
 		return &ports.CheckerAction{Type: None}
 	}
 

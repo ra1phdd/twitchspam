@@ -288,9 +288,34 @@ func (c *Twitch) connectAndHandleEvents() error {
 					c.moderation.Ban(am.UserID, "банворд")
 				}
 
-				if c.cfg.PunishmentOnline && c.bwords.CheckOnline(text) {
-					c.moderation.Ban(am.UserID, "тупое")
-				}
+				//for _, group := range c.cfg.MwordGroup {
+				//	if !group.Enabled {
+				//		continue
+				//	}
+				//
+				//	for _, word := range words {
+				//		if !strings.Contains(text, word) {
+				//			continue
+				//		}
+				//
+				//		switch group.Action {
+				//		case "ban":
+				//			c.log.Warn("Banword in phrase", slog.String("username", action.Username), slog.String("text", action.Text))
+				//			c.moderation.Ban(action.UserID, action.Reason)
+				//		case "timeout":
+				//			c.log.Warn("Spam is found", slog.String("username", action.Username), slog.String("text", action.Text), slog.Int("duration", int(action.Duration.Seconds())))
+				//			if c.cfg.Spam.SettingsDefault.Enabled {
+				//				c.moderation.Timeout(action.UserID, int(action.Duration.Seconds()), action.Reason)
+				//			}
+				//		case "delete":
+				//			c.log.Warn("Muteword in phrase", slog.String("username", action.Username), slog.String("text", action.Text))
+				//			if err := c.DeleteChatMessage(msg.Broadcaster.UserID, msg.Message.ID); err != nil {
+				//				c.log.Error("Failed to delete message on chat", err)
+				//			}
+				//		}
+				//		break
+				//	}
+				//}
 			case "stream.online":
 				c.log.Info("Stream started")
 				c.stream.SetIslive(true)
@@ -319,7 +344,7 @@ func (c *Twitch) connectAndHandleEvents() error {
 
 				switch modEvent.Action {
 				case "delete":
-					c.log.Info("The moderator deleted the user's message", slog.String("mod_username", modEvent.ModeratorUserName), slog.String("username", modEvent.Timeout.Username))
+					c.log.Info("The moderator deleted the user's message", slog.String("mod_username", modEvent.ModeratorUserName))
 					c.stats.AddDeleted(modEvent.ModeratorUserName)
 				case "timeout":
 					c.log.Info("The moderator muted the user", slog.String("mod_username", modEvent.ModeratorUserName), slog.String("username", modEvent.Timeout.Username), slog.Time("expires_at", modEvent.Timeout.ExpiresAt), slog.String("reason", modEvent.Timeout.Reason))
