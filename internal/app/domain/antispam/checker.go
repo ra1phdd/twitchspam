@@ -17,6 +17,7 @@ const (
 	None    ports.ActionType = "none"
 	Ban     ports.ActionType = "ban"
 	Timeout ports.ActionType = "timeout"
+	Delete  ports.ActionType = "delete"
 )
 
 type Empty struct{}
@@ -85,13 +86,24 @@ func (c *Checker) Check(msg *ports.ChatMessage) *ports.CheckerAction {
 		}
 	}
 
-	if c.cfg.PunishmentOnline && c.bwords.CheckOnline(text) {
-		return &ports.CheckerAction{
-			Type:     Ban,
-			Reason:   "тупое",
-			UserID:   msg.Chatter.UserID,
-			Username: msg.Chatter.Username,
-			Text:     msg.Message.Text,
+	for _, group := range c.cfg.MwordGroup {
+		if !group.Enabled {
+			continue
+		}
+
+		for _, word := range words {
+			if !strings.Contains(text, word) {
+				continue
+			}
+
+			return &ports.CheckerAction{
+				Type:     ports.ActionType(group.Action),
+				Reason:   "мворд",
+				Duration: time.Duration(group.Duration) * time.Second,
+				UserID:   msg.Chatter.UserID,
+				Username: msg.Chatter.Username,
+				Text:     msg.Message.Text,
+			}
 		}
 	}
 

@@ -1,5 +1,11 @@
 package ports
 
+type Chat interface {
+	GetChannelID(username string) (string, error)
+	GetOnline(username string) (int, bool, error)
+	SendChatMessage(broadcasterID, senderID, message string) error
+}
+
 type ChatMessage struct {
 	Broadcaster Broadcaster
 	Chatter     Chatter

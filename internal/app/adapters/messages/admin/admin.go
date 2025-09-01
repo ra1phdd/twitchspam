@@ -31,6 +31,9 @@ const (
 	ErrResetTimeoutSeconds ports.ActionType = "значение должно быть от 1 до 86400"
 	ErrDelayAutomod        ports.ActionType = "значение должно быть от 1 до 10"
 	NoStream               ports.ActionType = "стрим выключен"
+	ErrFoundMwordGroup     ports.ActionType = "группа уже существует"
+	ErrNotFoundMwordGroup  ports.ActionType = "группа не найдена"
+	ErrNotFoundMwordGroups ports.ActionType = "группы не найдены"
 )
 
 type Admin struct {
@@ -89,7 +92,7 @@ func (a *Admin) FindMessages(msg *ports.ChatMessage) ports.ActionType {
 		"del":     a.handleDel,
 		"vip":     a.handleVip,
 		"game":    a.handleCategory,
-		"mword":   a.handleOnline,
+		"mwg":     a.handleMwg,
 	}
 
 	handler, ok := handlers[cmd]
@@ -380,6 +383,229 @@ func (a *Admin) handleOnline(cfg *config.Config, args []string, _ string) ports.
 	}
 
 	return NotFound
+}
+
+func (a *Admin) handleMwg(cfg *config.Config, args []string, _ string) ports.ActionType {
+	if len(args) < 1 {
+		return NonParametr
+	}
+	mwgCmd, mwgArgs := args[0], args[1:]
+
+	handlers := map[string]func([]string, *config.Config) ports.ActionType{
+		"list":   a.handleMwgList,
+		"create": a.handleMwgCreate,
+		"set":    a.handleMwgSet,
+		"add":    a.handleMwgAdd,
+		"del":    a.handleMwgDel,
+		"on":     a.handleMwgOnOff,
+		"off":    a.handleMwgOnOff,
+	}
+
+	if handler, ok := handlers[mwgCmd]; ok {
+		return handler(mwgArgs, cfg)
+	}
+	return NotFound
+}
+
+func (a *Admin) handleMwgList(_ []string, cfg *config.Config) ports.ActionType {
+	if len(cfg.MwordGroup) == 0 {
+		return ErrNotFoundMwordGroups
+	}
+
+	msg := "группы:"
+	for name := range cfg.MwordGroup {
+		msg += fmt.Sprintf(" %s", name)
+	}
+
+	return ports.ActionType(msg)
+}
+
+func (a *Admin) handleMwgCreate(args []string, cfg *config.Config) ports.ActionType {
+	if len(args) < 2 {
+		return NonParametr
+	}
+
+	groupName := args[0]
+	punishment := args[1]
+
+	if _, exists := cfg.MwordGroup[groupName]; exists {
+		return ErrFoundMwordGroup
+	}
+
+	action, duration, err := parsePunishment(punishment)
+	if err != nil {
+		return ErrFound
+	}
+
+	if err := a.manager.Update(func(cfg *config.Config) {
+		cfg.MwordGroup[groupName] = &config.MwordGroup{
+			Action:   action,
+			Duration: duration,
+			Enabled:  true,
+			Words:    []string{},
+		}
+	}); err != nil {
+		a.log.Error("Failed update config", err)
+		return ErrFound
+	}
+
+	return Success
+}
+
+func (a *Admin) handleMwgSet(args []string, cfg *config.Config) ports.ActionType {
+	if len(args) < 2 {
+		return NonParametr
+	}
+
+	groupName := args[0]
+	punishment := args[1]
+
+	if _, exists := cfg.MwordGroup[groupName]; !exists {
+		return ErrNotFoundMwordGroup
+	}
+
+	action, duration, err := parsePunishment(punishment)
+	if err != nil {
+		return ErrFound
+	}
+
+	if err := a.manager.Update(func(cfg *config.Config) {
+		cfg.MwordGroup[groupName].Action = action
+		cfg.MwordGroup[groupName].Duration = duration
+	}); err != nil {
+		a.log.Error("Failed update config", err)
+		return ErrFound
+	}
+
+	return Success
+}
+
+func (a *Admin) handleMwgAdd(args []string, cfg *config.Config) ports.ActionType {
+	if len(args) < 2 {
+		return NonParametr
+	}
+
+	groupName := args[0]
+	words := strings.Split(args[1], ",")
+
+	group, exists := cfg.MwordGroup[groupName]
+	if !exists {
+		return NotFound
+	}
+
+	for _, word := range words {
+		trimmedWord := strings.TrimSpace(word)
+		if trimmedWord == "" {
+			continue
+		}
+
+		found := false
+		for _, existingWord := range group.Words {
+			if existingWord == trimmedWord {
+				found = true
+				break
+			}
+		}
+
+		if !found {
+			if err := a.manager.Update(func(cfg *config.Config) {
+				cfg.MwordGroup[groupName].Words = append(cfg.MwordGroup[groupName].Words, trimmedWord)
+			}); err != nil {
+				a.log.Error("Failed update config", err)
+				return ErrFound
+			}
+		}
+	}
+
+	return Success
+}
+
+func (a *Admin) handleMwgDel(args []string, cfg *config.Config) ports.ActionType {
+	if len(args) < 2 {
+		return NonParametr
+	}
+
+	groupName := args[0]
+	target := args[1]
+
+	group, exists := cfg.MwordGroup[groupName]
+	if !exists {
+		return NotFound
+	}
+
+	if target == "all" {
+		if err := a.manager.Update(func(cfg *config.Config) {
+			delete(cfg.MwordGroup, groupName)
+		}); err != nil {
+			a.log.Error("Failed update config", err)
+			return ErrFound
+		}
+
+		return Success
+	}
+
+	wordsToRemove := strings.Split(target, ",")
+	var newWords []string
+
+	for _, existingWord := range group.Words {
+		keep := true
+		for _, wordToRemove := range wordsToRemove {
+			if existingWord == strings.TrimSpace(wordToRemove) {
+				keep = false
+				break
+			}
+		}
+		if keep {
+			newWords = append(newWords, existingWord)
+		}
+	}
+
+	if err := a.manager.Update(func(cfg *config.Config) {
+		cfg.MwordGroup[groupName].Words = newWords
+	}); err != nil {
+		a.log.Error("Failed update config", err)
+		return ErrFound
+	}
+
+	return Success
+}
+
+func (a *Admin) handleMwgOnOff(args []string, cfg *config.Config) ports.ActionType {
+	if len(args) < 1 {
+		return NonParametr
+	}
+	groupName := args[0]
+
+	if _, exists := cfg.MwordGroup[groupName]; !exists {
+		return ErrNotFoundMwordGroup
+	}
+
+	if err := a.manager.Update(func(cfg *config.Config) {
+		cfg.MwordGroup[groupName].Enabled = strings.HasPrefix(args[0], "on")
+	}); err != nil {
+		a.log.Error("Failed update config", err)
+		return ErrFound
+	}
+
+	return Success
+}
+
+func parsePunishment(punishment string) (string, int, error) {
+	punishment = strings.TrimSpace(punishment)
+	if punishment == "-" {
+		return "delete", 0, nil
+	}
+
+	if punishment == "0" {
+		return "ban", 0, nil
+	}
+
+	duration, err := strconv.Atoi(punishment)
+	if err != nil || duration < 1 || duration > 1209600 {
+		return "", 0, fmt.Errorf("invalid timeout value")
+	}
+
+	return "timeout", duration, nil
 }
 
 func parseIntArg(args []string, min, max int) (int, bool) {

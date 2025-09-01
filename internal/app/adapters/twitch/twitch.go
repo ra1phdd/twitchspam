@@ -1,4 +1,4 @@
-package chat
+package twitch
 
 import (
 	"bytes"
@@ -10,12 +10,12 @@ import (
 	"net/http"
 	"strings"
 	"time"
+	"twitchspam/internal/app/adapters/messages/admin"
+	"twitchspam/internal/app/adapters/messages/user"
 	"twitchspam/internal/app/adapters/stats"
 	"twitchspam/internal/app/domain"
 	"twitchspam/internal/app/domain/antispam"
 	"twitchspam/internal/app/domain/banwords"
-	"twitchspam/internal/app/domain/messages/admin"
-	"twitchspam/internal/app/domain/messages/user"
 	"twitchspam/internal/app/domain/stream"
 	"twitchspam/internal/app/infrastructure/config"
 	"twitchspam/internal/app/infrastructure/twitch"
@@ -23,7 +23,7 @@ import (
 	"twitchspam/pkg/logger"
 )
 
-type Chat struct {
+type Twitch struct {
 	log        logger.Logger
 	cfg        *config.Config
 	stream     ports.StreamPort
@@ -37,19 +37,19 @@ type Chat struct {
 	client *http.Client
 }
 
-func New(log logger.Logger, manager *config.Manager, client *http.Client, modChannel string) (*Chat, error) {
-	c := &Chat{
+func New(log logger.Logger, manager *config.Manager, client *http.Client, modChannel string) (*Twitch, error) {
+	c := &Twitch{
 		log:    log,
 		cfg:    manager.Get(),
 		client: client,
 	}
 
-	channelID, err := GetChannelID(modChannel, c.cfg.App.OAuth, c.cfg.App.ClientID)
+	channelID, err := c.GetChannelID(modChannel)
 	if err != nil {
 		return nil, err
 	}
 
-	viewerCount, isLive, err := GetOnline(modChannel, c.cfg.App.OAuth, c.cfg.App.ClientID)
+	viewerCount, isLive, err := c.GetOnline(modChannel)
 	if err != nil {
 		return nil, err
 	}
@@ -74,7 +74,7 @@ func New(log logger.Logger, manager *config.Manager, client *http.Client, modCha
 	go func() {
 		ticker := time.NewTicker(30 * time.Second)
 		for range ticker.C {
-			viewerCount, isLive, err := GetOnline(modChannel, c.cfg.App.OAuth, c.cfg.App.ClientID)
+			viewerCount, isLive, err := c.GetOnline(modChannel)
 			if err != nil {
 				log.Error("Error getting viewer count", err)
 				return
@@ -90,7 +90,7 @@ func New(log logger.Logger, manager *config.Manager, client *http.Client, modCha
 	return c, nil
 }
 
-func (c *Chat) runEventLoop() {
+func (c *Twitch) runEventLoop() {
 	for {
 		err := c.connectAndHandleEvents()
 		if err != nil {
@@ -100,15 +100,15 @@ func (c *Chat) runEventLoop() {
 	}
 }
 
-func (c *Chat) connectAndHandleEvents() error {
+func (c *Twitch) connectAndHandleEvents() error {
 	ws, _, err := websocket.DefaultDialer.Dial("wss://eventsub.wss.twitch.tv/ws", nil)
 	if err != nil {
-		c.log.Error("Failed to connect to Twitch Chat", err)
+		c.log.Error("Failed to connect to Twitch Twitch", err)
 		return err
 	}
 	defer ws.Close()
 
-	c.log.Info("Connected to Twitch Chat WebSocket")
+	c.log.Info("Connected to Twitch Twitch WebSocket")
 	for {
 		_, msgBytes, err := ws.ReadMessage()
 		if err != nil {
@@ -118,13 +118,13 @@ func (c *Chat) connectAndHandleEvents() error {
 
 		var event EventSubMessage
 		if err := json.Unmarshal(msgBytes, &event); err != nil {
-			c.log.Error("Failed to decode Chat message", err, slog.String("event", string(msgBytes)))
+			c.log.Error("Failed to decode Twitch message", err, slog.String("event", string(msgBytes)))
 			continue
 		}
 
 		switch event.Metadata.MessageType {
 		case "session_welcome":
-			c.log.Debug("Received session_welcome on Chat")
+			c.log.Debug("Received session_welcome on Twitch")
 
 			var payload SessionWelcomePayload
 			if err := json.Unmarshal(event.Payload, &payload); err != nil {
@@ -173,20 +173,19 @@ func (c *Chat) connectAndHandleEvents() error {
 
 			break
 		case "session_keepalive":
-			c.log.Trace("Received session_keepalive on Chat")
+			c.log.Trace("Received session_keepalive on Twitch")
 			break
 		case "notification":
-			c.log.Debug("Received notification on Chat")
+			c.log.Debug("Received notification on Twitch")
 
 			var envelope EventSubEnvelope
 			if err := json.Unmarshal(event.Payload, &envelope); err != nil {
-				c.log.Error("Failed to decode Chat envelope", err)
+				c.log.Error("Failed to decode Twitch envelope", err)
 				break
 			}
 
 			switch envelope.Subscription.Type {
 			case "channel.chat.message":
-				fmt.Println(string(envelope.Event))
 				var msgEvent ChatMessageEvent
 				if err := json.Unmarshal(envelope.Event, &msgEvent); err != nil {
 					c.log.Error("Failed to decode channel.chat.message event", err)
@@ -244,14 +243,14 @@ func (c *Chat) connectAndHandleEvents() error {
 				}
 
 				if adminAction := c.admin.FindMessages(msg); adminAction != admin.None {
-					if err := SendChatMessage(msg.Broadcaster.UserID, c.cfg.App.UserID, fmt.Sprintf("@%s, %s!", msg.Chatter.Username, adminAction), c.cfg.App.OAuth, c.cfg.App.ClientID); err != nil {
+					if err := c.SendChatMessage(msg.Broadcaster.UserID, fmt.Sprintf("@%s, %s!", msg.Chatter.Username, adminAction)); err != nil {
 						c.log.Error("Failed to send message on chat", err)
 					}
 					continue
 				}
 
 				if userAction := c.user.FindMessages(msg); userAction != user.None {
-					if err := SendChatMessage(msg.Broadcaster.UserID, c.cfg.App.UserID, fmt.Sprintf("@%s, %s!", msg.Chatter.Username, userAction), c.cfg.App.OAuth, c.cfg.App.ClientID); err != nil {
+					if err := c.SendChatMessage(msg.Broadcaster.UserID, fmt.Sprintf("@%s, %s!", msg.Chatter.Username, userAction)); err != nil {
 						c.log.Error("Failed to send message on chat", err)
 					}
 					continue
@@ -266,6 +265,11 @@ func (c *Chat) connectAndHandleEvents() error {
 					c.log.Warn("Spam is found", slog.String("username", action.Username), slog.String("text", action.Text), slog.Int("duration", int(action.Duration.Seconds())))
 					if c.cfg.Spam.SettingsDefault.Enabled {
 						c.moderation.Timeout(action.UserID, int(action.Duration.Seconds()), action.Reason)
+					}
+				case antispam.Delete:
+					c.log.Warn("Muteword in phrase", slog.String("username", action.Username), slog.String("text", action.Text))
+					if err := c.DeleteChatMessage(msg.Broadcaster.UserID, msg.Message.ID); err != nil {
+						c.log.Error("Failed to delete message on chat", err)
 					}
 				}
 			case "automod.message.hold":
@@ -325,14 +329,14 @@ func (c *Chat) connectAndHandleEvents() error {
 					c.stats.AddBan(modEvent.ModeratorUserName)
 				}
 			case "session_reconnect":
-				c.log.Debug("Received session_reconnect on Chat")
+				c.log.Debug("Received session_reconnect on Twitch")
 				return nil
 			}
 		}
 	}
 }
 
-func (c *Chat) subscribeEvent(eventType, version string, condition map[string]string, sessionID string) error {
+func (c *Twitch) subscribeEvent(eventType, version string, condition map[string]string, sessionID string) error {
 	body := map[string]interface{}{
 		"type":      eventType,
 		"version":   version,

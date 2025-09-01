@@ -8,6 +8,7 @@ require (
 	github.com/gorilla/websocket v1.5.3
 	github.com/samber/slog-multi v1.4.1
 	github.com/shirou/gopsutil v3.21.11+incompatible
+	golang.org/x/time v0.12.0
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 )
 
@@ -21,5 +22,4 @@ require (
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
 	golang.org/x/sys v0.35.0 // indirect
 	golang.org/x/text v0.22.0 // indirect
-	golang.org/x/time v0.12.0 // indirect
 )

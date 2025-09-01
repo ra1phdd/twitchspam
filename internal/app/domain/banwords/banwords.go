@@ -30,31 +30,3 @@ func (bw *Banwords) CheckMessage(words []string) bool {
 
 	return false
 }
-
-func (bw *Banwords) CheckOnline(text string) bool {
-	queries := []string{
-		"че с онлайном",
-		"чё с онлайном",
-		"что с онлайном",
-		"где онлайн",
-		"че со зрителями",
-		"чё со зрителями",
-		"что со зрителями",
-		"че по онлайну",
-		"чё по онлайну",
-		"что по онлайну",
-		"где зрители",
-		"где зрилы",
-		"че так мало онлайна",
-		"чё так мало онлайна",
-		"почему так мало онлайна",
-	}
-
-	for _, q := range queries {
-		if strings.Contains(text, q) {
-			return true
-		}
-	}
-
-	return false
-}

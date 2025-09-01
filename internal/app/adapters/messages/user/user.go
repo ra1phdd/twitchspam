@@ -11,8 +11,7 @@ import (
 )
 
 const (
-	None        ports.ActionType = "none"
-	NonParametr ports.ActionType = "не указан параметр"
+	None ports.ActionType = "none"
 )
 
 type User struct {
