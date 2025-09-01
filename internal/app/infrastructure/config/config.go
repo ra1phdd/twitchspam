@@ -50,11 +50,19 @@ type SpamSettingsEmote struct {
 	MaxEmotesTimeoutTime int   `json:"max_emotes_timeout_time"`
 }
 
+type MwordGroup struct {
+	Action   string   `json:"action"`   // "delete", "ban", "timeout"
+	Duration int      `json:"duration"` // только для таймаута
+	Enabled  bool     `json:"enabled"`
+	Words    []string `json:"words"`
+}
+
 type Config struct {
-	App              App      `json:"app"`
-	Spam             Spam     `json:"spam"`
-	PunishmentOnline bool     `json:"punishment_online"`
-	Banwords         []string `json:"banwords"`
+	App              App                    `json:"app"`
+	Spam             Spam                   `json:"spam"`
+	MwordGroup       map[string]*MwordGroup `json:"mword_group"`
+	PunishmentOnline bool                   `json:"punishment_online"`
+	Banwords         []string               `json:"banwords"`
 }
 
 type Manager struct {

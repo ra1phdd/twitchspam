@@ -67,6 +67,7 @@ func (s *Store[T]) Push(username string, data T, ttl time.Duration) {
 	if len(q) > messageLimitPerUser {
 		q = q[len(q)-messageLimitPerUser:]
 	}
+	sh.userData[username] = q
 	sh.userMu.Unlock()
 
 	sh.heapMu.Lock()

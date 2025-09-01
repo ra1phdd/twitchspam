@@ -2,7 +2,7 @@ package ports
 
 import (
 	"time"
-	"twitchspam/internal/app/adapters/storage"
+	"twitchspam/internal/app/infrastructure/storage"
 )
 
 type StorePort[T any] interface {

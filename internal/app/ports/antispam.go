@@ -5,7 +5,7 @@ import (
 )
 
 type CheckerPort interface {
-	Check(irc *IRCMessage) *CheckerAction
+	Check(msg *ChatMessage) *CheckerAction
 }
 
 type ActionType string

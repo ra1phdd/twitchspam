@@ -5,12 +5,9 @@ import (
 	"math"
 	"sort"
 	"time"
-	"twitchspam/pkg/logger"
 )
 
 type Stats struct {
-	log logger.Logger
-
 	startTime time.Time
 	endTime   time.Time
 	online    struct {
@@ -18,16 +15,14 @@ type Stats struct {
 		sumViewers int64
 		count      int
 	}
-	countFirstMessages int
-	countMessages      map[string]int
-	countBans          map[string]int
-	countTimeouts      map[string]int
+	countMessages map[string]int
+	countDeletes  map[string]int
+	countTimeouts map[string]int
+	countBans     map[string]int
 }
 
-func New(log logger.Logger) *Stats {
-	return &Stats{
-		log: log,
-	}
+func New() *Stats {
+	return &Stats{}
 }
 
 func (s *Stats) SetStartTime(t time.Time) {
@@ -40,8 +35,9 @@ func (s *Stats) SetStartTime(t time.Time) {
 			count      int
 		}{maxViewers: 0, sumViewers: 0, count: 0},
 		countMessages: make(map[string]int),
-		countBans:     make(map[string]int),
+		countDeletes:  make(map[string]int),
 		countTimeouts: make(map[string]int),
+		countBans:     make(map[string]int),
 	}
 }
 
@@ -50,16 +46,16 @@ func (s *Stats) SetEndTime(t time.Time) {
 }
 
 func (s *Stats) SetOnline(viewers int) {
+	if viewers <= 0 {
+		return
+	}
+
 	if viewers > s.online.maxViewers {
 		s.online.maxViewers = viewers
 	}
 
-	s.online.sumViewers = int64(viewers)
+	s.online.sumViewers += int64(viewers)
 	s.online.count++
-}
-
-func (s *Stats) CountFirstMessages() {
-	s.countFirstMessages++
 }
 
 func (s *Stats) AddMessage(username string) {
@@ -70,12 +66,12 @@ func (s *Stats) AddMessage(username string) {
 	s.countMessages[username]++
 }
 
-func (s *Stats) AddBan(username string) {
-	if s.countBans == nil {
+func (s *Stats) AddDeleted(username string) {
+	if s.countDeletes == nil {
 		return
 	}
 
-	s.countBans[username]++
+	s.countDeletes[username]++
 }
 
 func (s *Stats) AddTimeout(username string) {
@@ -86,20 +82,31 @@ func (s *Stats) AddTimeout(username string) {
 	s.countTimeouts[username]++
 }
 
-func (s *Stats) GetStats() string {
-	if s.startTime.IsZero() {
-		return "нет данных"
+func (s *Stats) AddBan(username string) {
+	if s.countBans == nil {
+		return
 	}
 
-	msg := fmt.Sprintf("длительность стрима: %s • средний онлайн: %.0f • максимальный онлайн: %d • всего сообщений: %d • первых сообщений: %d • скорость сообщений: %.1f/сек • кол-во банов: %d • кол-во мутов: %d • топ 3 модератора за стрим: ",
-		s.endTime.Sub(s.startTime), math.Round(float64(s.online.sumViewers/int64(s.online.count))), s.online.maxViewers, len(s.countMessages),
-		s.countFirstMessages, float64(len(s.countMessages))/s.endTime.Sub(s.startTime).Seconds(), len(s.countBans), len(s.countTimeouts))
+	s.countBans[username]++
+}
 
+func (s *Stats) GetStats() string {
+	if s.startTime.IsZero() {
+		return "нет данных за последний стрим"
+	}
+
+	var countBans, countTimeouts, countDeletes int
 	combined := make(map[string]int)
-	for k, v := range s.countBans {
+	for k, v := range s.countDeletes {
+		countDeletes += v
 		combined[k] += v
 	}
 	for k, v := range s.countTimeouts {
+		countTimeouts += v
+		combined[k] += v
+	}
+	for k, v := range s.countBans {
+		countBans += v
 		combined[k] += v
 	}
 
@@ -117,6 +124,10 @@ func (s *Stats) GetStats() string {
 		return list[i].value > list[j].value
 	})
 
+	msg := fmt.Sprintf("длительность стрима: %s • средний онлайн: %.0f • максимальный онлайн: %d • всего сообщений: %d • скорость сообщений: %.1f/сек • кол-во банов: %d • кол-во мутов: %d • кол-во удаленных сообщений: %d • топ 3 модератора за стрим: ",
+		s.endTime.Sub(s.startTime), math.Round(float64(s.online.sumViewers/int64(s.online.count))), s.online.maxViewers, len(s.countMessages),
+		float64(len(s.countMessages))/s.endTime.Sub(s.startTime).Seconds(), countBans, countTimeouts, countDeletes)
+
 	top := 3
 	if len(list) < 3 {
 		top = len(list)
@@ -128,15 +139,20 @@ func (s *Stats) GetStats() string {
 		}
 		msg += fmt.Sprintf("%s (%d)", list[i].key, list[i].value)
 	}
-	msg += "• посмотреть свою стату - !am stats"
+	msg += "• посмотреть свою стату - !stats"
 
 	return msg
 }
 
-func (s *Stats) GetModeratorStats(username string) string {
-	return fmt.Sprintf("кол-во сообщений за стрим: %d • кол-во банов: %d • кол-во мутов: %d", s.countMessages[username], s.countBans[username], s.countTimeouts[username])
-}
-
 func (s *Stats) GetUserStats(username string) string {
+	if s.startTime.IsZero() {
+		return "нет данных за последний стрим"
+	}
+
+	if s.countBans[username] > 0 || s.countTimeouts[username] > 0 || s.countDeletes[username] > 0 {
+		return fmt.Sprintf("кол-во сообщений за стрим: %d • кол-во банов: %d • кол-во мутов: %d • кол-во удаленных сообщений: %d",
+			s.countMessages[username], s.countBans[username], s.countTimeouts[username], s.countDeletes[username])
+	}
+
 	return fmt.Sprintf("кол-во сообщений за стрим: %d", s.countMessages[username])
 }

@@ -4,8 +4,8 @@ import (
 	"golang.org/x/time/rate"
 	"strings"
 	"time"
-	"twitchspam/config"
 	"twitchspam/internal/app/domain"
+	"twitchspam/internal/app/infrastructure/config"
 	"twitchspam/internal/app/ports"
 	"twitchspam/pkg/logger"
 )
@@ -35,30 +35,25 @@ func New(log logger.Logger, manager *config.Manager, stream ports.StreamPort, st
 	}
 }
 
-func (u *User) FindMessages(irc *ports.IRCMessage) ports.ActionType {
-	text := strings.ToLower(domain.NormalizeText(irc.Text))
-	if _, exists := u.usersLimiter[irc.Username]; !exists {
-		u.usersLimiter[irc.Username] = rate.NewLimiter(rate.Every(time.Minute), 3)
+func (u *User) FindMessages(msg *ports.ChatMessage) ports.ActionType {
+	text := strings.ToLower(domain.NormalizeText(msg.Message.Text))
+	if _, exists := u.usersLimiter[msg.Chatter.Username]; !exists {
+		u.usersLimiter[msg.Chatter.Username] = rate.NewLimiter(rate.Every(time.Minute), 3)
 	}
 
-	if strings.HasPrefix(irc.Text, "!stats") && u.usersLimiter[irc.Username].Allow() {
-		parts := strings.Fields(irc.Text)
-		if len(parts) < 2 {
-			return NonParametr
+	if strings.HasPrefix(msg.Message.Text, "!stats") && u.usersLimiter[msg.Chatter.Username].Allow() {
+		parts := strings.Fields(msg.Message.Text)
+		target := msg.Chatter.Username
+		if len(parts) > 1 {
+			if parts[1] == "all" {
+				return ports.ActionType(u.stats.GetStats())
+			}
+			target = parts[1]
 		}
-
-		args := parts[1:]
-		if len(args) > 0 && args[0] == "all" {
-			return ports.ActionType(u.stats.GetStats())
-		}
-
-		if irc.IsMod {
-			return ports.ActionType(u.stats.GetModeratorStats(irc.Username))
-		}
-		return ports.ActionType(u.stats.GetUserStats(irc.Username))
+		return ports.ActionType(u.stats.GetUserStats(target))
 	}
 
-	if u.stream.IsLive() && u.stream.Category() != "Just Chatting" && u.limiterGame.Allow() && u.usersLimiter[irc.Username].Allow() {
+	if u.stream.IsLive() && u.stream.Category() != "Just Chatting" && u.limiterGame.Allow() && u.usersLimiter[msg.Chatter.Username].Allow() {
 		for _, q := range []string{
 			"че за игра",
 			"чё за игра",
@@ -69,28 +64,6 @@ func (u *User) FindMessages(irc *ports.IRCMessage) ports.ActionType {
 			if strings.Contains(text, q) {
 				return ports.ActionType(u.stream.Category())
 			}
-		}
-	}
-
-	for _, q := range []string{
-		"афсигга плохой",
-		"афсига плохой",
-		"афсугга плохой",
-		"афсуга плохой",
-	} {
-		if strings.Contains(text, q) && u.usersLimiter[irc.Username].Allow() {
-			return "(("
-		}
-	}
-
-	for _, q := range []string{
-		"афсигга хороший",
-		"афсига хороший",
-		"афсугга хороший",
-		"афсуга хороший",
-	} {
-		if strings.Contains(text, q) && u.usersLimiter[irc.Username].Allow() {
-			return "nya"
 		}
 	}
 

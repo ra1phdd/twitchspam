@@ -1,4 +1,4 @@
-package moderation
+package twitch
 
 type TimeoutRequest struct {
 	Data TimeoutData `json:"data"`

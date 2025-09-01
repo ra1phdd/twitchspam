@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"net/http"
 	"time"
-	"twitchspam/config"
 	"twitchspam/internal/app/adapters/chat"
+	"twitchspam/internal/app/infrastructure/config"
 	"twitchspam/pkg/logger"
 )
 
@@ -32,14 +32,11 @@ func New() error {
 	for _, channel := range a.cfg.App.ModChannels {
 		log := logger.NewPrefixedLogger(a.log, channel)
 
-		c, err := chat.New(log, manager, a.client, channel)
+		_, err := chat.New(log, manager, a.client, channel)
 		if err != nil {
 			return err
 		}
 
-		if err := c.Connect(channel); err != nil {
-			return err
-		}
 		a.log.Info(fmt.Sprintf("[%s] Chatbot started", channel))
 	}
 

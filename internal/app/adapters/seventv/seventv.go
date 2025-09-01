@@ -34,7 +34,7 @@ func New(log logger.Logger, stream ports.StreamPort) *SevenTV {
 		s.emoteSet[e.Name] = struct{}{}
 	}
 
-	//go s.RunEventLoop()
+	//go s.runEventLoop()
 	return s
 }
 
@@ -66,7 +66,7 @@ func (sv *SevenTV) IsOnlyEmotes(words []string) bool {
 	return true
 }
 
-//func (sv *SevenTV) RunEventLoop() {
+//func (sv *SevenTV) runEventLoop() {
 //	for {
 //		err := sv.connectAndHandleEvents()
 //		if err != nil {

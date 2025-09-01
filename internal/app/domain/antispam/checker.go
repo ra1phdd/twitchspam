@@ -4,11 +4,11 @@ import (
 	"runtime"
 	"strings"
 	"time"
-	"twitchspam/config"
-	"twitchspam/internal/app/adapters/banwords"
 	"twitchspam/internal/app/adapters/seventv"
-	"twitchspam/internal/app/adapters/storage"
 	"twitchspam/internal/app/domain"
+	"twitchspam/internal/app/domain/banwords"
+	"twitchspam/internal/app/infrastructure/config"
+	"twitchspam/internal/app/infrastructure/storage"
 	"twitchspam/internal/app/ports"
 	"twitchspam/pkg/logger"
 )
@@ -53,18 +53,16 @@ func NewCheck(log logger.Logger, cfg *config.Config, stream ports.StreamPort, st
 	}
 }
 
-func (c *Checker) Check(irc *ports.IRCMessage) *ports.CheckerAction {
+func (c *Checker) Check(msg *ports.ChatMessage) *ports.CheckerAction {
 	if c.stream.IsLive() {
-		c.stats.AddMessage(irc.Username)
-		if irc.IsFirst {
-			c.stats.CountFirstMessages()
-		}
+		c.stats.AddMessage(msg.Chatter.Username)
 	}
 
-	if irc.IsMod || !c.cfg.Spam.SettingsDefault.Enabled || (c.cfg.Spam.Mode == "online" && !c.stream.IsLive()) || (!c.cfg.Spam.SettingsEmotes.Enabled && irc.EmoteOnly) {
+	if msg.Chatter.IsBroadcaster || msg.Chatter.IsMod || !c.cfg.Spam.SettingsDefault.Enabled ||
+		(c.cfg.Spam.Mode == "online" && !c.stream.IsLive()) || (!c.cfg.Spam.SettingsEmotes.Enabled && msg.Message.EmoteOnly) {
 		return &ports.CheckerAction{Type: None}
 	}
-	text := strings.ToLower(domain.NormalizeText(irc.Text))
+	text := strings.ToLower(domain.NormalizeText(msg.Message.Text))
 	words := strings.Fields(text)
 
 	if !c.cfg.Spam.SettingsEmotes.Enabled && c.sevenTV.IsOnlyEmotes(words) {
@@ -75,14 +73,14 @@ func (c *Checker) Check(irc *ports.IRCMessage) *ports.CheckerAction {
 		return &ports.CheckerAction{
 			Type:     Ban,
 			Reason:   "банворд",
-			UserID:   irc.UserID,
-			Username: irc.Username,
-			Text:     irc.Text,
+			UserID:   msg.Chatter.UserID,
+			Username: msg.Chatter.Username,
+			Text:     msg.Message.Text,
 		}
 	}
 
 	for _, user := range c.cfg.Spam.WhitelistUsers {
-		if strings.ToLower(user) == strings.ToLower(irc.Username) {
+		if strings.ToLower(user) == strings.ToLower(msg.Chatter.Username) {
 			return &ports.CheckerAction{Type: None}
 		}
 	}
@@ -91,9 +89,9 @@ func (c *Checker) Check(irc *ports.IRCMessage) *ports.CheckerAction {
 		return &ports.CheckerAction{
 			Type:     Ban,
 			Reason:   "тупое",
-			UserID:   irc.UserID,
-			Username: irc.Username,
-			Text:     irc.Text,
+			UserID:   msg.Chatter.UserID,
+			Username: msg.Chatter.Username,
+			Text:     msg.Message.Text,
 		}
 	}
 
@@ -106,14 +104,14 @@ func (c *Checker) Check(irc *ports.IRCMessage) *ports.CheckerAction {
 			Type:     Timeout,
 			Reason:   "превышена максимальная длина слова",
 			Duration: time.Duration(c.cfg.Spam.SettingsDefault.MaxWordTimeoutTime) * time.Second,
-			UserID:   irc.UserID,
-			Username: irc.Username,
-			Text:     irc.Text,
+			UserID:   msg.Chatter.UserID,
+			Username: msg.Chatter.Username,
+			Text:     msg.Message.Text,
 		}
 	}
 
 	settings := c.cfg.Spam.SettingsDefault
-	if irc.IsVIP {
+	if msg.Chatter.IsVip {
 		settings = c.cfg.Spam.SettingsVIP
 
 		if !c.cfg.Spam.SettingsVIP.Enabled {
@@ -122,7 +120,7 @@ func (c *Checker) Check(irc *ports.IRCMessage) *ports.CheckerAction {
 	}
 
 	var countSpam, gap int
-	c.messages.ForEach(irc.Username, func(item *storage.Item[string]) {
+	c.messages.ForEach(msg.Chatter.Username, func(item *storage.Item[string]) {
 		similarity := domain.JaccardSimilarity(text, item.Data)
 
 		if similarity >= settings.SimilarityThreshold {
@@ -137,25 +135,25 @@ func (c *Checker) Check(irc *ports.IRCMessage) *ports.CheckerAction {
 
 	// кол-во спама -1 новый
 	if countSpam >= settings.MessageLimit-1 {
-		c.messages.CleanupUser(irc.Username)
+		c.messages.CleanupUser(msg.Chatter.Username)
 
 		dur := time.Duration(c.cfg.Spam.SpamExceptions[text]) * time.Second
 		if dur == 0 {
-			sec := domain.GetByIndexOrLast(settings.Timeouts, c.timeouts.Len(irc.Username))
+			sec := domain.GetByIndexOrLast(settings.Timeouts, c.timeouts.Len(msg.Chatter.Username))
 			dur = time.Duration(sec) * time.Second
 		}
 
-		c.timeouts.Push(irc.Username, Empty{}, time.Duration(settings.ResetTimeoutSeconds)*time.Second)
+		c.timeouts.Push(msg.Chatter.Username, Empty{}, time.Duration(settings.ResetTimeoutSeconds)*time.Second)
 		return &ports.CheckerAction{
 			Type:     Timeout,
 			Reason:   "спам",
 			Duration: dur,
-			UserID:   irc.UserID,
-			Username: irc.Username,
-			Text:     irc.Text,
+			UserID:   msg.Chatter.UserID,
+			Username: msg.Chatter.Username,
+			Text:     msg.Message.Text,
 		}
 	}
 
-	c.messages.Push(irc.Username, text, time.Duration(c.cfg.Spam.CheckWindowSeconds)*time.Second)
+	c.messages.Push(msg.Chatter.Username, text, time.Duration(c.cfg.Spam.CheckWindowSeconds)*time.Second)
 	return &ports.CheckerAction{Type: None}
 }

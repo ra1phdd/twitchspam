@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"twitchspam/config"
+	"twitchspam/internal/app/infrastructure/config"
 	"twitchspam/internal/app/ports"
 	"twitchspam/pkg/logger"
 )
@@ -51,12 +51,12 @@ type cmdHandler func(cfg *config.Config, args []string, cmd string) ports.Action
 
 var startApp = time.Now()
 
-func (a *Admin) FindMessages(irc *ports.IRCMessage) ports.ActionType {
-	if !irc.IsMod || !strings.HasPrefix(irc.Text, "!am") {
+func (a *Admin) FindMessages(msg *ports.ChatMessage) ports.ActionType {
+	if (!msg.Chatter.IsBroadcaster || !msg.Chatter.IsMod) && !strings.HasPrefix(msg.Message.Text, "!am") {
 		return None
 	}
 
-	parts := strings.Fields(irc.Text)
+	parts := strings.Fields(msg.Message.Text)
 	if len(parts) < 2 {
 		return NonParametr
 	}
@@ -73,23 +73,23 @@ func (a *Admin) FindMessages(irc *ports.IRCMessage) ports.ActionType {
 		"off": func(cfg *config.Config, _ []string, cmd string) ports.ActionType {
 			return handleOnOffSettings(cmd, &cfg.Spam.SettingsDefault)
 		},
-		"online":   a.handleMode,
-		"always":   a.handleMode,
-		"sim":      a.handleSim,
-		"msg":      a.handleMsg,
-		"time":     a.handleTime,
-		"to":       a.handleTo,
-		"rto":      a.handleRto,
-		"mw":       a.handleMw,
-		"mwt":      a.handleMwt,
-		"min_gap":  a.handleMinGap,
-		"da":       a.handleDelayAutomod,
-		"reset":    a.handleReset,
-		"add":      a.handleAdd,
-		"del":      a.handleDel,
-		"vip":      a.handleVip,
-		"category": a.handleCategory,
-		"mword":    a.handleOnline,
+		"online":  a.handleMode,
+		"always":  a.handleMode,
+		"sim":     a.handleSim,
+		"msg":     a.handleMsg,
+		"time":    a.handleTime,
+		"to":      a.handleTo,
+		"rto":     a.handleRto,
+		"mw":      a.handleMw,
+		"mwt":     a.handleMwt,
+		"min_gap": a.handleMinGap,
+		"da":      a.handleDelayAutomod,
+		"reset":   a.handleReset,
+		"add":     a.handleAdd,
+		"del":     a.handleDel,
+		"vip":     a.handleVip,
+		"game":    a.handleCategory,
+		"mword":   a.handleOnline,
 	}
 
 	handler, ok := handlers[cmd]
@@ -102,7 +102,7 @@ func (a *Admin) FindMessages(irc *ports.IRCMessage) ports.ActionType {
 	if err := a.manager.Update(func(cfg *config.Config) {
 		result = handler(cfg, args, cmd)
 	}); err != nil {
-		a.log.Error("Failed update config", err, slog.String("msg", irc.Text))
+		a.log.Error("Failed update config", err, slog.String("msg", msg.Message.Text))
 		return ErrFound
 	}
 

@@ -1,9 +1,9 @@
 package ports
 
 type AdminPort interface {
-	FindMessages(irc *IRCMessage) ActionType
+	FindMessages(msg *ChatMessage) ActionType
 }
 
 type UserPort interface {
-	FindMessages(irc *IRCMessage) ActionType
+	FindMessages(msg *ChatMessage) ActionType
 }

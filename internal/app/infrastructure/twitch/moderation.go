@@ -1,4 +1,4 @@
-package moderation
+package twitch
 
 import (
 	"bytes"
@@ -7,7 +7,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
-	"twitchspam/config"
+	"twitchspam/internal/app/infrastructure/config"
 	"twitchspam/internal/app/ports"
 	"twitchspam/pkg/logger"
 )
