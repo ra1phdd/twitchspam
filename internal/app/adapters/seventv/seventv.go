@@ -66,6 +66,7 @@ func (sv *SevenTV) IsOnlyEmotes(text string) bool {
 			return false
 		}
 	}
+
 	return true
 }
 

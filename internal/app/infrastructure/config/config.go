@@ -20,25 +20,31 @@ type App struct {
 }
 
 type Spam struct {
-	Mode               string            `json:"mode"`                 // !am online/always - только на стриме/всегда
-	CheckWindowSeconds int               `json:"check_window_seconds"` // !am time <секунды, макс 300>
-	DelayAutomod       int               `json:"delay_automod"`        // !am da <0-10> - задержка срабатывания
-	WhitelistUsers     []string          `json:"whitelist_users"`      // !am add/del <список>
-	SpamExceptions     map[string]int    `json:"spam_exceptions"`      // !am except <фразы> <таймаут>
-	SettingsDefault    SpamSettings      `json:"settings_default"`
-	SettingsVIP        SpamSettings      `json:"settings_vip"`
-	SettingsEmotes     SpamSettingsEmote `json:"settings_emotes"`
+	Mode               string                             `json:"mode"`                 // !am online/always - только на стриме/всегда
+	CheckWindowSeconds int                                `json:"check_window_seconds"` // !am time <секунды, макс 300>
+	DelayAutomod       int                                `json:"delay_automod"`        // !am da <0-10> - задержка срабатывания
+	WhitelistUsers     []string                           `json:"whitelist_users"`      // !am add/del <список>
+	Exceptions         map[string]*SpamExceptionsSettings `json:"exceptions"`
+	SettingsDefault    SpamSettings                       `json:"settings_default"`
+	SettingsVIP        SpamSettings                       `json:"settings_vip"`
+	SettingsEmotes     SpamSettingsEmote                  `json:"settings_emotes"`
 }
 
 type SpamSettings struct {
 	Enabled             bool    `json:"enabled"`
 	SimilarityThreshold float64 `json:"similarity_threshold"`  // !am sim <0.0-1.0>
 	MessageLimit        int     `json:"message_limit"`         // !am msg <2-15 или off>
-	Timeouts            []int   `json:"timeouts"`              // !am to <значения через пробел>
+	Timeouts            []int   `json:"timeouts"`              // !am to <значения через запятую>
 	ResetTimeoutSeconds int     `json:"reset_timeout_seconds"` // !am rto <значение>
-	MaxWordLength       int     `json:"max_word_length"`       // !am mw <значение или 0>
+	MaxWordLength       int     `json:"max_word_length"`       // !am mw <значение или 0 для оффа>
 	MaxWordTimeoutTime  int     `json:"max_word_timeout_time"` // !am mwt <секунды>
 	MinGapMessages      int     `json:"min_gap_messages"`      // !am min_gap <0-15>
+}
+
+type SpamExceptionsSettings struct {
+	Enabled      bool `json:"enabled"`       // !am except on/off <фразы через запятую>
+	MessageLimit int  `json:"message_limit"` // !am except msg <2-15 или off> <фразы через запятую>
+	Timeout      int  `json:"timeout"`       // !am except to <значение> <фразы через запятую>
 }
 
 type SpamSettingsEmote struct {
@@ -58,11 +64,10 @@ type MwordGroup struct {
 }
 
 type Config struct {
-	App              App                    `json:"app"`
-	Spam             Spam                   `json:"spam"`
-	MwordGroup       map[string]*MwordGroup `json:"mword_group"`
-	PunishmentOnline bool                   `json:"punishment_online"`
-	Banwords         []string               `json:"banwords"`
+	App        App                    `json:"app"`
+	Spam       Spam                   `json:"spam"`
+	MwordGroup map[string]*MwordGroup `json:"mword_group"`
+	Banwords   []string               `json:"banwords"`
 }
 
 type Manager struct {
@@ -123,6 +128,7 @@ func (m *Manager) GetDefault() *Config {
 		Spam: Spam{
 			Mode:               "online",
 			CheckWindowSeconds: 60,
+			Exceptions:         make(map[string]*SpamExceptionsSettings),
 			SettingsDefault: SpamSettings{
 				Enabled:             true,
 				SimilarityThreshold: 0.7,
@@ -151,11 +157,10 @@ func (m *Manager) GetDefault() *Config {
 				MaxEmotesLength:      10,
 				MaxEmotesTimeoutTime: 600,
 			},
-			WhitelistUsers: []string{},
-			SpamExceptions: map[string]int{},
-			DelayAutomod:   0,
+			DelayAutomod: 0,
 		},
-		Banwords: []string{},
+		MwordGroup: make(map[string]*MwordGroup),
+		Banwords:   []string{},
 	}
 }
 
@@ -218,6 +223,14 @@ func (m *Manager) validate(cfg *Config) error {
 	}
 	if cfg.Spam.SettingsDefault.MinGapMessages < 0 || cfg.Spam.SettingsDefault.MinGapMessages > 15 {
 		return errors.New("spam.min_gap_messages must be in 0..15")
+	}
+
+	if cfg.Spam.Exceptions == nil {
+		cfg.Spam.Exceptions = make(map[string]*SpamExceptionsSettings)
+	}
+
+	if cfg.MwordGroup == nil {
+		cfg.MwordGroup = make(map[string]*MwordGroup)
 	}
 
 	return nil

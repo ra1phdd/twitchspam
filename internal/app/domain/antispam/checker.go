@@ -91,8 +91,8 @@ func (c *Checker) Check(msg *ports.ChatMessage) *ports.CheckerAction {
 			continue
 		}
 
-		for _, word := range words {
-			if !strings.Contains(text, word) {
+		for _, word := range group.Words {
+			if word == "" || !strings.Contains(text, word) {
 				continue
 			}
 
@@ -147,15 +147,21 @@ func (c *Checker) Check(msg *ports.ChatMessage) *ports.CheckerAction {
 
 	// кол-во спама -1 новый
 	if countSpam >= settings.MessageLimit-1 {
-		c.messages.CleanupUser(msg.Chatter.Username)
+		var dur time.Duration
+		if except, ok := c.cfg.Spam.Exceptions[text]; ok && except.Enabled {
+			if countSpam < except.MessageLimit-1 {
+				c.messages.Push(msg.Chatter.Username, text, time.Duration(c.cfg.Spam.CheckWindowSeconds)*time.Second)
+				return &ports.CheckerAction{Type: None}
+			}
 
-		dur := time.Duration(c.cfg.Spam.SpamExceptions[text]) * time.Second
-		if dur == 0 {
+			dur = time.Duration(except.Timeout) * time.Second
+		} else {
 			sec := domain.GetByIndexOrLast(settings.Timeouts, c.timeouts.Len(msg.Chatter.Username))
 			dur = time.Duration(sec) * time.Second
+			c.timeouts.Push(msg.Chatter.Username, Empty{}, time.Duration(settings.ResetTimeoutSeconds)*time.Second)
 		}
 
-		c.timeouts.Push(msg.Chatter.Username, Empty{}, time.Duration(settings.ResetTimeoutSeconds)*time.Second)
+		c.messages.CleanupUser(msg.Chatter.Username)
 		return &ports.CheckerAction{
 			Type:     Timeout,
 			Reason:   "спам",

@@ -76,6 +76,7 @@ func (c *Twitch) doTwitchRequest(method, url string, body io.Reader, target inte
 	req, _ := http.NewRequest(method, url, body)
 	req.Header.Set("Authorization", "Bearer "+c.cfg.App.OAuth)
 	req.Header.Set("Client-Id", c.cfg.App.ClientID)
+	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {

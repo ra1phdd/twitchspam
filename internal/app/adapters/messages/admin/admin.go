@@ -50,7 +50,7 @@ func New(log logger.Logger, manager *config.Manager, stream ports.StreamPort) *A
 	}
 }
 
-type cmdHandler func(cfg *config.Config, args []string, cmd string) ports.ActionType
+type cmdHandler func(cfg *config.Config, cmd string, args []string) ports.ActionType
 
 var startApp = time.Now()
 
@@ -70,29 +70,43 @@ func (a *Admin) FindMessages(msg *ports.ChatMessage) ports.ActionType {
 	}
 
 	handlers := map[string]cmdHandler{
-		"on": func(cfg *config.Config, _ []string, cmd string) ports.ActionType {
-			return handleOnOffSettings(cmd, &cfg.Spam.SettingsDefault)
+		"on": func(cfg *config.Config, cmd string, args []string) ports.ActionType {
+			return a.handleOnOff(cfg, cmd, args, "default")
 		},
-		"off": func(cfg *config.Config, _ []string, cmd string) ports.ActionType {
-			return handleOnOffSettings(cmd, &cfg.Spam.SettingsDefault)
+		"off": func(cfg *config.Config, cmd string, args []string) ports.ActionType {
+			return a.handleOnOff(cfg, cmd, args, "default")
 		},
-		"online":  a.handleMode,
-		"always":  a.handleMode,
-		"sim":     a.handleSim,
-		"msg":     a.handleMsg,
-		"time":    a.handleTime,
-		"to":      a.handleTo,
-		"rto":     a.handleRto,
-		"mw":      a.handleMw,
-		"mwt":     a.handleMwt,
-		"min_gap": a.handleMinGap,
-		"da":      a.handleDelayAutomod,
-		"reset":   a.handleReset,
-		"add":     a.handleAdd,
-		"del":     a.handleDel,
-		"vip":     a.handleVip,
-		"game":    a.handleCategory,
-		"mwg":     a.handleMwg,
+		"online": a.handleMode,
+		"always": a.handleMode,
+		"sim": func(cfg *config.Config, cmd string, args []string) ports.ActionType {
+			return a.handleSim(cfg, cmd, args, "default")
+		},
+		"msg": func(cfg *config.Config, cmd string, args []string) ports.ActionType {
+			return a.handleMsg(cfg, cmd, args, "default")
+		},
+		"time": a.handleTime,
+		"to": func(cfg *config.Config, cmd string, args []string) ports.ActionType {
+			return a.handleTo(cfg, cmd, args, "default")
+		},
+		"rto": func(cfg *config.Config, cmd string, args []string) ports.ActionType {
+			return a.handleRto(cfg, cmd, args, "default")
+		},
+		"mw": func(cfg *config.Config, cmd string, args []string) ports.ActionType {
+			return a.handleMw(cfg, cmd, args, "default")
+		},
+		"mwt": func(cfg *config.Config, cmd string, args []string) ports.ActionType {
+			return a.handleMwt(cfg, cmd, args, "default")
+		},
+		"min_gap": func(cfg *config.Config, cmd string, args []string) ports.ActionType {
+			return a.handleMinGap(cfg, cmd, args, "default")
+		},
+		"da":    a.handleDelayAutomod,
+		"reset": a.handleReset,
+		"add":   a.handleAdd,
+		"del":   a.handleDel,
+		"vip":   a.handleVip,
+		"game":  a.handleCategory,
+		"mwg":   a.handleMwg,
 	}
 
 	handler, ok := handlers[cmd]
@@ -103,7 +117,7 @@ func (a *Admin) FindMessages(msg *ports.ChatMessage) ports.ActionType {
 
 	var result ports.ActionType
 	if err := a.manager.Update(func(cfg *config.Config) {
-		result = handler(cfg, args, cmd)
+		result = handler(cfg, cmd, args)
 	}); err != nil {
 		a.log.Error("Failed update config", err, slog.String("msg", msg.Message.Text))
 		return ErrFound
@@ -122,66 +136,71 @@ func (a *Admin) handlePing() ports.ActionType {
 	runtime.ReadMemStats(&m)
 
 	percent, _ := cpu.Percent(0, false)
+	if len(percent) == 0 {
+		percent = append(percent, 0)
+	}
+
 	return ports.ActionType(fmt.Sprintf("бот работает %v • загрузка CPU %.2f%% • потребление ОЗУ %v MB", uptime.Truncate(time.Second), percent[0], m.Sys/1024/1024))
 }
 
-func (a *Admin) handleMode(cfg *config.Config, _ []string, cmd string) ports.ActionType {
+func (a *Admin) handleOnOff(cfg *config.Config, cmd string, args []string, typeSpam string) ports.ActionType {
+	switch typeSpam {
+	case "vip":
+		cfg.Spam.SettingsVIP.Enabled = cmd == "on"
+	default:
+		cfg.Spam.SettingsDefault.Enabled = cmd == "on"
+	}
+	return None
+}
+
+func (a *Admin) handleMode(cfg *config.Config, cmd string, args []string) ports.ActionType {
 	cfg.Spam.Mode = cmd
 	return None
 }
 
-func (a *Admin) handleSim(cfg *config.Config, args []string, _ string) ports.ActionType {
-	return handleSimSettings(args, &cfg.Spam.SettingsDefault)
-}
+func (a *Admin) handleSim(cfg *config.Config, cmd string, args []string, typeSpam string) ports.ActionType {
+	var target *float64
 
-func (a *Admin) handleMsg(cfg *config.Config, args []string, _ string) ports.ActionType {
-	return handleMsgSettings(args, &cfg.Spam.SettingsDefault)
-}
+	switch typeSpam {
+	case "vip":
+		target = &cfg.Spam.SettingsVIP.SimilarityThreshold
+	default:
+		target = &cfg.Spam.SettingsDefault.SimilarityThreshold
+	}
 
-func (a *Admin) handleTo(cfg *config.Config, args []string, _ string) ports.ActionType {
-	return handleToSettings(args, &cfg.Spam.SettingsDefault)
-}
-
-func (a *Admin) handleRto(cfg *config.Config, args []string, _ string) ports.ActionType {
-	return handleRtoSettings(args, &cfg.Spam.SettingsDefault)
-}
-
-func (a *Admin) handleMw(cfg *config.Config, args []string, _ string) ports.ActionType {
-	return handleMwSettings(args, &cfg.Spam.SettingsDefault)
-}
-
-func (a *Admin) handleMwt(cfg *config.Config, args []string, _ string) ports.ActionType {
-	return handleMwtSettings(args, &cfg.Spam.SettingsDefault)
-}
-
-func (a *Admin) handleMinGap(cfg *config.Config, args []string, _ string) ports.ActionType {
-	return handleMinGapSettings(args, &cfg.Spam.SettingsDefault)
-}
-
-func handleOnOffSettings(cmd string, s *config.SpamSettings) ports.ActionType {
-	s.Enabled = cmd == "on"
-	return None
-}
-
-func handleSimSettings(args []string, s *config.SpamSettings) ports.ActionType {
 	if val, ok := parseFloatArg(args, 0, 1); ok {
-		s.SimilarityThreshold = val
+		*target = val
 		return None
 	}
 	return ErrSimilarityThreshold
 }
 
-func handleMsgSettings(args []string, s *config.SpamSettings) ports.ActionType {
+func (a *Admin) handleMsg(cfg *config.Config, cmd string, args []string, typeSpam string) ports.ActionType {
+	var target *int
+
+	switch typeSpam {
+	case "vip":
+		target = &cfg.Spam.SettingsVIP.MessageLimit
+	default:
+		target = &cfg.Spam.SettingsDefault.MessageLimit
+	}
+
 	if val, ok := parseIntArg(args, 2, 15); ok {
-		s.MessageLimit = val
+		*target = val
 		return None
 	}
 	return ErrMessageLimit
 }
 
-func handleToSettings(args []string, s *config.SpamSettings) ports.ActionType {
+func (a *Admin) handleTo(cfg *config.Config, cmd string, args []string, typeSpam string) ports.ActionType {
+	if len(args) == 0 {
+		return NonValue
+	}
+
+	parts := strings.Split(args[0], ",")
 	var timeouts []int
-	for i, str := range args {
+
+	for i, str := range parts {
 		if i >= 15 {
 			break
 		}
@@ -192,46 +211,89 @@ func handleToSettings(args []string, s *config.SpamSettings) ports.ActionType {
 			return NonValue
 		}
 	}
+
 	if len(timeouts) == 0 {
 		return NonValue
 	}
-	s.Timeouts = timeouts
+
+	switch typeSpam {
+	case "vip":
+		cfg.Spam.SettingsVIP.Timeouts = timeouts
+	default:
+		cfg.Spam.SettingsDefault.Timeouts = timeouts
+	}
 	return None
 }
 
-func handleRtoSettings(args []string, s *config.SpamSettings) ports.ActionType {
+func (a *Admin) handleRto(cfg *config.Config, cmd string, args []string, typeSpam string) ports.ActionType {
+	var target *int
+
+	switch typeSpam {
+	case "vip":
+		target = &cfg.Spam.SettingsVIP.ResetTimeoutSeconds
+	default:
+		target = &cfg.Spam.SettingsDefault.ResetTimeoutSeconds
+	}
+
 	if val, ok := parseIntArg(args, 1, 86400); ok {
-		s.ResetTimeoutSeconds = val
+		*target = val
 		return None
 	}
 	return ErrResetTimeoutSeconds
 }
 
-func handleMwSettings(args []string, s *config.SpamSettings) ports.ActionType {
+func (a *Admin) handleMw(cfg *config.Config, cmd string, args []string, typeSpam string) ports.ActionType {
+	var target *int
+
+	switch typeSpam {
+	case "vip":
+		target = &cfg.Spam.SettingsVIP.MaxWordLength
+	default:
+		target = &cfg.Spam.SettingsDefault.MaxWordLength
+	}
+
 	if val, ok := parseIntArg(args, 0, 500); ok {
-		s.MaxWordLength = val
+		*target = val
 		return None
 	}
 	return ErrMaxWordLength
 }
 
-func handleMwtSettings(args []string, s *config.SpamSettings) ports.ActionType {
+func (a *Admin) handleMwt(cfg *config.Config, cmd string, args []string, typeSpam string) ports.ActionType {
+	var target *int
+
+	switch typeSpam {
+	case "vip":
+		target = &cfg.Spam.SettingsVIP.MaxWordTimeoutTime
+	default:
+		target = &cfg.Spam.SettingsDefault.MaxWordTimeoutTime
+	}
+
 	if val, ok := parseIntArg(args, 0, 1209600); ok {
-		s.MaxWordTimeoutTime = val
+		*target = val
 		return None
 	}
 	return ErrMaxWordTimeoutTime
 }
 
-func handleMinGapSettings(args []string, s *config.SpamSettings) ports.ActionType {
+func (a *Admin) handleMinGap(cfg *config.Config, cmd string, args []string, typeSpam string) ports.ActionType {
+	var target *int
+
+	switch typeSpam {
+	case "vip":
+		target = &cfg.Spam.SettingsVIP.MinGapMessages
+	default:
+		target = &cfg.Spam.SettingsDefault.MinGapMessages
+	}
+
 	if val, ok := parseIntArg(args, 0, 15); ok {
-		s.MinGapMessages = val
+		*target = val
 		return None
 	}
 	return ErrMinGapMessages
 }
 
-func (a *Admin) handleDelayAutomod(cfg *config.Config, args []string, _ string) ports.ActionType {
+func (a *Admin) handleDelayAutomod(cfg *config.Config, cmd string, args []string) ports.ActionType {
 	if val, ok := parseIntArg(args, 0, 10); ok {
 		cfg.Spam.DelayAutomod = val
 		return None
@@ -239,13 +301,12 @@ func (a *Admin) handleDelayAutomod(cfg *config.Config, args []string, _ string) 
 	return ErrDelayAutomod
 }
 
-func (a *Admin) handleReset(cfg *config.Config, _ []string, _ string) ports.ActionType {
-	def := a.manager.GetDefault()
-	cfg.Spam = def.Spam
+func (a *Admin) handleReset(cfg *config.Config, cmd string, args []string) ports.ActionType {
+	cfg.Spam = a.manager.GetDefault().Spam
 	return None
 }
 
-func (a *Admin) handleTime(cfg *config.Config, args []string, _ string) ports.ActionType {
+func (a *Admin) handleTime(cfg *config.Config, cmd string, args []string) ports.ActionType {
 	if val, ok := parseIntArg(args, 1, 300); ok {
 		cfg.Spam.CheckWindowSeconds = val
 		return None
@@ -253,7 +314,7 @@ func (a *Admin) handleTime(cfg *config.Config, args []string, _ string) ports.Ac
 	return ErrCheckWindowSeconds
 }
 
-func (a *Admin) handleAdd(cfg *config.Config, args []string, _ string) ports.ActionType {
+func (a *Admin) handleAdd(cfg *config.Config, cmd string, args []string) ports.ActionType {
 	if len(args) == 0 {
 		return NonParametr
 	}
@@ -289,7 +350,7 @@ func (a *Admin) handleAdd(cfg *config.Config, args []string, _ string) ports.Act
 	return ports.ActionType(strings.Join(msgParts, " • "))
 }
 
-func (a *Admin) handleDel(cfg *config.Config, args []string, _ string) ports.ActionType {
+func (a *Admin) handleDel(cfg *config.Config, cmd string, args []string) ports.ActionType {
 	if len(args) == 0 {
 		return NonParametr
 	}
@@ -339,35 +400,49 @@ func (a *Admin) handleDel(cfg *config.Config, args []string, _ string) ports.Act
 	return ports.ActionType(strings.Join(msgParts, " • "))
 }
 
-func (a *Admin) handleVip(cfg *config.Config, args []string, _ string) ports.ActionType {
+func (a *Admin) handleVip(cfg *config.Config, cmd string, args []string) ports.ActionType {
 	if len(args) < 1 {
 		return NonParametr
 	}
 	vipCmd, vipArgs := args[0], args[1:]
 
-	handlers := map[string]func([]string, *config.SpamSettings) ports.ActionType{
-		"on": func(_ []string, settings *config.SpamSettings) ports.ActionType {
-			return handleOnOffSettings(vipCmd, settings)
+	handlers := map[string]func(cfg *config.Config, cmd string, args []string) ports.ActionType{
+		"on": func(cfg *config.Config, cmd string, args []string) ports.ActionType {
+			return a.handleOnOff(cfg, cmd, args, "vip")
 		},
-		"off": func(_ []string, settings *config.SpamSettings) ports.ActionType {
-			return handleOnOffSettings(vipCmd, settings)
+		"off": func(cfg *config.Config, cmd string, args []string) ports.ActionType {
+			return a.handleOnOff(cfg, cmd, args, "vip")
 		},
-		"sim":     handleSimSettings,
-		"msg":     handleMsgSettings,
-		"to":      handleToSettings,
-		"rto":     handleRtoSettings,
-		"mw":      handleMwSettings,
-		"mwt":     handleMwtSettings,
-		"min_gap": handleMinGapSettings,
+		"sim": func(cfg *config.Config, cmd string, args []string) ports.ActionType {
+			return a.handleSim(cfg, cmd, args, "vip")
+		},
+		"msg": func(cfg *config.Config, cmd string, args []string) ports.ActionType {
+			return a.handleMsg(cfg, cmd, args, "vip")
+		},
+		"to": func(cfg *config.Config, cmd string, args []string) ports.ActionType {
+			return a.handleTo(cfg, cmd, args, "vip")
+		},
+		"rto": func(cfg *config.Config, cmd string, args []string) ports.ActionType {
+			return a.handleRto(cfg, cmd, args, "vip")
+		},
+		"mw": func(cfg *config.Config, cmd string, args []string) ports.ActionType {
+			return a.handleMw(cfg, cmd, args, "vip")
+		},
+		"mwt": func(cfg *config.Config, cmd string, args []string) ports.ActionType {
+			return a.handleMwt(cfg, cmd, args, "vip")
+		},
+		"min_gap": func(cfg *config.Config, cmd string, args []string) ports.ActionType {
+			return a.handleMinGap(cfg, cmd, args, "vip")
+		},
 	}
 
 	if handler, ok := handlers[vipCmd]; ok {
-		return handler(vipArgs, &cfg.Spam.SettingsVIP)
+		return handler(cfg, vipCmd, vipArgs)
 	}
 	return NotFound
 }
 
-func (a *Admin) handleCategory(_ *config.Config, args []string, _ string) ports.ActionType {
+func (a *Admin) handleCategory(cfg *config.Config, cmd string, args []string) ports.ActionType {
 	if !a.stream.IsLive() {
 		return NoStream
 	}
@@ -376,22 +451,13 @@ func (a *Admin) handleCategory(_ *config.Config, args []string, _ string) ports.
 	return Success
 }
 
-func (a *Admin) handleOnline(cfg *config.Config, args []string, _ string) ports.ActionType {
-	if len(args) > 0 && args[0] == "online" {
-		cfg.PunishmentOnline = !cfg.PunishmentOnline
-		return Success
-	}
-
-	return NotFound
-}
-
-func (a *Admin) handleMwg(cfg *config.Config, args []string, _ string) ports.ActionType {
+func (a *Admin) handleMwg(cfg *config.Config, cmd string, args []string) ports.ActionType {
 	if len(args) < 1 {
 		return NonParametr
 	}
 	mwgCmd, mwgArgs := args[0], args[1:]
 
-	handlers := map[string]func([]string, *config.Config) ports.ActionType{
+	handlers := map[string]func(cfg *config.Config, cmd string, args []string) ports.ActionType{
 		"list":   a.handleMwgList,
 		"create": a.handleMwgCreate,
 		"set":    a.handleMwgSet,
@@ -399,15 +465,16 @@ func (a *Admin) handleMwg(cfg *config.Config, args []string, _ string) ports.Act
 		"del":    a.handleMwgDel,
 		"on":     a.handleMwgOnOff,
 		"off":    a.handleMwgOnOff,
+		"words":  a.handleMwgWords,
 	}
 
 	if handler, ok := handlers[mwgCmd]; ok {
-		return handler(mwgArgs, cfg)
+		return handler(cfg, mwgCmd, mwgArgs)
 	}
 	return NotFound
 }
 
-func (a *Admin) handleMwgList(_ []string, cfg *config.Config) ports.ActionType {
+func (a *Admin) handleMwgList(cfg *config.Config, cmd string, args []string) ports.ActionType {
 	if len(cfg.MwordGroup) == 0 {
 		return ErrNotFoundMwordGroups
 	}
@@ -420,7 +487,7 @@ func (a *Admin) handleMwgList(_ []string, cfg *config.Config) ports.ActionType {
 	return ports.ActionType(msg)
 }
 
-func (a *Admin) handleMwgCreate(args []string, cfg *config.Config) ports.ActionType {
+func (a *Admin) handleMwgCreate(cfg *config.Config, cmd string, args []string) ports.ActionType {
 	if len(args) < 2 {
 		return NonParametr
 	}
@@ -437,22 +504,17 @@ func (a *Admin) handleMwgCreate(args []string, cfg *config.Config) ports.ActionT
 		return ErrFound
 	}
 
-	if err := a.manager.Update(func(cfg *config.Config) {
-		cfg.MwordGroup[groupName] = &config.MwordGroup{
-			Action:   action,
-			Duration: duration,
-			Enabled:  true,
-			Words:    []string{},
-		}
-	}); err != nil {
-		a.log.Error("Failed update config", err)
-		return ErrFound
+	cfg.MwordGroup[groupName] = &config.MwordGroup{
+		Action:   action,
+		Duration: duration,
+		Enabled:  true,
+		Words:    []string{},
 	}
 
 	return Success
 }
 
-func (a *Admin) handleMwgSet(args []string, cfg *config.Config) ports.ActionType {
+func (a *Admin) handleMwgSet(cfg *config.Config, cmd string, args []string) ports.ActionType {
 	if len(args) < 2 {
 		return NonParametr
 	}
@@ -469,24 +531,19 @@ func (a *Admin) handleMwgSet(args []string, cfg *config.Config) ports.ActionType
 		return ErrFound
 	}
 
-	if err := a.manager.Update(func(cfg *config.Config) {
-		cfg.MwordGroup[groupName].Action = action
-		cfg.MwordGroup[groupName].Duration = duration
-	}); err != nil {
-		a.log.Error("Failed update config", err)
-		return ErrFound
-	}
+	cfg.MwordGroup[groupName].Action = action
+	cfg.MwordGroup[groupName].Duration = duration
 
 	return Success
 }
 
-func (a *Admin) handleMwgAdd(args []string, cfg *config.Config) ports.ActionType {
+func (a *Admin) handleMwgAdd(cfg *config.Config, cmd string, args []string) ports.ActionType {
 	if len(args) < 2 {
 		return NonParametr
 	}
 
 	groupName := args[0]
-	words := strings.Split(args[1], ",")
+	words := strings.Split(strings.Join(args[1:], " "), ",")
 
 	group, exists := cfg.MwordGroup[groupName]
 	if !exists {
@@ -508,25 +565,20 @@ func (a *Admin) handleMwgAdd(args []string, cfg *config.Config) ports.ActionType
 		}
 
 		if !found {
-			if err := a.manager.Update(func(cfg *config.Config) {
-				cfg.MwordGroup[groupName].Words = append(cfg.MwordGroup[groupName].Words, trimmedWord)
-			}); err != nil {
-				a.log.Error("Failed update config", err)
-				return ErrFound
-			}
+			group.Words = append(cfg.MwordGroup[groupName].Words, trimmedWord)
 		}
 	}
 
 	return Success
 }
 
-func (a *Admin) handleMwgDel(args []string, cfg *config.Config) ports.ActionType {
+func (a *Admin) handleMwgDel(cfg *config.Config, cmd string, args []string) ports.ActionType {
 	if len(args) < 2 {
 		return NonParametr
 	}
 
 	groupName := args[0]
-	target := args[1]
+	target := strings.Join(args[1:], " ")
 
 	group, exists := cfg.MwordGroup[groupName]
 	if !exists {
@@ -534,12 +586,7 @@ func (a *Admin) handleMwgDel(args []string, cfg *config.Config) ports.ActionType
 	}
 
 	if target == "all" {
-		if err := a.manager.Update(func(cfg *config.Config) {
-			delete(cfg.MwordGroup, groupName)
-		}); err != nil {
-			a.log.Error("Failed update config", err)
-			return ErrFound
-		}
+		delete(cfg.MwordGroup, groupName)
 
 		return Success
 	}
@@ -559,18 +606,12 @@ func (a *Admin) handleMwgDel(args []string, cfg *config.Config) ports.ActionType
 			newWords = append(newWords, existingWord)
 		}
 	}
-
-	if err := a.manager.Update(func(cfg *config.Config) {
-		cfg.MwordGroup[groupName].Words = newWords
-	}); err != nil {
-		a.log.Error("Failed update config", err)
-		return ErrFound
-	}
+	group.Words = newWords
 
 	return Success
 }
 
-func (a *Admin) handleMwgOnOff(args []string, cfg *config.Config) ports.ActionType {
+func (a *Admin) handleMwgOnOff(cfg *config.Config, cmd string, args []string) ports.ActionType {
 	if len(args) < 1 {
 		return NonParametr
 	}
@@ -579,15 +620,28 @@ func (a *Admin) handleMwgOnOff(args []string, cfg *config.Config) ports.ActionTy
 	if _, exists := cfg.MwordGroup[groupName]; !exists {
 		return ErrNotFoundMwordGroup
 	}
-
-	if err := a.manager.Update(func(cfg *config.Config) {
-		cfg.MwordGroup[groupName].Enabled = strings.HasPrefix(args[0], "on")
-	}); err != nil {
-		a.log.Error("Failed update config", err)
-		return ErrFound
-	}
+	cfg.MwordGroup[groupName].Enabled = cmd == "on"
 
 	return Success
+}
+
+func (a *Admin) handleMwgWords(cfg *config.Config, cmd string, args []string) ports.ActionType {
+	if len(args) < 1 {
+		return NonParametr
+	}
+	groupName := args[0]
+
+	group, exists := cfg.MwordGroup[groupName]
+	if !exists {
+		return ErrNotFoundMwordGroup
+	}
+
+	if len(group.Words) == 0 {
+		return "cлова в группе отсутствуют"
+	}
+
+	msg := "cлова в группе: " + strings.Join(group.Words, ", ")
+	return ports.ActionType(msg)
 }
 
 func parsePunishment(punishment string) (string, int, error) {
