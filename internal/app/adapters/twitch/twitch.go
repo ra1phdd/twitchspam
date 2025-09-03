@@ -12,10 +12,10 @@ import (
 	"time"
 	"twitchspam/internal/app/adapters/messages/admin"
 	"twitchspam/internal/app/adapters/messages/user"
-	"twitchspam/internal/app/adapters/stats"
 	"twitchspam/internal/app/domain"
 	"twitchspam/internal/app/domain/antispam"
 	"twitchspam/internal/app/domain/banwords"
+	"twitchspam/internal/app/domain/stats"
 	"twitchspam/internal/app/domain/stream"
 	"twitchspam/internal/app/infrastructure/config"
 	"twitchspam/internal/app/infrastructure/twitch"
@@ -324,6 +324,10 @@ func (c *Twitch) connectAndHandleEvents() error {
 				c.log.Info("Stream ended")
 				c.stream.SetIslive(false)
 				c.stats.SetEndTime(time.Now())
+
+				if err := c.SendChatMessage(c.stream.ChannelID(), c.stats.GetStats()); err != nil {
+					c.log.Error("Failed to send message on chat", err)
+				}
 			case "channel.update":
 				var upd ChannelUpdateEvent
 				if err := json.Unmarshal(envelope.Event, &upd); err != nil {

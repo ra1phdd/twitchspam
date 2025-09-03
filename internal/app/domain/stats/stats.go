@@ -125,8 +125,8 @@ func (s *Stats) GetStats() string {
 	})
 
 	msg := fmt.Sprintf("длительность стрима: %s • средний онлайн: %.0f • максимальный онлайн: %d • всего сообщений: %d • скорость сообщений: %.1f/сек • кол-во банов: %d • кол-во мутов: %d • кол-во удаленных сообщений: %d • топ 3 модератора за стрим: ",
-		s.endTime.Sub(s.startTime), math.Round(float64(s.online.sumViewers/int64(s.online.count))), s.online.maxViewers, len(s.countMessages),
-		float64(len(s.countMessages))/s.endTime.Sub(s.startTime).Seconds(), countBans, countTimeouts, countDeletes)
+		s.endTime.Sub(s.startTime).Round(1*time.Second).String(), math.Round(float64(s.online.sumViewers/int64(s.online.count))),
+		s.online.maxViewers, len(s.countMessages), float64(len(s.countMessages))/s.endTime.Sub(s.startTime).Seconds(), countBans, countTimeouts, countDeletes)
 
 	top := 3
 	if len(list) < 3 {

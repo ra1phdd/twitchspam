@@ -24,10 +24,10 @@ type Spam struct {
 	CheckWindowSeconds int                                `json:"check_window_seconds"` // !am time <секунды, макс 300>
 	DelayAutomod       int                                `json:"delay_automod"`        // !am da <0-10> - задержка срабатывания
 	WhitelistUsers     []string                           `json:"whitelist_users"`      // !am add/del <список>
-	Exceptions         map[string]*SpamExceptionsSettings `json:"exceptions"`
 	SettingsDefault    SpamSettings                       `json:"settings_default"`
 	SettingsVIP        SpamSettings                       `json:"settings_vip"`
 	SettingsEmotes     SpamSettingsEmote                  `json:"settings_emotes"`
+	Exceptions         map[string]*SpamExceptionsSettings `json:"exceptions"`
 }
 
 type SpamSettings struct {
@@ -36,15 +36,9 @@ type SpamSettings struct {
 	MessageLimit        int     `json:"message_limit"`         // !am msg <2-15 или off>
 	Timeouts            []int   `json:"timeouts"`              // !am to <значения через запятую>
 	ResetTimeoutSeconds int     `json:"reset_timeout_seconds"` // !am rto <значение>
-	MaxWordLength       int     `json:"max_word_length"`       // !am mw <значение или 0 для оффа>
+	MaxWordLength       int     `json:"max_word_length"`       // !am mwlen <значение или 0 для оффа>
 	MaxWordTimeoutTime  int     `json:"max_word_timeout_time"` // !am mwt <секунды>
 	MinGapMessages      int     `json:"min_gap_messages"`      // !am min_gap <0-15>
-}
-
-type SpamExceptionsSettings struct {
-	Enabled      bool `json:"enabled"`       // !am except on/off <фразы через запятую>
-	MessageLimit int  `json:"message_limit"` // !am except msg <2-15 или off> <фразы через запятую>
-	Timeout      int  `json:"timeout"`       // !am except to <значение> <фразы через запятую>
 }
 
 type SpamSettingsEmote struct {
@@ -54,6 +48,17 @@ type SpamSettingsEmote struct {
 	ResetTimeoutSeconds  int   `json:"reset_timeout_seconds"`
 	MaxEmotesLength      int   `json:"max_emotes_length"`
 	MaxEmotesTimeoutTime int   `json:"max_emotes_timeout_time"`
+}
+
+type SpamExceptionsSettings struct {
+	Enabled      bool `json:"enabled"`
+	MessageLimit int  `json:"message_limit"`
+	Timeout      int  `json:"timeout"`
+}
+
+type Mword struct {
+	Action   string `json:"action"`   // "delete", "ban", "timeout"
+	Duration int    `json:"duration"` // только для таймаута
 }
 
 type MwordGroup struct {
@@ -66,6 +71,7 @@ type MwordGroup struct {
 type Config struct {
 	App        App                    `json:"app"`
 	Spam       Spam                   `json:"spam"`
+	Mword      map[string]*Mword      `json:"mword"`
 	MwordGroup map[string]*MwordGroup `json:"mword_group"`
 	Banwords   []string               `json:"banwords"`
 }
@@ -159,6 +165,7 @@ func (m *Manager) GetDefault() *Config {
 			},
 			DelayAutomod: 0,
 		},
+		Mword:      make(map[string]*Mword),
 		MwordGroup: make(map[string]*MwordGroup),
 		Banwords:   []string{},
 	}
@@ -227,6 +234,10 @@ func (m *Manager) validate(cfg *Config) error {
 
 	if cfg.Spam.Exceptions == nil {
 		cfg.Spam.Exceptions = make(map[string]*SpamExceptionsSettings)
+	}
+
+	if cfg.Mword == nil {
+		cfg.Mword = make(map[string]*Mword)
 	}
 
 	if cfg.MwordGroup == nil {

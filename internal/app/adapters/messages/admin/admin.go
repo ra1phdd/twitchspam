@@ -5,6 +5,7 @@ import (
 	"github.com/shirou/gopsutil/cpu"
 	"log/slog"
 	"math"
+	"regexp"
 	"runtime"
 	"slices"
 	"strconv"
@@ -34,6 +35,7 @@ const (
 	ErrFoundMwordGroup     ports.ActionType = "группа уже существует"
 	ErrNotFoundMwordGroup  ports.ActionType = "группа не найдена"
 	ErrNotFoundMwordGroups ports.ActionType = "группы не найдены"
+	InvalidRegex           ports.ActionType = "невалидное регулярное выражение"
 )
 
 type Admin struct {
@@ -91,8 +93,8 @@ func (a *Admin) FindMessages(msg *ports.ChatMessage) ports.ActionType {
 		"rto": func(cfg *config.Config, cmd string, args []string) ports.ActionType {
 			return a.handleRto(cfg, cmd, args, "default")
 		},
-		"mw": func(cfg *config.Config, cmd string, args []string) ports.ActionType {
-			return a.handleMw(cfg, cmd, args, "default")
+		"mwlen": func(cfg *config.Config, cmd string, args []string) ports.ActionType {
+			return a.handleMwLen(cfg, cmd, args, "default")
 		},
 		"mwt": func(cfg *config.Config, cmd string, args []string) ports.ActionType {
 			return a.handleMwt(cfg, cmd, args, "default")
@@ -107,6 +109,7 @@ func (a *Admin) FindMessages(msg *ports.ChatMessage) ports.ActionType {
 		"vip":   a.handleVip,
 		"game":  a.handleCategory,
 		"mwg":   a.handleMwg,
+		"mw":    a.handleMw,
 	}
 
 	handler, ok := handlers[cmd]
@@ -242,7 +245,7 @@ func (a *Admin) handleRto(cfg *config.Config, cmd string, args []string, typeSpa
 	return ErrResetTimeoutSeconds
 }
 
-func (a *Admin) handleMw(cfg *config.Config, cmd string, args []string, typeSpam string) ports.ActionType {
+func (a *Admin) handleMwLen(cfg *config.Config, cmd string, args []string, typeSpam string) ports.ActionType {
 	var target *int
 
 	switch typeSpam {
@@ -425,8 +428,8 @@ func (a *Admin) handleVip(cfg *config.Config, cmd string, args []string) ports.A
 		"rto": func(cfg *config.Config, cmd string, args []string) ports.ActionType {
 			return a.handleRto(cfg, cmd, args, "vip")
 		},
-		"mw": func(cfg *config.Config, cmd string, args []string) ports.ActionType {
-			return a.handleMw(cfg, cmd, args, "vip")
+		"mwlen": func(cfg *config.Config, cmd string, args []string) ports.ActionType {
+			return a.handleMwLen(cfg, cmd, args, "vip")
 		},
 		"mwt": func(cfg *config.Config, cmd string, args []string) ports.ActionType {
 			return a.handleMwt(cfg, cmd, args, "vip")
@@ -543,7 +546,7 @@ func (a *Admin) handleMwgAdd(cfg *config.Config, cmd string, args []string) port
 	}
 
 	groupName := args[0]
-	words := strings.Split(strings.Join(args[1:], " "), ",")
+	words := splitWords(strings.Join(args[1:], " "))
 
 	group, exists := cfg.MwordGroup[groupName]
 	if !exists {
@@ -554,6 +557,14 @@ func (a *Admin) handleMwgAdd(cfg *config.Config, cmd string, args []string) port
 		trimmedWord := strings.TrimSpace(word)
 		if trimmedWord == "" {
 			continue
+		}
+
+		if (strings.HasPrefix(trimmedWord, `r"`) && strings.HasSuffix(trimmedWord, `"`)) ||
+			(strings.HasPrefix(trimmedWord, `r'`) && strings.HasSuffix(trimmedWord, `'`)) {
+			pattern := trimmedWord[2 : len(trimmedWord)-1]
+			if _, err := regexp.Compile(pattern); err != nil {
+				return InvalidRegex
+			}
 		}
 
 		found := false
@@ -591,7 +602,7 @@ func (a *Admin) handleMwgDel(cfg *config.Config, cmd string, args []string) port
 		return Success
 	}
 
-	wordsToRemove := strings.Split(target, ",")
+	wordsToRemove := splitWords(target)
 	var newWords []string
 
 	for _, existingWord := range group.Words {
@@ -644,6 +655,230 @@ func (a *Admin) handleMwgWords(cfg *config.Config, cmd string, args []string) po
 	return ports.ActionType(msg)
 }
 
+func (a *Admin) handleMw(cfg *config.Config, cmd string, args []string) ports.ActionType {
+	if len(args) < 1 {
+		return NonParametr
+	}
+	mwCmd, mwArgs := args[0], args[1:]
+
+	handlers := map[string]func(cfg *config.Config, cmd string, args []string) ports.ActionType{
+		"del":  a.handleMwDel,
+		"list": a.handleMwList,
+	}
+
+	if handler, ok := handlers[mwCmd]; ok {
+		return handler(cfg, mwCmd, mwArgs)
+	}
+
+	return a.handleMwAdd(cfg, mwCmd, mwArgs)
+}
+
+func (a *Admin) handleMwAdd(cfg *config.Config, cmd string, args []string) ports.ActionType {
+	if len(args) < 2 {
+		return NonParametr
+	}
+
+	words := splitWords(strings.Join(args[1:], " "))
+	for _, word := range words {
+		word = strings.TrimSpace(word)
+		if word == "" {
+			continue
+		}
+
+		if (strings.HasPrefix(word, `r"`) && strings.HasSuffix(word, `"`)) ||
+			(strings.HasPrefix(word, `r'`) && strings.HasSuffix(word, `'`)) {
+			pattern := word[2 : len(word)-1]
+			if _, err := regexp.Compile(pattern); err != nil {
+				return InvalidRegex
+			}
+		}
+
+		action, duration, err := parsePunishment(args[0])
+		if err != nil {
+			return ErrFound
+		}
+
+		cfg.Mword[word] = &config.Mword{
+			Action:   action,
+			Duration: duration,
+		}
+	}
+
+	return Success
+}
+
+func (a *Admin) handleMwDel(cfg *config.Config, cmd string, args []string) ports.ActionType {
+	if len(args) < 1 {
+		return NonParametr
+	}
+
+	wordsToDelete := splitWords(strings.Join(args, " "))
+	for _, w := range wordsToDelete {
+		if _, ok := cfg.Mword[w]; ok {
+			delete(cfg.Mword, w)
+		}
+	}
+
+	return Success
+}
+
+func (a *Admin) handleMwList(cfg *config.Config, cmd string, args []string) ports.ActionType {
+	if len(cfg.Mword) == 0 {
+		return "мворды отсутствуют"
+	}
+	msg := "мворды:"
+	for word, mw := range cfg.Mword {
+		msg += fmt.Sprintf(" %s(%d)", word, mw.Duration)
+	}
+	return ports.ActionType(msg)
+}
+
+func (a *Admin) handleEx(cfg *config.Config, cmd string, args []string) ports.ActionType {
+	if len(args) < 1 {
+		return NonParametr
+	}
+	mwgCmd, mwgArgs := args[0], args[1:]
+
+	handlers := map[string]func(cfg *config.Config, cmd string, args []string) ports.ActionType{
+		"list": a.handleExList,
+		"add":  a.handleExAdd,
+		"set":  a.handleExSet,
+		"del":  a.handleExDel,
+	}
+
+	if handler, ok := handlers[mwgCmd]; ok {
+		return handler(cfg, mwgCmd, mwgArgs)
+	}
+	return NotFound
+}
+
+func (a *Admin) handleExList(cfg *config.Config, cmd string, args []string) ports.ActionType {
+	if len(cfg.Spam.Exceptions) == 0 {
+		return "исключения отсутствуют"
+	}
+
+	//msg := "исключения:"
+	//for word, ex := range cfg.Spam.Exceptions {
+	//	msg += fmt.Sprintf("ML: %d, TO: %d, слова: %s • ", ex.MessageLimit, ex.Timeout, strings.Join(ex, ", "))
+	//}
+	//return ports.ActionType(msg)
+	return ErrFound
+}
+
+// !am ex add <message_limit> <timeout> <слова/фразы>
+func (a *Admin) handleExAdd(cfg *config.Config, cmd string, args []string) ports.ActionType {
+	if len(args) < 3 {
+		return NonParametr
+	}
+
+	//messageLimit, err := strconv.Atoi(args[0])
+	//if err != nil {
+	//	return ErrFound
+	//}
+	//
+	//timeout, err := strconv.Atoi(args[1])
+	//if err != nil {
+	//	return ErrFound
+	//}
+	//
+	//words := splitWords(strings.Join(args[2:], " "))
+	//
+	//for _, w := range words {
+	//	trimmed := strings.TrimSpace(w)
+	//	if trimmed == "" {
+	//		continue
+	//	}
+	//
+	//	if (strings.HasPrefix(trimmed, `r"`) && strings.HasSuffix(trimmed, `"`)) ||
+	//		(strings.HasPrefix(trimmed, `r'`) && strings.HasSuffix(trimmed, `'`)) {
+	//		pattern := trimmed[2 : len(trimmed)-1]
+	//		if _, err := regexp.Compile(pattern); err != nil {
+	//			return InvalidRegex
+	//		}
+	//	}
+	//}
+	//
+	//cfg.Except = append(cfg.Except, &config.Except{
+	//	MessageLimit: messageLimit,
+	//	Timeout:      timeout,
+	//	Words:        words,
+	//})
+
+	return Success
+}
+
+// !am ex set ml|to <value> <слова/фразы>
+func (a *Admin) handleExSet(cfg *config.Config, cmd string, args []string) ports.ActionType {
+	if len(args) < 3 {
+		return NonParametr
+	}
+
+	//field := args[0]
+	//value, err := strconv.Atoi(args[1])
+	//if err != nil {
+	//	return ErrFound
+	//}
+	//
+	//words := splitWords(strings.Join(args[2:], " "))
+	//
+	//updated := false
+	//for _, ex := range cfg.Except {
+	//	for _, w := range words {
+	//		for _, exWord := range ex.Words {
+	//			if exWord == strings.TrimSpace(w) {
+	//				if field == "ml" {
+	//					ex.MessageLimit = value
+	//				} else if field == "to" {
+	//					ex.Timeout = value
+	//				} else {
+	//					return NotFound
+	//				}
+	//				updated = true
+	//			}
+	//		}
+	//	}
+	//}
+	//
+	//if !updated {
+	//	return NotFound
+	//}
+
+	return Success
+}
+
+// !am ex del <слова/фразы>
+func (a *Admin) handleExDel(cfg *config.Config, cmd string, args []string) ports.ActionType {
+	if len(args) < 1 {
+		return NonParametr
+	}
+
+	//wordsToRemove := splitWords(strings.Join(args, " "))
+	//
+	//var newExcept []*config.Except
+	//for _, ex := range cfg.Except {
+	//	var newWords []string
+	//	for _, exWord := range ex.Words {
+	//		keep := true
+	//		for _, w := range wordsToRemove {
+	//			if exWord == strings.TrimSpace(w) {
+	//				keep = false
+	//				break
+	//			}
+	//		}
+	//		if keep {
+	//			newWords = append(newWords, exWord)
+	//		}
+	//	}
+	//	if len(newWords) > 0 {
+	//		ex.Words = newWords
+	//		newExcept = append(newExcept, ex)
+	//	}
+	//}
+	//
+	//cfg.Except = newExcept
+	return Success
+}
+
 func parsePunishment(punishment string) (string, int, error) {
 	punishment = strings.TrimSpace(punishment)
 	if punishment == "-" {
@@ -686,4 +921,43 @@ func parseFloatArg(args []string, min, max float64) (float64, bool) {
 	}
 
 	return math.Round(val*100) / 100, true
+}
+
+func splitWords(input string) []string {
+	var words []string
+	var buf strings.Builder
+	inRegex := false
+	quoteChar := rune(0)
+
+	for i, r := range input {
+		// Начало регулярки
+		if !inRegex && (strings.HasPrefix(input[i:], `r"`) || strings.HasPrefix(input[i:], `r'`)) {
+			inRegex = true
+			quoteChar = rune(input[i+1]) // " или '
+			buf.WriteRune(r)             // пишем 'r'
+			continue
+		}
+
+		// Конец регулярки
+		if inRegex && r == quoteChar {
+			inRegex = false
+			buf.WriteRune(r)
+			continue
+		}
+
+		// Разделитель запятая, только если мы не внутри регулярки
+		if r == ',' && !inRegex {
+			words = append(words, strings.TrimSpace(buf.String()))
+			buf.Reset()
+			continue
+		}
+
+		buf.WriteRune(r)
+	}
+
+	if buf.Len() > 0 {
+		words = append(words, strings.TrimSpace(buf.String()))
+	}
+
+	return words
 }
