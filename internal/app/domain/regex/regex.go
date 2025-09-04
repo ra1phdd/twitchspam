@@ -66,3 +66,44 @@ func (r *Regex) SplitWords(input string) []string {
 
 	return words
 }
+
+func (r *Regex) SplitWordsBySpace(input string) []string {
+	var words []string
+	var buf strings.Builder
+	inRegex := false
+	quoteChar := rune(0)
+
+	for i, ch := range input {
+		// Начало регулярки
+		if !inRegex && (strings.HasPrefix(input[i:], `r"`) || strings.HasPrefix(input[i:], `r'`)) {
+			inRegex = true
+			quoteChar = rune(input[i+1]) // " или '
+			buf.WriteRune(ch)            // пишем 'r'
+			continue
+		}
+
+		// Конец регулярки
+		if inRegex && ch == quoteChar {
+			inRegex = false
+			buf.WriteRune(ch)
+			continue
+		}
+
+		// Разделитель пробел/таб/новая строка, если не внутри регулярки
+		if !inRegex && (ch == ' ' || ch == '\t' || ch == '\n') {
+			if buf.Len() > 0 {
+				words = append(words, buf.String())
+				buf.Reset()
+			}
+			continue
+		}
+
+		buf.WriteRune(ch)
+	}
+
+	if buf.Len() > 0 {
+		words = append(words, buf.String())
+	}
+
+	return words
+}

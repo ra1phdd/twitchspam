@@ -115,7 +115,7 @@ func (c *Checker) CheckBanwords(words []string) *ports.CheckerAction {
 }
 
 func (c *Checker) CheckMwords(text string) *ports.CheckerAction {
-	words := c.regexp.SplitWords(text)
+	words := c.regexp.SplitWordsBySpace(text)
 	makeAction := func(action string, reason string, duration int) *ports.CheckerAction {
 		return &ports.CheckerAction{
 			Type:     ports.ActionType(action),
@@ -135,6 +135,7 @@ func (c *Checker) CheckMwords(text string) *ports.CheckerAction {
 			}
 
 			if matchPhrase(words, phrase) {
+				fmt.Println("хуй")
 				return makeAction(group.Action, phrase, group.Duration)
 			}
 		}
@@ -210,7 +211,7 @@ func (c *Checker) checkSpam(msg *ports.ChatMessage, text string) *ports.CheckerA
 		return nil
 	}
 
-	words := c.regexp.SplitWords(text)
+	words := c.regexp.SplitWordsBySpace(text)
 	var dur time.Duration
 	isException := false
 
