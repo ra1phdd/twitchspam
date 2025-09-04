@@ -51,9 +51,8 @@ type SpamSettingsEmote struct {
 }
 
 type SpamExceptionsSettings struct {
-	Enabled      bool `json:"enabled"`
-	MessageLimit int  `json:"message_limit"`
-	Timeout      int  `json:"timeout"`
+	MessageLimit int `json:"message_limit"`
+	Timeout      int `json:"timeout"`
 }
 
 type Mword struct {
@@ -70,6 +69,7 @@ type MwordGroup struct {
 
 type Config struct {
 	App        App                    `json:"app"`
+	Enabled    bool                   `json:"enabled"`
 	Spam       Spam                   `json:"spam"`
 	Mword      map[string]*Mword      `json:"mword"`
 	MwordGroup map[string]*MwordGroup `json:"mword_group"`

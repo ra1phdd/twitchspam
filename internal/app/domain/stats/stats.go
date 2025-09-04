@@ -95,8 +95,11 @@ func (s *Stats) GetStats() string {
 		return "нет данных за последний стрим"
 	}
 
-	var countBans, countTimeouts, countDeletes int
+	var countBans, countTimeouts, countDeletes, countMessages int
 	combined := make(map[string]int)
+	for _, v := range s.countMessages {
+		countMessages += v
+	}
 	for k, v := range s.countDeletes {
 		countDeletes += v
 		combined[k] += v
@@ -124,9 +127,9 @@ func (s *Stats) GetStats() string {
 		return list[i].value > list[j].value
 	})
 
-	msg := fmt.Sprintf("длительность стрима: %s • средний онлайн: %.0f • максимальный онлайн: %d • всего сообщений: %d • скорость сообщений: %.1f/сек • кол-во банов: %d • кол-во мутов: %d • кол-во удаленных сообщений: %d • топ 3 модератора за стрим: ",
-		s.endTime.Sub(s.startTime).Round(1*time.Second).String(), math.Round(float64(s.online.sumViewers/int64(s.online.count))),
-		s.online.maxViewers, len(s.countMessages), float64(len(s.countMessages))/s.endTime.Sub(s.startTime).Seconds(), countBans, countTimeouts, countDeletes)
+	msg := fmt.Sprintf("длительность стрима: %s • средний онлайн: %.0f • максимальный онлайн: %d • всего сообщений: %d • кол-во чаттеров: %d • скорость сообщений: %.1f/сек • кол-во банов: %d • кол-во мутов: %d • кол-во удаленных сообщений: %d • топ 3 модератора за стрим: ",
+		s.endTime.Sub(s.startTime).Round(1*time.Second).String(), math.Round(float64(s.online.sumViewers/int64(s.online.count))), s.online.maxViewers,
+		countMessages, len(s.countMessages), float64(len(s.countMessages))/s.endTime.Sub(s.startTime).Seconds(), countBans, countTimeouts, countDeletes)
 
 	top := 3
 	if len(list) < 3 {
@@ -149,10 +152,36 @@ func (s *Stats) GetUserStats(username string) string {
 		return "нет данных за последний стрим"
 	}
 
-	if s.countBans[username] > 0 || s.countTimeouts[username] > 0 || s.countDeletes[username] > 0 {
-		return fmt.Sprintf("кол-во сообщений за стрим: %d • кол-во банов: %d • кол-во мутов: %d • кол-во удаленных сообщений: %d",
-			s.countMessages[username], s.countBans[username], s.countTimeouts[username], s.countDeletes[username])
+	type kv struct {
+		Key   string
+		Value int
 	}
 
-	return fmt.Sprintf("кол-во сообщений за стрим: %d", s.countMessages[username])
+	var pairs []kv
+	for k, v := range s.countMessages {
+		pairs = append(pairs, kv{k, v})
+	}
+
+	sort.Slice(pairs, func(i, j int) bool {
+		return pairs[i].Value > pairs[j].Value
+	})
+
+	position := -1
+	for i, p := range pairs {
+		if p.Key == username {
+			position = i + 1
+			break
+		}
+	}
+
+	msg := fmt.Sprintf("кол-во сообщений за стрим: %d", s.countMessages[username])
+	if position != -1 {
+		msg += fmt.Sprintf(" (топ-%d чаттер)", position)
+	}
+
+	if s.countBans[username] > 0 || s.countTimeouts[username] > 0 || s.countDeletes[username] > 0 {
+		msg += fmt.Sprintf(" • кол-во банов: %d • кол-во мутов: %d • кол-во удаленных сообщений: %d",
+			s.countBans[username], s.countTimeouts[username], s.countDeletes[username])
+	}
+	return msg
 }

@@ -68,7 +68,7 @@ func New(log logger.Logger, manager *config.Manager, client *http.Client, modCha
 	c.moderation = twitch.New(log, c.cfg, c.stream, client)
 	c.checker = antispam.NewCheck(log, c.cfg, c.stream, c.stats)
 	c.admin = admin.New(log, manager, c.stream)
-	c.user = user.New(log, manager, c.stream, c.stats)
+	c.user = user.New(log, c.cfg, c.stream, c.stats)
 	c.bwords = banwords.New(c.cfg.Banwords)
 
 	go func() {
@@ -242,15 +242,19 @@ func (c *Twitch) connectAndHandleEvents() error {
 					},
 				}
 
+				if c.stream.IsLive() {
+					c.stats.AddMessage(msg.Chatter.Username)
+				}
+
 				if adminAction := c.admin.FindMessages(msg); adminAction != admin.None {
-					if err := c.SendChatMessage(msg.Broadcaster.UserID, fmt.Sprintf("@%s, %s!", msg.Chatter.Username, adminAction)); err != nil {
+					if err := c.SendChatMessage(msg.Broadcaster.UserID, fmt.Sprintf("@%s, %s", msg.Chatter.Username, adminAction)); err != nil {
 						c.log.Error("Failed to send message on chat", err)
 					}
 					continue
 				}
 
 				if userAction := c.user.FindMessages(msg); userAction != user.None {
-					if err := c.SendChatMessage(msg.Broadcaster.UserID, fmt.Sprintf("@%s, %s!", msg.Chatter.Username, userAction)); err != nil {
+					if err := c.SendChatMessage(msg.Broadcaster.UserID, fmt.Sprintf("@%s, %s", msg.Chatter.Username, userAction)); err != nil {
 						c.log.Error("Failed to send message on chat", err)
 					}
 					continue
@@ -279,6 +283,10 @@ func (c *Twitch) connectAndHandleEvents() error {
 					break
 				}
 				c.log.Info("AutoMod held message", slog.String("user_id", am.UserID), slog.String("message_id", am.MessageID), slog.String("text", am.Message.Text))
+
+				if !c.cfg.Enabled {
+					break
+				}
 
 				text := strings.ToLower(domain.NormalizeText(am.Message.Text))
 				words := strings.Fields(text)

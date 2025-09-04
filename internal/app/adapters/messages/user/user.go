@@ -16,17 +16,17 @@ const (
 
 type User struct {
 	log          logger.Logger
-	manager      *config.Manager
+	cfg          *config.Config
 	stream       ports.StreamPort
 	stats        ports.StatsPort
 	limiterGame  *rate.Limiter
 	usersLimiter map[string]*rate.Limiter
 }
 
-func New(log logger.Logger, manager *config.Manager, stream ports.StreamPort, stats ports.StatsPort) *User {
+func New(log logger.Logger, cfg *config.Config, stream ports.StreamPort, stats ports.StatsPort) *User {
 	return &User{
 		log:          log,
-		manager:      manager,
+		cfg:          cfg,
 		stream:       stream,
 		stats:        stats,
 		limiterGame:  rate.NewLimiter(rate.Every(30*time.Second), 1),
@@ -50,6 +50,10 @@ func (u *User) FindMessages(msg *ports.ChatMessage) ports.ActionType {
 			target = parts[1]
 		}
 		return ports.ActionType(u.stats.GetUserStats(target))
+	}
+
+	if !u.cfg.Enabled {
+		return None
 	}
 
 	if u.stream.IsLive() && u.stream.Category() != "Just Chatting" && u.limiterGame.Allow() && u.usersLimiter[msg.Chatter.Username].Allow() {

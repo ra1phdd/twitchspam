@@ -58,10 +58,6 @@ func NewCheck(log logger.Logger, cfg *config.Config, stream ports.StreamPort, st
 }
 
 func (c *Checker) Check(msg *ports.ChatMessage) *ports.CheckerAction {
-	if c.stream.IsLive() {
-		c.stats.AddMessage(msg.Chatter.Username)
-	}
-
 	if action := c.checkBypass(msg); action != nil {
 		return action
 	}
@@ -93,7 +89,7 @@ func (c *Checker) Check(msg *ports.ChatMessage) *ports.CheckerAction {
 }
 
 func (c *Checker) checkBypass(msg *ports.ChatMessage) *ports.CheckerAction {
-	if msg.Chatter.IsBroadcaster || msg.Chatter.IsMod || !c.cfg.Spam.SettingsDefault.Enabled ||
+	if !c.cfg.Enabled || msg.Chatter.IsBroadcaster || msg.Chatter.IsMod || !c.cfg.Spam.SettingsDefault.Enabled ||
 		(c.cfg.Spam.Mode == "online" && !c.stream.IsLive()) {
 		return &ports.CheckerAction{Type: None}
 	}
@@ -132,7 +128,11 @@ func (c *Checker) checkMwords(msg *ports.ChatMessage, text string) *ports.Checke
 				continue
 			}
 
-			pattern := fmt.Sprintf(`\b%s\b`, regexp.QuoteMeta(word))
+			pattern := fmt.Sprintf(`(^|[^[:alnum:]_])%s([^[:alnum:]_]|$)`, regexp.QuoteMeta(word))
+			if strings.Contains(word, " ") {
+				pattern = regexp.QuoteMeta(word)
+			}
+
 			if (strings.HasPrefix(word, `r"`) && strings.HasSuffix(word, `"`)) ||
 				(strings.HasPrefix(word, `r'`) && strings.HasSuffix(word, `'`)) {
 				pattern = word[2 : len(word)-1]
@@ -158,7 +158,15 @@ func (c *Checker) checkMwords(msg *ports.ChatMessage, text string) *ports.Checke
 	}
 
 	for word, mw := range c.cfg.Mword {
-		pattern := fmt.Sprintf(`\b%s\b`, regexp.QuoteMeta(word))
+		if word == "" {
+			continue
+		}
+
+		pattern := fmt.Sprintf(`(^|[^[:alnum:]_])%s([^[:alnum:]_]|$)`, regexp.QuoteMeta(word))
+		if strings.Contains(word, " ") {
+			pattern = regexp.QuoteMeta(word)
+		}
+
 		if (strings.HasPrefix(word, `r"`) && strings.HasSuffix(word, `"`)) ||
 			(strings.HasPrefix(word, `r'`) && strings.HasSuffix(word, `'`)) {
 			pattern = word[2 : len(word)-1]
@@ -232,7 +240,7 @@ func (c *Checker) checkSpam(msg *ports.ChatMessage, text string) *ports.CheckerA
 
 	if countSpam >= settings.MessageLimit-1 {
 		var dur time.Duration
-		if except, ok := c.cfg.Spam.Exceptions[text]; ok && except.Enabled {
+		if except, ok := c.cfg.Spam.Exceptions[text]; ok {
 			if countSpam < except.MessageLimit-1 {
 				c.messages.Push(msg.Chatter.Username, text, time.Duration(c.cfg.Spam.CheckWindowSeconds)*time.Second)
 				return nil

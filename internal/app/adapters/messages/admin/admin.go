@@ -57,7 +57,7 @@ type cmdHandler func(cfg *config.Config, cmd string, args []string) ports.Action
 var startApp = time.Now()
 
 func (a *Admin) FindMessages(msg *ports.ChatMessage) ports.ActionType {
-	if (!msg.Chatter.IsBroadcaster || !msg.Chatter.IsMod) && !strings.HasPrefix(msg.Message.Text, "!am") {
+	if !(msg.Chatter.IsBroadcaster || msg.Chatter.IsMod) || !strings.HasPrefix(msg.Message.Text, "!am") {
 		return None
 	}
 
@@ -72,12 +72,9 @@ func (a *Admin) FindMessages(msg *ports.ChatMessage) ports.ActionType {
 	}
 
 	handlers := map[string]cmdHandler{
-		"on": func(cfg *config.Config, cmd string, args []string) ports.ActionType {
-			return a.handleOnOff(cfg, cmd, args, "default")
-		},
-		"off": func(cfg *config.Config, cmd string, args []string) ports.ActionType {
-			return a.handleOnOff(cfg, cmd, args, "default")
-		},
+		"on":     a.handleOnOff,
+		"off":    a.handleOnOff,
+		"spam":   a.handleSpam,
 		"online": a.handleMode,
 		"always": a.handleMode,
 		"sim": func(cfg *config.Config, cmd string, args []string) ports.ActionType {
@@ -110,6 +107,7 @@ func (a *Admin) FindMessages(msg *ports.ChatMessage) ports.ActionType {
 		"game":  a.handleCategory,
 		"mwg":   a.handleMwg,
 		"mw":    a.handleMw,
+		"ex":    a.handleEx,
 	}
 
 	handler, ok := handlers[cmd]
@@ -146,7 +144,33 @@ func (a *Admin) handlePing() ports.ActionType {
 	return ports.ActionType(fmt.Sprintf("бот работает %v • загрузка CPU %.2f%% • потребление ОЗУ %v MB", uptime.Truncate(time.Second), percent[0], m.Sys/1024/1024))
 }
 
-func (a *Admin) handleOnOff(cfg *config.Config, cmd string, args []string, typeSpam string) ports.ActionType {
+func (a *Admin) handleOnOff(cfg *config.Config, cmd string, args []string) ports.ActionType {
+	cfg.Enabled = cmd == "on"
+	return None
+}
+
+func (a *Admin) handleSpam(cfg *config.Config, cmd string, args []string) ports.ActionType {
+	if len(args) < 1 {
+		return NonParametr
+	}
+	spamCmd, spamArgs := args[0], args[1:]
+
+	handlers := map[string]func(cfg *config.Config, cmd string, args []string) ports.ActionType{
+		"on": func(cfg *config.Config, cmd string, args []string) ports.ActionType {
+			return a.handleSpamOnOff(cfg, cmd, args, "default")
+		},
+		"off": func(cfg *config.Config, cmd string, args []string) ports.ActionType {
+			return a.handleSpamOnOff(cfg, cmd, args, "default")
+		},
+	}
+
+	if handler, ok := handlers[spamCmd]; ok {
+		return handler(cfg, spamCmd, spamArgs)
+	}
+	return NotFound
+}
+
+func (a *Admin) handleSpamOnOff(cfg *config.Config, cmd string, args []string, typeSpam string) ports.ActionType {
 	switch typeSpam {
 	case "vip":
 		cfg.Spam.SettingsVIP.Enabled = cmd == "on"
@@ -411,10 +435,10 @@ func (a *Admin) handleVip(cfg *config.Config, cmd string, args []string) ports.A
 
 	handlers := map[string]func(cfg *config.Config, cmd string, args []string) ports.ActionType{
 		"on": func(cfg *config.Config, cmd string, args []string) ports.ActionType {
-			return a.handleOnOff(cfg, cmd, args, "vip")
+			return a.handleSpamOnOff(cfg, cmd, args, "vip")
 		},
 		"off": func(cfg *config.Config, cmd string, args []string) ports.ActionType {
-			return a.handleOnOff(cfg, cmd, args, "vip")
+			return a.handleSpamOnOff(cfg, cmd, args, "vip")
 		},
 		"sim": func(cfg *config.Config, cmd string, args []string) ports.ActionType {
 			return a.handleSim(cfg, cmd, args, "vip")
@@ -726,10 +750,13 @@ func (a *Admin) handleMwList(cfg *config.Config, cmd string, args []string) port
 	if len(cfg.Mword) == 0 {
 		return "мворды отсутствуют"
 	}
-	msg := "мворды:"
+
+	var parts []string
 	for word, mw := range cfg.Mword {
-		msg += fmt.Sprintf(" %s(%d)", word, mw.Duration)
+		parts = append(parts, fmt.Sprintf("%s(%d)", word, mw.Duration))
 	}
+
+	msg := "мворды: " + strings.Join(parts, ", ")
 	return ports.ActionType(msg)
 }
 
@@ -757,126 +784,127 @@ func (a *Admin) handleExList(cfg *config.Config, cmd string, args []string) port
 		return "исключения отсутствуют"
 	}
 
-	//msg := "исключения:"
-	//for word, ex := range cfg.Spam.Exceptions {
-	//	msg += fmt.Sprintf("ML: %d, TO: %d, слова: %s • ", ex.MessageLimit, ex.Timeout, strings.Join(ex, ", "))
-	//}
-	//return ports.ActionType(msg)
-	return ErrFound
+	var parts []string
+	for word, ex := range cfg.Spam.Exceptions {
+		parts = append(parts, fmt.Sprintf("%s(ML: %d, TO: %d)", word, ex.MessageLimit, ex.Timeout))
+	}
+
+	msg := "исключения: " + strings.Join(parts, ", ")
+	return ports.ActionType(msg)
 }
 
-// !am ex add <message_limit> <timeout> <слова/фразы>
 func (a *Admin) handleExAdd(cfg *config.Config, cmd string, args []string) ports.ActionType {
 	if len(args) < 3 {
 		return NonParametr
 	}
 
-	//messageLimit, err := strconv.Atoi(args[0])
-	//if err != nil {
-	//	return ErrFound
-	//}
-	//
-	//timeout, err := strconv.Atoi(args[1])
-	//if err != nil {
-	//	return ErrFound
-	//}
-	//
-	//words := splitWords(strings.Join(args[2:], " "))
-	//
-	//for _, w := range words {
-	//	trimmed := strings.TrimSpace(w)
-	//	if trimmed == "" {
-	//		continue
-	//	}
-	//
-	//	if (strings.HasPrefix(trimmed, `r"`) && strings.HasSuffix(trimmed, `"`)) ||
-	//		(strings.HasPrefix(trimmed, `r'`) && strings.HasSuffix(trimmed, `'`)) {
-	//		pattern := trimmed[2 : len(trimmed)-1]
-	//		if _, err := regexp.Compile(pattern); err != nil {
-	//			return InvalidRegex
-	//		}
-	//	}
-	//}
-	//
-	//cfg.Except = append(cfg.Except, &config.Except{
-	//	MessageLimit: messageLimit,
-	//	Timeout:      timeout,
-	//	Words:        words,
-	//})
+	messageLimit, err := strconv.Atoi(args[0])
+	if err != nil {
+		return ErrFound
+	}
+
+	timeout, err := strconv.Atoi(args[1])
+	if err != nil {
+		return ErrFound
+	}
+
+	words := splitWords(strings.Join(args[2:], " "))
+	for _, w := range words {
+		trimmed := strings.TrimSpace(w)
+		if trimmed == "" {
+			continue
+		}
+
+		if (strings.HasPrefix(trimmed, `r"`) && strings.HasSuffix(trimmed, `"`)) ||
+			(strings.HasPrefix(trimmed, `r'`) && strings.HasSuffix(trimmed, `'`)) {
+			pattern := trimmed[2 : len(trimmed)-1]
+			if _, err := regexp.Compile(pattern); err != nil {
+				return InvalidRegex
+			}
+		}
+
+		cfg.Spam.Exceptions[w] = &config.SpamExceptionsSettings{
+			MessageLimit: messageLimit,
+			Timeout:      timeout,
+		}
+	}
 
 	return Success
 }
 
-// !am ex set ml|to <value> <слова/фразы>
 func (a *Admin) handleExSet(cfg *config.Config, cmd string, args []string) ports.ActionType {
 	if len(args) < 3 {
 		return NonParametr
 	}
 
-	//field := args[0]
-	//value, err := strconv.Atoi(args[1])
-	//if err != nil {
-	//	return ErrFound
-	//}
-	//
-	//words := splitWords(strings.Join(args[2:], " "))
-	//
-	//updated := false
-	//for _, ex := range cfg.Except {
-	//	for _, w := range words {
-	//		for _, exWord := range ex.Words {
-	//			if exWord == strings.TrimSpace(w) {
-	//				if field == "ml" {
-	//					ex.MessageLimit = value
-	//				} else if field == "to" {
-	//					ex.Timeout = value
-	//				} else {
-	//					return NotFound
-	//				}
-	//				updated = true
-	//			}
-	//		}
-	//	}
-	//}
-	//
-	//if !updated {
-	//	return NotFound
-	//}
+	field := args[0]
+	value, err := strconv.Atoi(args[1])
+	if err != nil {
+		return ErrFound
+	}
 
-	return Success
+	var updated, notFound []string
+	words := splitWords(strings.Join(args[2:], " "))
+
+	for _, w := range words {
+		if exWord, ok := cfg.Spam.Exceptions[w]; ok {
+			switch field {
+			case "ml":
+				exWord.MessageLimit = value
+			case "to":
+				exWord.Timeout = value
+			default:
+				return NotFound
+			}
+			updated = append(updated, w)
+		} else {
+			notFound = append(notFound, w)
+		}
+	}
+
+	var msgParts []string
+	if len(updated) > 0 {
+		msgParts = append(msgParts, fmt.Sprintf("изменены: %s", strings.Join(updated, ", ")))
+	}
+	if len(notFound) > 0 {
+		msgParts = append(msgParts, fmt.Sprintf("не найдены: %s", strings.Join(notFound, ", ")))
+	}
+
+	if len(msgParts) == 0 {
+		return None
+	}
+	return ports.ActionType(strings.Join(msgParts, " • "))
 }
 
-// !am ex del <слова/фразы>
 func (a *Admin) handleExDel(cfg *config.Config, cmd string, args []string) ports.ActionType {
 	if len(args) < 1 {
 		return NonParametr
 	}
 
-	//wordsToRemove := splitWords(strings.Join(args, " "))
-	//
-	//var newExcept []*config.Except
-	//for _, ex := range cfg.Except {
-	//	var newWords []string
-	//	for _, exWord := range ex.Words {
-	//		keep := true
-	//		for _, w := range wordsToRemove {
-	//			if exWord == strings.TrimSpace(w) {
-	//				keep = false
-	//				break
-	//			}
-	//		}
-	//		if keep {
-	//			newWords = append(newWords, exWord)
-	//		}
-	//	}
-	//	if len(newWords) > 0 {
-	//		ex.Words = newWords
-	//		newExcept = append(newExcept, ex)
-	//	}
-	//}
-	//
-	//cfg.Except = newExcept
-	return Success
+	var removed, notFound []string
+	wordsToRemove := splitWords(strings.Join(args, " "))
+
+	for _, w := range wordsToRemove {
+		if _, ok := cfg.Spam.Exceptions[w]; ok {
+			delete(cfg.Spam.Exceptions, w)
+			removed = append(removed, w)
+		} else {
+			notFound = append(notFound, w)
+		}
+	}
+
+	var msgParts []string
+	if len(removed) > 0 {
+		msgParts = append(msgParts, fmt.Sprintf("удалены: %s", strings.Join(removed, ", ")))
+	}
+	if len(notFound) > 0 {
+		msgParts = append(msgParts, fmt.Sprintf("не найдены: %s", strings.Join(notFound, ", ")))
+	}
+
+	if len(msgParts) == 0 {
+		return None
+	}
+	return ports.ActionType(strings.Join(msgParts, " • "))
 }
 
 func parsePunishment(punishment string) (string, int, error) {
