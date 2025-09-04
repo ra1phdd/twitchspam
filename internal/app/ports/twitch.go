@@ -6,6 +6,11 @@ type Chat interface {
 	SendChatMessage(broadcasterID, senderID, message string) error
 }
 
+type ModerationPort interface {
+	Timeout(userID string, duration int, reason string)
+	Ban(userID string, reason string)
+}
+
 type ChatMessage struct {
 	Broadcaster Broadcaster
 	Chatter     Chatter

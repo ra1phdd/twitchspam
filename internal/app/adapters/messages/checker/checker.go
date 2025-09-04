@@ -1,15 +1,15 @@
-package antispam
+package checker
 
 import (
 	"fmt"
-	"log/slog"
-	"regexp"
 	"runtime"
+	"slices"
 	"strings"
 	"time"
 	"twitchspam/internal/app/adapters/seventv"
 	"twitchspam/internal/app/domain"
 	"twitchspam/internal/app/domain/banwords"
+	"twitchspam/internal/app/domain/regex"
 	"twitchspam/internal/app/infrastructure/config"
 	"twitchspam/internal/app/infrastructure/storage"
 	"twitchspam/internal/app/ports"
@@ -35,9 +35,10 @@ type Checker struct {
 	messages ports.StorePort[string]
 	bwords   ports.BanwordsPort
 	sevenTV  ports.SevenTVPort
+	regexp   ports.RegexPort
 }
 
-func NewCheck(log logger.Logger, cfg *config.Config, stream ports.StreamPort, stats ports.StatsPort) *Checker {
+func NewCheck(log logger.Logger, cfg *config.Config, stream ports.StreamPort, stats ports.StatsPort, regexp *regex.Regex) *Checker {
 	return &Checker{
 		log:    log,
 		cfg:    cfg,
@@ -54,6 +55,7 @@ func NewCheck(log logger.Logger, cfg *config.Config, stream ports.StreamPort, st
 		}),
 		bwords:  banwords.New(cfg.Banwords),
 		sevenTV: seventv.New(log, stream),
+		regexp:  regexp,
 	}
 }
 
@@ -69,11 +71,11 @@ func (c *Checker) Check(msg *ports.ChatMessage) *ports.CheckerAction {
 		return &ports.CheckerAction{Type: None}
 	}
 
-	if action := c.checkBanwords(msg, words); action != nil {
+	if action := c.CheckBanwords(words); action != nil {
 		return action
 	}
 
-	if action := c.checkMwords(msg, text); action != nil {
+	if action := c.CheckMwords(text); action != nil {
 		return action
 	}
 
@@ -94,99 +96,67 @@ func (c *Checker) checkBypass(msg *ports.ChatMessage) *ports.CheckerAction {
 		return &ports.CheckerAction{Type: None}
 	}
 
-	for _, user := range c.cfg.Spam.WhitelistUsers {
-		if user == msg.Chatter.Username {
-			return &ports.CheckerAction{Type: None}
-		}
+	if slices.Contains(c.cfg.Spam.WhitelistUsers, msg.Chatter.Username) {
+		return &ports.CheckerAction{Type: None}
 	}
 
 	return nil
 }
 
-func (c *Checker) checkBanwords(msg *ports.ChatMessage, words []string) *ports.CheckerAction {
+func (c *Checker) CheckBanwords(words []string) *ports.CheckerAction {
 	if !c.bwords.CheckMessage(words) {
 		return nil
 	}
 
 	return &ports.CheckerAction{
-		Type:     Ban,
-		Reason:   "банворд",
-		UserID:   msg.Chatter.UserID,
-		Username: msg.Chatter.Username,
-		Text:     msg.Message.Text,
+		Type:   Ban,
+		Reason: "банворд",
 	}
 }
 
-func (c *Checker) checkMwords(msg *ports.ChatMessage, text string) *ports.CheckerAction {
+func (c *Checker) CheckMwords(text string) *ports.CheckerAction {
+	words := c.regexp.SplitWords(text)
+	makeAction := func(action string, reason string, duration int) *ports.CheckerAction {
+		return &ports.CheckerAction{
+			Type:     ports.ActionType(action),
+			Reason:   fmt.Sprintf("мворд (%s)", reason),
+			Duration: time.Duration(duration) * time.Second,
+		}
+	}
+
 	for _, group := range c.cfg.MwordGroup {
 		if !group.Enabled {
 			continue
 		}
 
-		for _, word := range group.Words {
-			if word == "" {
+		for _, phrase := range group.Words {
+			if phrase == "" {
 				continue
 			}
 
-			pattern := fmt.Sprintf(`(^|[^[:alnum:]_])%s([^[:alnum:]_]|$)`, regexp.QuoteMeta(word))
-			if strings.Contains(word, " ") {
-				pattern = regexp.QuoteMeta(word)
+			if matchPhrase(words, phrase) {
+				return makeAction(group.Action, phrase, group.Duration)
 			}
+		}
 
-			if (strings.HasPrefix(word, `r"`) && strings.HasSuffix(word, `"`)) ||
-				(strings.HasPrefix(word, `r'`) && strings.HasSuffix(word, `'`)) {
-				pattern = word[2 : len(word)-1]
-			}
-
-			re, err := regexp.Compile(pattern)
-			if err != nil {
-				c.log.Error("Invalid regex", err, slog.String("pattern", pattern))
-				continue
-			}
-
-			if re.MatchString(text) {
-				return &ports.CheckerAction{
-					Type:     ports.ActionType(group.Action),
-					Reason:   fmt.Sprintf("мворд (%s)", word),
-					Duration: time.Duration(group.Duration) * time.Second,
-					UserID:   msg.Chatter.UserID,
-					Username: msg.Chatter.Username,
-					Text:     msg.Message.Text,
-				}
+		for _, re := range group.Regexp {
+			if re != nil && re.MatchString(text) {
+				return makeAction(group.Action, re.String(), group.Duration)
 			}
 		}
 	}
 
-	for word, mw := range c.cfg.Mword {
-		if word == "" {
+	for phrase, mw := range c.cfg.Mword {
+		if phrase == "" {
 			continue
 		}
 
-		pattern := fmt.Sprintf(`(^|[^[:alnum:]_])%s([^[:alnum:]_]|$)`, regexp.QuoteMeta(word))
-		if strings.Contains(word, " ") {
-			pattern = regexp.QuoteMeta(word)
+		if mw.Regexp != nil && mw.Regexp.MatchString(text) {
+			return makeAction(mw.Action, mw.Regexp.String(), mw.Duration)
 		}
 
-		if (strings.HasPrefix(word, `r"`) && strings.HasSuffix(word, `"`)) ||
-			(strings.HasPrefix(word, `r'`) && strings.HasSuffix(word, `'`)) {
-			pattern = word[2 : len(word)-1]
-		}
-
-		re, err := regexp.Compile(pattern)
-		if err != nil {
-			c.log.Error("Invalid regex", err, slog.String("pattern", pattern))
-			continue
-		}
-
-		if re.MatchString(text) {
-			return &ports.CheckerAction{
-				Type:     ports.ActionType(mw.Action),
-				Reason:   fmt.Sprintf("мворд (%s)", word),
-				Duration: time.Duration(mw.Duration) * time.Second,
-				UserID:   msg.Chatter.UserID,
-				Username: msg.Chatter.Username,
-				Text:     msg.Message.Text,
-			}
+		if matchPhrase(words, strings.ToLower(phrase)) {
+			return makeAction(mw.Action, phrase, mw.Duration)
 		}
 	}
 	return nil
@@ -207,9 +177,6 @@ func (c *Checker) checkWordLength(msg *ports.ChatMessage, words []string) *ports
 				Type:     Timeout,
 				Reason:   "превышена максимальная длина слова",
 				Duration: time.Duration(settings.MaxWordTimeoutTime) * time.Second,
-				UserID:   msg.Chatter.UserID,
-				Username: msg.Chatter.Username,
-				Text:     msg.Message.Text,
 			}
 		}
 	}
@@ -238,31 +205,65 @@ func (c *Checker) checkSpam(msg *ports.ChatMessage, text string) *ports.CheckerA
 		}
 	})
 
-	if countSpam >= settings.MessageLimit-1 {
-		var dur time.Duration
-		if except, ok := c.cfg.Spam.Exceptions[text]; ok {
-			if countSpam < except.MessageLimit-1 {
-				c.messages.Push(msg.Chatter.Username, text, time.Duration(c.cfg.Spam.CheckWindowSeconds)*time.Second)
-				return nil
-			}
-			dur = time.Duration(except.Timeout) * time.Second
-		} else {
-			sec := domain.GetByIndexOrLast(settings.Timeouts, c.timeouts.Len(msg.Chatter.Username))
-			dur = time.Duration(sec) * time.Second
-			c.timeouts.Push(msg.Chatter.Username, Empty{}, time.Duration(settings.ResetTimeoutSeconds)*time.Second)
-		}
-
-		c.messages.CleanupUser(msg.Chatter.Username)
-		return &ports.CheckerAction{
-			Type:     Timeout,
-			Reason:   "спам",
-			Duration: dur,
-			UserID:   msg.Chatter.UserID,
-			Username: msg.Chatter.Username,
-			Text:     msg.Message.Text,
-		}
+	if countSpam < settings.MessageLimit-1 {
+		c.messages.Push(msg.Chatter.Username, text, time.Duration(c.cfg.Spam.CheckWindowSeconds)*time.Second)
+		return nil
 	}
 
-	c.messages.Push(msg.Chatter.Username, text, time.Duration(c.cfg.Spam.CheckWindowSeconds)*time.Second)
-	return nil
+	words := c.regexp.SplitWords(text)
+	var dur time.Duration
+	isException := false
+
+	for phrase, ex := range c.cfg.Spam.Exceptions {
+		if (ex.Regexp == nil || !ex.Regexp.MatchString(text)) && !matchPhrase(words, strings.ToLower(phrase)) {
+			continue
+		}
+
+		if countSpam < ex.MessageLimit-1 {
+			c.messages.Push(msg.Chatter.Username, text, time.Duration(c.cfg.Spam.CheckWindowSeconds)*time.Second)
+			return nil
+		}
+		dur = time.Duration(ex.Timeout) * time.Second
+		isException = true
+		break
+	}
+
+	if !isException {
+		sec := domain.GetByIndexOrLast(settings.Timeouts, c.timeouts.Len(msg.Chatter.Username))
+		dur = time.Duration(sec) * time.Second
+		c.timeouts.Push(msg.Chatter.Username, Empty{}, time.Duration(settings.ResetTimeoutSeconds)*time.Second)
+	}
+
+	c.messages.CleanupUser(msg.Chatter.Username)
+	return &ports.CheckerAction{
+		Type:     Timeout,
+		Reason:   "спам",
+		Duration: dur,
+	}
+}
+
+func matchPhrase(words []string, phrase string) bool {
+	phraseParts := strings.Split(phrase, " ")
+	if len(phraseParts) == 1 {
+		for _, w := range words {
+			if w == phrase {
+				return true
+			}
+		}
+		return false
+	}
+
+	for i := 0; i <= len(words)-len(phraseParts); i++ {
+		match := true
+		for j := 0; j < len(phraseParts); j++ {
+			if words[i+j] != phraseParts[j] {
+				match = false
+				break
+			}
+		}
+		if match {
+			return true
+		}
+	}
+	return false
 }

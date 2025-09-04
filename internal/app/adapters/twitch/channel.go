@@ -9,9 +9,9 @@ import (
 	"net/url"
 )
 
-func (i *Twitch) GetChannelID(username string) (string, error) {
+func (t *Twitch) GetChannelID(username string) (string, error) {
 	var userResp UserResponse
-	if err := i.doTwitchRequest("GET", "https://api.twitch.tv/helix/users?login="+username, nil, &userResp); err != nil {
+	if err := t.doTwitchRequest("GET", "https://api.twitch.tv/helix/users?login="+username, nil, &userResp); err != nil {
 		return "", err
 	}
 	if len(userResp.Data) == 0 {
@@ -20,9 +20,9 @@ func (i *Twitch) GetChannelID(username string) (string, error) {
 	return userResp.Data[0].ID, nil
 }
 
-func (i *Twitch) GetOnline(username string) (int, bool, error) {
+func (t *Twitch) GetOnline(username string) (int, bool, error) {
 	var streamResp StreamResponse
-	err := i.doTwitchRequest("GET", "https://api.twitch.tv/helix/streams?user_login="+username, nil, &streamResp)
+	err := t.doTwitchRequest("GET", "https://api.twitch.tv/helix/streams?user_login="+username, nil, &streamResp)
 	if err != nil {
 		return 0, false, err
 	}
@@ -32,10 +32,10 @@ func (i *Twitch) GetOnline(username string) (int, bool, error) {
 	return streamResp.Data[0].ViewerCount, true, nil
 }
 
-func (i *Twitch) SendChatMessage(broadcasterID, message string) error {
+func (t *Twitch) SendChatMessage(broadcasterID, message string) error {
 	reqBody := ChatMessageRequest{
 		BroadcasterID: broadcasterID,
-		SenderID:      i.cfg.App.UserID,
+		SenderID:      t.cfg.App.UserID,
 		Message:       message,
 	}
 
@@ -45,7 +45,7 @@ func (i *Twitch) SendChatMessage(broadcasterID, message string) error {
 	}
 
 	var chatResp ChatMessageResponse
-	err = i.doTwitchRequest("POST", "https://api.twitch.tv/helix/chat/messages", bytes.NewReader(bodyBytes), &chatResp)
+	err = t.doTwitchRequest("POST", "https://api.twitch.tv/helix/chat/messages", bytes.NewReader(bodyBytes), &chatResp)
 	if err != nil {
 		return err
 	}
@@ -57,15 +57,15 @@ func (i *Twitch) SendChatMessage(broadcasterID, message string) error {
 	return nil
 }
 
-func (i *Twitch) DeleteChatMessage(broadcasterID, messageID string) error {
+func (t *Twitch) DeleteChatMessage(broadcasterID, messageID string) error {
 	params := url.Values{}
 	params.Set("broadcaster_id", broadcasterID)
-	params.Set("moderator_id", i.cfg.App.UserID)
+	params.Set("moderator_id", t.cfg.App.UserID)
 	if messageID != "" {
 		params.Set("message_id", messageID)
 	}
 
-	err := i.doTwitchRequest("DELETE", "https://api.twitch.tv/helix/moderation/chat?"+params.Encode(), nil, nil)
+	err := t.doTwitchRequest("DELETE", "https://api.twitch.tv/helix/moderation/chat?"+params.Encode(), nil, nil)
 	if err != nil {
 		return err
 	}

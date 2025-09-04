@@ -2,6 +2,7 @@ package user
 
 import (
 	"golang.org/x/time/rate"
+	"slices"
 	"strings"
 	"time"
 	"twitchspam/internal/app/domain"
@@ -40,35 +41,54 @@ func (u *User) FindMessages(msg *ports.ChatMessage) ports.ActionType {
 		u.usersLimiter[msg.Chatter.Username] = rate.NewLimiter(rate.Every(time.Minute), 3)
 	}
 
-	if strings.HasPrefix(msg.Message.Text, "!stats") && u.usersLimiter[msg.Chatter.Username].Allow() {
-		parts := strings.Fields(msg.Message.Text)
-		target := msg.Chatter.Username
-		if len(parts) > 1 {
-			if parts[1] == "all" {
-				return ports.ActionType(u.stats.GetStats())
-			}
-			target = parts[1]
-		}
-		return ports.ActionType(u.stats.GetUserStats(target))
+	if action := u.handleStats(msg); action != None {
+		return action
 	}
 
 	if !u.cfg.Enabled {
 		return None
 	}
 
-	if u.stream.IsLive() && u.stream.Category() != "Just Chatting" && u.limiterGame.Allow() && u.usersLimiter[msg.Chatter.Username].Allow() {
-		for _, q := range []string{
-			"че за игра",
-			"чё за игра",
-			"что за игра",
-			"как игра называется",
-			"как игра называеться",
-		} {
-			if strings.Contains(text, q) {
-				return ports.ActionType(u.stream.Category())
-			}
-		}
+	if action := u.handleGameQuery(msg, text); action != None {
+		return action
 	}
 
+	return None
+}
+
+func (u *User) handleStats(msg *ports.ChatMessage) ports.ActionType {
+	if !strings.HasPrefix(msg.Message.Text, "!stats") || !u.usersLimiter[msg.Chatter.Username].Allow() {
+		return None
+	}
+
+	parts := strings.Fields(msg.Message.Text)
+	target := msg.Chatter.Username
+	if len(parts) > 1 && parts[1] != "all" {
+		target = parts[1]
+	}
+
+	if len(parts) > 1 && parts[1] == "all" {
+		return ports.ActionType(u.stats.GetStats())
+	}
+	return ports.ActionType(u.stats.GetUserStats(target))
+}
+
+func (u *User) handleGameQuery(msg *ports.ChatMessage, text string) ports.ActionType {
+	if !u.stream.IsLive() || u.stream.Category() == "Just Chatting" ||
+		!u.limiterGame.Allow() || !u.usersLimiter[msg.Chatter.Username].Allow() {
+		return None
+	}
+
+	queries := []string{
+		"че за игра",
+		"чё за игра",
+		"что за игра",
+		"как игра называется",
+		"как игра называеться",
+	}
+
+	if slices.Contains(queries, text) {
+		return ports.ActionType(u.stream.Category())
+	}
 	return None
 }

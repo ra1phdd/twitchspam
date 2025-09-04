@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sync"
 	"time"
 )
@@ -51,20 +52,23 @@ type SpamSettingsEmote struct {
 }
 
 type SpamExceptionsSettings struct {
-	MessageLimit int `json:"message_limit"`
-	Timeout      int `json:"timeout"`
+	MessageLimit int            `json:"message_limit"`
+	Timeout      int            `json:"timeout"`
+	Regexp       *regexp.Regexp `json:"regexp"`
 }
 
 type Mword struct {
-	Action   string `json:"action"`   // "delete", "ban", "timeout"
-	Duration int    `json:"duration"` // только для таймаута
+	Action   string         `json:"action"`   // "delete", "ban", "timeout"
+	Duration int            `json:"duration"` // только для таймаута
+	Regexp   *regexp.Regexp `json:"regexp"`
 }
 
 type MwordGroup struct {
-	Action   string   `json:"action"`   // "delete", "ban", "timeout"
-	Duration int      `json:"duration"` // только для таймаута
-	Enabled  bool     `json:"enabled"`
-	Words    []string `json:"words"`
+	Action   string           `json:"action"`   // "delete", "ban", "timeout"
+	Duration int              `json:"duration"` // только для таймаута
+	Enabled  bool             `json:"enabled"`
+	Words    []string         `json:"words"`
+	Regexp   []*regexp.Regexp `json:"regexp"`
 }
 
 type Config struct {

@@ -98,6 +98,7 @@ type ChatMessageEvent struct {
 type AutomodHoldEvent struct {
 	BroadcasterUserID string `json:"broadcaster_user_id"`
 	UserID            string `json:"user_id"`
+	UserName          string `json:"user_name"`
 	MessageID         string `json:"message_id"`
 	Message           struct {
 		Text      string `json:"text"`
