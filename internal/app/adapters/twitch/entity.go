@@ -178,14 +178,47 @@ type UserResponse struct {
 
 type StreamResponse struct {
 	Data []struct {
-		ID          string `json:"id"`
-		UserID      string `json:"user_id"`
-		UserLogin   string `json:"user_login"`
-		UserName    string `json:"user_name"`
-		Title       string `json:"title"`
-		GameName    string `json:"game_name"`
-		StartedAt   string `json:"started_at"`
-		Type        string `json:"type"`
-		ViewerCount int    `json:"viewer_count"`
+		ID           string   `json:"id"`
+		UserID       string   `json:"user_id"`
+		UserLogin    string   `json:"user_login"`
+		UserName     string   `json:"user_name"`
+		GameID       string   `json:"game_id"`
+		GameName     string   `json:"game_name"`
+		Type         string   `json:"type"`
+		Title        string   `json:"title"`
+		Tags         []string `json:"tags"`
+		ViewerCount  int      `json:"viewer_count"`
+		StartedAt    string   `json:"started_at"`
+		Language     string   `json:"language"`
+		ThumbnailURL string   `json:"thumbnail_url"`
+		IsMature     bool     `json:"is_mature"`
 	} `json:"data"`
+}
+
+type VideoResponse struct {
+	Data []struct {
+		ID            string `json:"id"`
+		StreamID      string `json:"stream_id"`
+		UserID        string `json:"user_id"`
+		UserLogin     string `json:"user_login"`
+		UserName      string `json:"user_name"`
+		Title         string `json:"title"`
+		Description   string `json:"description"`
+		CreatedAt     string `json:"created_at"`
+		PublishedAt   string `json:"published_at"`
+		URL           string `json:"url"`
+		ThumbnailURL  string `json:"thumbnail_url"`
+		Viewable      string `json:"viewable"`
+		ViewCount     int    `json:"view_count"`
+		Language      string `json:"language"`
+		Type          string `json:"type"`
+		Duration      string `json:"duration"`
+		MutedSegments []struct {
+			Duration int `json:"duration"`
+			Offset   int `json:"offset"`
+		} `json:"muted_segments"`
+	} `json:"data"`
+	Pagination struct {
+		Cursor string `json:"cursor"`
+	} `json:"pagination"`
 }

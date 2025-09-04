@@ -37,57 +37,79 @@ type Twitch struct {
 }
 
 func New(log logger.Logger, manager *config.Manager, client *http.Client, modChannel string) (*Twitch, error) {
-	c := &Twitch{
+	t := &Twitch{
 		log:    log,
 		cfg:    manager.Get(),
 		client: client,
 	}
 
-	channelID, err := c.GetChannelID(modChannel)
+	channelID, err := t.GetChannelID(modChannel)
 	if err != nil {
 		return nil, err
 	}
 
-	viewerCount, isLive, err := c.GetOnline(modChannel)
+	live, err := t.GetLiveStream(modChannel)
 	if err != nil {
 		return nil, err
 	}
 
-	c.stream = stream.NewStream(channelID, modChannel)
-	c.stream.SetIslive(isLive)
+	t.stream = stream.NewStream(channelID, modChannel)
+	t.stream.SetIslive(live.IsOnline)
 
-	c.stats = stats.New()
-	if isLive {
-		c.log.Info("Stream started")
-		c.stream.SetIslive(true)
-		c.stats.SetStartTime(time.Now())
-		c.stats.SetOnline(viewerCount)
+	t.stats = stats.New()
+	if live.IsOnline {
+		t.log.Info("Stream started")
+		t.stream.SetIslive(true)
+		t.stream.SetStreamID(live.ID)
+
+		t.stats.SetStartTime(time.Now())
+		t.stats.SetOnline(live.ViewerCount)
 	}
 
 	r := regex.New()
-	c.moderation = twitch.New(log, c.cfg, c.stream, client)
-	c.checker = checker.NewCheck(log, c.cfg, c.stream, c.stats, r)
-	c.admin = admin.New(log, manager, c.stream, r)
-	c.user = user.New(log, c.cfg, c.stream, c.stats)
-	c.bwords = banwords.New(c.cfg.Banwords)
+	t.moderation = twitch.New(log, t.cfg, t.stream, client)
+	t.checker = checker.NewCheck(log, t.cfg, t.stream, t.stats, r)
+	t.admin = admin.New(log, manager, t.stream, r)
+	t.user = user.New(log, t.cfg, t.stream, t.stats)
+	t.bwords = banwords.New(t.cfg.Banwords)
 
 	go func() {
 		ticker := time.NewTicker(30 * time.Second)
 		for range ticker.C {
-			viewerCount, isLive, err := c.GetOnline(modChannel)
+			live, err := t.GetLiveStream(modChannel)
 			if err != nil {
 				log.Error("Error getting viewer count", err)
 				return
 			}
 
-			if isLive {
-				c.stats.SetOnline(viewerCount)
+			if live.IsOnline {
+				t.stream.SetIslive(true)
+				t.stream.SetStreamID(live.ID)
+				t.stats.SetOnline(live.ViewerCount)
 			}
 		}
 	}()
-	go c.runEventLoop()
+	go t.runEventLoop()
 
-	return c, nil
+	//go func() {
+	//	time.Sleep(5 * time.Second)
+	//	id, err := t.GetUrlVOD(t.stream.StreamID())
+	//	if err != nil {
+	//		t.log.Error("Failed to get live message", err)
+	//		return
+	//	}
+	//
+	//	duration := t.stats.GetEndTime().Sub(t.stats.GetStartTime()).Round(time.Second)
+	//
+	//	h := int(duration.Hours())
+	//	m := int(duration.Minutes()) % 60
+	//	s := int(duration.Seconds()) % 60
+	//
+	//	timecode := fmt.Sprintf("%02dh%02dm%02ds", h, m, s)
+	//	fmt.Printf("@aFsYGGA, %s - https://www.twitch.tv/videos/%s?t=%s\n", time.Now().Format("02-01"), id, timecode)
+	//}()
+
+	return t, nil
 }
 
 func (t *Twitch) runEventLoop() {

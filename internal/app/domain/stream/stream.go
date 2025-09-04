@@ -4,6 +4,7 @@ type Stream struct {
 	channelID   string
 	channelName string
 	isLive      bool
+	streamID    string
 	category    string
 }
 
@@ -20,6 +21,14 @@ func (s *Stream) IsLive() bool {
 
 func (s *Stream) SetIslive(isLive bool) {
 	s.isLive = isLive
+}
+
+func (s *Stream) StreamID() string {
+	return s.streamID
+}
+
+func (s *Stream) SetStreamID(streamID string) {
+	s.streamID = streamID
 }
 
 func (s *Stream) ChannelID() string {

@@ -41,8 +41,16 @@ func (s *Stats) SetStartTime(t time.Time) {
 	}
 }
 
+func (s *Stats) GetStartTime() time.Time {
+	return s.startTime
+}
+
 func (s *Stats) SetEndTime(t time.Time) {
 	s.endTime = t
+}
+
+func (s *Stats) GetEndTime() time.Time {
+	return s.endTime
 }
 
 func (s *Stats) SetOnline(viewers int) {
@@ -128,7 +136,7 @@ func (s *Stats) GetStats() string {
 	})
 
 	msg := fmt.Sprintf("длительность стрима: %s • средний онлайн: %.0f • максимальный онлайн: %d • всего сообщений: %d • кол-во чаттеров: %d • скорость сообщений: %.1f/сек • кол-во банов: %d • кол-во мутов: %d • кол-во удаленных сообщений: %d • топ 3 модератора за стрим: ",
-		s.endTime.Sub(s.startTime).Round(1*time.Second).String(), math.Round(float64(s.online.sumViewers/int64(s.online.count))), s.online.maxViewers,
+		s.endTime.Sub(s.startTime).Round(time.Second).String(), math.Round(float64(s.online.sumViewers/int64(s.online.count))), s.online.maxViewers,
 		countMessages, len(s.countMessages), float64(countMessages)/s.endTime.Sub(s.startTime).Seconds(), countBans, countTimeouts, countDeletes)
 
 	top := 3

@@ -20,16 +20,49 @@ func (t *Twitch) GetChannelID(username string) (string, error) {
 	return userResp.Data[0].ID, nil
 }
 
-func (t *Twitch) GetOnline(username string) (int, bool, error) {
+type Stream struct {
+	ID          string
+	IsOnline    bool
+	ViewerCount int
+}
+
+func (t *Twitch) GetLiveStream(broadcasterID string) (*Stream, error) {
+	params := url.Values{}
+	params.Set("user_id", broadcasterID)
+	params.Set("type", "live")
+
 	var streamResp StreamResponse
-	err := t.doTwitchRequest("GET", "https://api.twitch.tv/helix/streams?user_login="+username, nil, &streamResp)
+	err := t.doTwitchRequest("GET", "https://api.twitch.tv/helix/streams?"+params.Encode(), nil, &streamResp)
 	if err != nil {
-		return 0, false, err
+		return nil, err
 	}
+
 	if len(streamResp.Data) == 0 {
-		return 0, false, nil
+		return &Stream{ID: "", IsOnline: false, ViewerCount: 0}, nil
 	}
-	return streamResp.Data[0].ViewerCount, true, nil
+
+	return &Stream{
+		ID:          streamResp.Data[0].ID,
+		IsOnline:    true,
+		ViewerCount: streamResp.Data[0].ViewerCount,
+	}, nil
+}
+
+func (t *Twitch) GetUrlVOD(id string) (string, error) {
+	params := url.Values{}
+	params.Set("id", id)
+	params.Set("type", "archive")
+
+	var videoResp VideoResponse
+	err := t.doTwitchRequest("GET", "https://api.twitch.tv/helix/videos?"+params.Encode(), nil, &videoResp)
+	if err != nil {
+		return "", err
+	}
+
+	if len(videoResp.Data) == 0 {
+		return "", fmt.Errorf("video %s not found", id)
+	}
+	return videoResp.Data[0].URL, nil
 }
 
 func (t *Twitch) SendChatMessage(broadcasterID, message string) error {
