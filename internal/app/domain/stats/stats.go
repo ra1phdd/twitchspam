@@ -135,8 +135,13 @@ func (s *Stats) GetStats() string {
 		return list[i].value > list[j].value
 	})
 
+	var avgViewers float64
+	if s.online.count > 0 {
+		avgViewers = math.Round(float64(s.online.sumViewers) / float64(s.online.count))
+	}
+
 	msg := fmt.Sprintf("длительность стрима: %s • средний онлайн: %.0f • максимальный онлайн: %d • всего сообщений: %d • кол-во чаттеров: %d • скорость сообщений: %.1f/сек • кол-во банов: %d • кол-во мутов: %d • кол-во удаленных сообщений: %d • топ 3 модератора за стрим: ",
-		s.endTime.Sub(s.startTime).Round(time.Second).String(), math.Round(float64(s.online.sumViewers/int64(s.online.count))), s.online.maxViewers,
+		s.endTime.Sub(s.startTime).Round(time.Second).String(), math.Round(avgViewers), s.online.maxViewers,
 		countMessages, len(s.countMessages), float64(countMessages)/s.endTime.Sub(s.startTime).Seconds(), countBans, countTimeouts, countDeletes)
 
 	top := 3

@@ -48,7 +48,7 @@ func New(log logger.Logger, manager *config.Manager, client *http.Client, modCha
 		return nil, err
 	}
 
-	live, err := t.GetLiveStream(modChannel)
+	live, err := t.GetLiveStream(channelID)
 	if err != nil {
 		return nil, err
 	}
@@ -76,7 +76,7 @@ func New(log logger.Logger, manager *config.Manager, client *http.Client, modCha
 	go func() {
 		ticker := time.NewTicker(30 * time.Second)
 		for range ticker.C {
-			live, err := t.GetLiveStream(modChannel)
+			live, err := t.GetLiveStream(channelID)
 			if err != nil {
 				log.Error("Error getting viewer count", err)
 				return
