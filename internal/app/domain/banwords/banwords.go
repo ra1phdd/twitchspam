@@ -1,29 +1,38 @@
 package banwords
 
 import (
+	"github.com/dlclark/regexp2"
 	"strings"
-	"twitchspam/internal/app/domain"
 )
 
 type Banwords struct {
-	bwords map[string]struct{}
+	words map[string]struct{}
+	re    []*regexp2.Regexp
 }
 
-func New(list []string) *Banwords {
+func New(words []string, re []*regexp2.Regexp) *Banwords {
 	bw := &Banwords{
-		bwords: make(map[string]struct{}, len(list)),
+		words: make(map[string]struct{}, len(words)),
+		re:    re,
 	}
 
-	for _, bword := range list {
-		bw.bwords[domain.NormalizeText(strings.ToLower(bword))] = struct{}{}
+	for _, bword := range words {
+		bw.words[strings.TrimSpace(bword)] = struct{}{}
 	}
 
 	return bw
 }
 
-func (bw *Banwords) CheckMessage(words []string) bool {
+func (bw *Banwords) CheckMessage(text, textOriginal string) bool {
+	for _, re := range bw.re {
+		if isMatch, _ := re.MatchString(text); isMatch {
+			return true
+		}
+	}
+
+	words := strings.Fields(textOriginal)
 	for _, word := range words {
-		if _, ok := bw.bwords[word]; ok {
+		if _, ok := bw.words[word]; ok {
 			return true
 		}
 	}

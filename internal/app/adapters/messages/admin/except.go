@@ -8,13 +8,13 @@ import (
 	"twitchspam/internal/app/ports"
 )
 
-func (a *Admin) handleEx(cfg *config.Config, _ string, args []string) ports.ActionType {
+func (a *Admin) handleEx(cfg *config.Config, _ string, args []string) *ports.AnswerType {
 	if len(args) < 1 {
 		return NonParametr
 	}
 	mwgCmd, mwgArgs := args[0], args[1:]
 
-	handlers := map[string]func(cfg *config.Config, cmd string, args []string) ports.ActionType{
+	handlers := map[string]func(cfg *config.Config, cmd string, args []string) *ports.AnswerType{
 		"list": a.handleExList,
 		"add":  a.handleExAdd,
 		"set":  a.handleExSet,
@@ -24,36 +24,53 @@ func (a *Admin) handleEx(cfg *config.Config, _ string, args []string) ports.Acti
 	if handler, ok := handlers[mwgCmd]; ok {
 		return handler(cfg, mwgCmd, mwgArgs)
 	}
-	return NotFound
+	return NotFoundCmd
 }
 
-func (a *Admin) handleExList(cfg *config.Config, _ string, _ []string) ports.ActionType {
+func (a *Admin) handleExList(cfg *config.Config, _ string, _ []string) *ports.AnswerType {
 	if len(cfg.Spam.Exceptions) == 0 {
-		return "исключения отсутствуют"
+		return &ports.AnswerType{
+			Text:    []string{"исключений не найдено!"},
+			IsReply: true,
+		}
 	}
 
 	var parts []string
 	for word, ex := range cfg.Spam.Exceptions {
-		parts = append(parts, fmt.Sprintf("%s(ML: %d, TO: %d)", word, ex.MessageLimit, ex.Timeout))
+		parts = append(parts, fmt.Sprintf("- %s (message_limit: %d, timeout: %d)", word, ex.MessageLimit, ex.Timeout))
+	}
+	msg := "исключения: \n" + strings.Join(parts, "\n")
+
+	key, err := a.fs.UploadToHaste(msg)
+	if err != nil {
+		return UnknownError
 	}
 
-	msg := "исключения: " + strings.Join(parts, ", ")
-	return ports.ActionType(msg)
+	return &ports.AnswerType{
+		Text:    []string{a.fs.GetURL(key)},
+		IsReply: true,
+	}
 }
 
-func (a *Admin) handleExAdd(cfg *config.Config, _ string, args []string) ports.ActionType {
+func (a *Admin) handleExAdd(cfg *config.Config, _ string, args []string) *ports.AnswerType {
 	if len(args) < 3 {
 		return NonParametr
 	}
 
 	messageLimit, err := strconv.Atoi(args[0])
 	if err != nil {
-		return ErrFound
+		return &ports.AnswerType{
+			Text:    []string{"не указан лимит сообщений!"},
+			IsReply: true,
+		}
 	}
 
 	timeout, err := strconv.Atoi(args[1])
 	if err != nil {
-		return ErrFound
+		return &ports.AnswerType{
+			Text:    []string{"не указана длительность таймаута!"},
+			IsReply: true,
+		}
 	}
 
 	words := a.regexp.SplitWords(strings.Join(args[2:], " "))
@@ -65,7 +82,10 @@ func (a *Admin) handleExAdd(cfg *config.Config, _ string, args []string) ports.A
 
 		re, err := a.regexp.Parse(trimmed)
 		if err != nil {
-			return ports.ActionType(err.Error())
+			return &ports.AnswerType{
+				Text:    []string{"неверное регулярное выражение!"},
+				IsReply: true,
+			}
 		}
 
 		cfg.Spam.Exceptions[w] = &config.SpamExceptionsSettings{
@@ -75,10 +95,10 @@ func (a *Admin) handleExAdd(cfg *config.Config, _ string, args []string) ports.A
 		}
 	}
 
-	return Success
+	return nil
 }
 
-func (a *Admin) handleExSet(cfg *config.Config, _ string, args []string) ports.ActionType {
+func (a *Admin) handleExSet(cfg *config.Config, _ string, args []string) *ports.AnswerType {
 	if len(args) < 3 {
 		return NonParametr
 	}
@@ -86,7 +106,7 @@ func (a *Admin) handleExSet(cfg *config.Config, _ string, args []string) ports.A
 	field := args[0]
 	value, err := strconv.Atoi(args[1])
 	if err != nil {
-		return ErrFound
+		return NonParametr
 	}
 
 	var updated, notFound []string
@@ -100,7 +120,7 @@ func (a *Admin) handleExSet(cfg *config.Config, _ string, args []string) ports.A
 			case "to":
 				exWord.Timeout = value
 			default:
-				return NotFound
+				return NonParametr
 			}
 			updated = append(updated, w)
 		} else {
@@ -117,12 +137,16 @@ func (a *Admin) handleExSet(cfg *config.Config, _ string, args []string) ports.A
 	}
 
 	if len(msgParts) == 0 {
-		return None
+		return nil
 	}
-	return ports.ActionType(strings.Join(msgParts, " • "))
+
+	return &ports.AnswerType{
+		Text:    []string{strings.Join(msgParts, " • ") + "!"},
+		IsReply: true,
+	}
 }
 
-func (a *Admin) handleExDel(cfg *config.Config, _ string, args []string) ports.ActionType {
+func (a *Admin) handleExDel(cfg *config.Config, _ string, args []string) *ports.AnswerType {
 	if len(args) < 1 {
 		return NonParametr
 	}
@@ -148,7 +172,11 @@ func (a *Admin) handleExDel(cfg *config.Config, _ string, args []string) ports.A
 	}
 
 	if len(msgParts) == 0 {
-		return None
+		return nil
 	}
-	return ports.ActionType(strings.Join(msgParts, " • "))
+
+	return &ports.AnswerType{
+		Text:    []string{strings.Join(msgParts, " • ") + "!"},
+		IsReply: true,
+	}
 }

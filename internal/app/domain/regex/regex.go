@@ -2,7 +2,7 @@ package regex
 
 import (
 	"errors"
-	"regexp"
+	"github.com/dlclark/regexp2"
 	"strings"
 )
 
@@ -14,11 +14,11 @@ func New() *Regex {
 
 var InvalidRegex = errors.New("невалидное регулярное выражение")
 
-func (r *Regex) Parse(str string) (*regexp.Regexp, error) {
+func (r *Regex) Parse(str string) (*regexp2.Regexp, error) {
 	if (strings.HasPrefix(str, `r"`) && strings.HasSuffix(str, `"`)) ||
 		(strings.HasPrefix(str, `r'`) && strings.HasSuffix(str, `'`)) {
 		pattern := str[2 : len(str)-1]
-		re, err := regexp.Compile(pattern)
+		re, err := regexp2.Compile(pattern, regexp2.None)
 		if err != nil {
 			return nil, InvalidRegex
 		}

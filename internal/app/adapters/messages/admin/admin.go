@@ -2,37 +2,36 @@ package admin
 
 import (
 	"fmt"
+	"github.com/dlclark/regexp2"
 	"log/slog"
 	"math"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
+	"twitchspam/internal/app/adapters/file_server"
 	"twitchspam/internal/app/domain/regex"
 	"twitchspam/internal/app/infrastructure/config"
 	"twitchspam/internal/app/ports"
 	"twitchspam/pkg/logger"
 )
 
-const (
-	None                   ports.ActionType = "none"
-	Success                ports.ActionType = "успешно"
-	NotFound               ports.ActionType = "неизвестная команда"
-	ErrFound               ports.ActionType = "неизвестная ошибка"
-	NonParametr            ports.ActionType = "не указан параметр"
-	NonValue               ports.ActionType = "неверное значение"
-	ErrSimilarityThreshold ports.ActionType = "значение должно быть от 0.0 до 1.0"
-	ErrMessageLimit        ports.ActionType = "значение должно быть от 2 до 15"
-	ErrCheckWindowSeconds  ports.ActionType = "значение должно быть от 0 до 300"
-	ErrMaxWordLength       ports.ActionType = "значение должно быть от 0 до 500"
-	ErrMaxWordTimeoutTime  ports.ActionType = "значение должно быть от 0 до 1209600"
-	ErrMinGapMessages      ports.ActionType = "значение должно быть от 0 до 15"
-	ErrResetTimeoutSeconds ports.ActionType = "значение должно быть от 1 до 86400"
-	ErrDelayAutomod        ports.ActionType = "значение должно быть от 1 до 10"
-	NoStream               ports.ActionType = "стрим выключен"
-	ErrFoundMwordGroup     ports.ActionType = "группа уже существует"
-	ErrNotFoundMwordGroup  ports.ActionType = "группа не найдена"
-	ErrNotFoundMwordGroups ports.ActionType = "группы не найдены"
+var (
+	NotFoundCmd = &ports.AnswerType{
+		Text:    []string{"команда не найдена!"},
+		IsReply: true,
+	}
+	NonParametr = &ports.AnswerType{
+		Text:    []string{"не указан один из параметров!"},
+		IsReply: true,
+	}
+	UnknownError = &ports.AnswerType{
+		Text:    []string{"неизвестная ошибка!"},
+		IsReply: true,
+	}
+	UnknownPunishment = &ports.AnswerType{
+		Text:    []string{"неизвестное наказание!"},
+		IsReply: true,
+	}
 )
 
 type Admin struct {
@@ -40,6 +39,7 @@ type Admin struct {
 	manager *config.Manager
 	stream  ports.StreamPort
 	regexp  ports.RegexPort
+	fs      ports.FileServerPort
 }
 
 func New(log logger.Logger, manager *config.Manager, stream ports.StreamPort, regexp *regex.Regex) *Admin {
@@ -48,21 +48,20 @@ func New(log logger.Logger, manager *config.Manager, stream ports.StreamPort, re
 		manager: manager,
 		stream:  stream,
 		regexp:  regexp,
+		fs:      file_server.New(),
 	}
 }
 
-type cmdHandler func(cfg *config.Config, cmd string, args []string) ports.ActionType
-
 var startApp = time.Now()
 
-func (a *Admin) FindMessages(msg *ports.ChatMessage) ports.ActionType {
+func (a *Admin) FindMessages(msg *ports.ChatMessage) *ports.AnswerType {
 	if !(msg.Chatter.IsBroadcaster || msg.Chatter.IsMod) || !strings.HasPrefix(msg.Message.Text, "!am") {
-		return None
+		return nil
 	}
 
 	parts := strings.Fields(msg.Message.Text)
 	if len(parts) < 2 {
-		return NonParametr
+		return NotFoundCmd
 	}
 
 	cmd, args := parts[1], parts[2:]
@@ -70,32 +69,35 @@ func (a *Admin) FindMessages(msg *ports.ChatMessage) ports.ActionType {
 		return a.handlePing()
 	}
 
-	handlers := map[string]cmdHandler{
+	handlers := map[string]func(cfg *config.Config, cmd string, args []string) *ports.AnswerType{
 		"on":     a.handleOnOff,
 		"off":    a.handleOnOff,
+		"info":   a.handleStatus,
+		"say":    a.handleSay,
 		"spam":   a.handleSpam,
+		"as":     a.handleAntiSpam,
 		"online": a.handleMode,
 		"always": a.handleMode,
-		"sim": func(cfg *config.Config, cmd string, args []string) ports.ActionType {
+		"sim": func(cfg *config.Config, cmd string, args []string) *ports.AnswerType {
 			return a.handleSim(cfg, cmd, args, "default")
 		},
-		"msg": func(cfg *config.Config, cmd string, args []string) ports.ActionType {
+		"msg": func(cfg *config.Config, cmd string, args []string) *ports.AnswerType {
 			return a.handleMsg(cfg, cmd, args, "default")
 		},
 		"time": a.handleTime,
-		"to": func(cfg *config.Config, cmd string, args []string) ports.ActionType {
+		"to": func(cfg *config.Config, cmd string, args []string) *ports.AnswerType {
 			return a.handleTo(cfg, cmd, args, "default")
 		},
-		"rto": func(cfg *config.Config, cmd string, args []string) ports.ActionType {
+		"rto": func(cfg *config.Config, cmd string, args []string) *ports.AnswerType {
 			return a.handleRto(cfg, cmd, args, "default")
 		},
-		"mwlen": func(cfg *config.Config, cmd string, args []string) ports.ActionType {
+		"mwlen": func(cfg *config.Config, cmd string, args []string) *ports.AnswerType {
 			return a.handleMwLen(cfg, cmd, args, "default")
 		},
-		"mwt": func(cfg *config.Config, cmd string, args []string) ports.ActionType {
+		"mwt": func(cfg *config.Config, cmd string, args []string) *ports.AnswerType {
 			return a.handleMwt(cfg, cmd, args, "default")
 		},
-		"min_gap": func(cfg *config.Config, cmd string, args []string) ports.ActionType {
+		"min_gap": func(cfg *config.Config, cmd string, args []string) *ports.AnswerType {
 			return a.handleMinGap(cfg, cmd, args, "default")
 		},
 		"da":    a.handleDelayAutomod,
@@ -112,21 +114,24 @@ func (a *Admin) FindMessages(msg *ports.ChatMessage) ports.ActionType {
 	handler, ok := handlers[cmd]
 	if !ok {
 		a.log.Info("cmd", slog.String("cmd", cmd))
-		return NotFound
+		return NotFoundCmd
 	}
 
-	var result ports.ActionType
+	var result *ports.AnswerType
 	if err := a.manager.Update(func(cfg *config.Config) {
 		result = handler(cfg, cmd, args)
 	}); err != nil {
 		a.log.Error("Failed update config", err, slog.String("msg", msg.Message.Text))
-		return ErrFound
+		return UnknownError
 	}
 
-	if result != None {
+	if result != nil {
 		return result
 	}
-	return Success
+	return &ports.AnswerType{
+		Text:    []string{"успешно!"},
+		IsReply: true,
+	}
 }
 
 func parsePunishment(punishment string) (string, int, error) {
@@ -173,7 +178,7 @@ func parseFloatArg(args []string, min, max float64) (float64, bool) {
 	return math.Round(val*100) / 100, true
 }
 
-func regexExists(list []*regexp.Regexp, re *regexp.Regexp) bool {
+func regexExists(list []*regexp2.Regexp, re *regexp2.Regexp) bool {
 	for _, r := range list {
 		if r.String() == re.String() {
 			return true

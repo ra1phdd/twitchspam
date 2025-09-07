@@ -4,12 +4,22 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/dlclark/regexp2"
 	"os"
 	"path/filepath"
-	"regexp"
 	"sync"
 	"time"
 )
+
+type Config struct {
+	App        App                    `json:"app"`
+	Enabled    bool                   `json:"enabled"`
+	Spam       Spam                   `json:"spam"`
+	Mword      map[string]*Mword      `json:"mword"`
+	MwordGroup map[string]*MwordGroup `json:"mword_group"`
+	Aliases    map[string]string      `json:"aliases"` // ключ - алиас, значение - оригинальная команда
+	Banwords   Banwords               `json:"banwords"`
+}
 
 type App struct {
 	LogLevel    string   `json:"log_level"`
@@ -52,32 +62,28 @@ type SpamSettingsEmote struct {
 }
 
 type SpamExceptionsSettings struct {
-	MessageLimit int            `json:"message_limit"`
-	Timeout      int            `json:"timeout"`
-	Regexp       *regexp.Regexp `json:"regexp"`
+	MessageLimit int             `json:"message_limit"`
+	Timeout      int             `json:"timeout"`
+	Regexp       *regexp2.Regexp `json:"regexp"`
 }
 
 type Mword struct {
-	Action   string         `json:"action"`   // "delete", "ban", "timeout"
-	Duration int            `json:"duration"` // только для таймаута
-	Regexp   *regexp.Regexp `json:"regexp"`
+	Action   string          `json:"action"`   // "delete", "ban", "timeout"
+	Duration int             `json:"duration"` // только для таймаута
+	Regexp   *regexp2.Regexp `json:"regexp"`
 }
 
 type MwordGroup struct {
-	Action   string           `json:"action"`   // "delete", "ban", "timeout"
-	Duration int              `json:"duration"` // только для таймаута
-	Enabled  bool             `json:"enabled"`
-	Words    []string         `json:"words"`
-	Regexp   []*regexp.Regexp `json:"regexp"`
+	Action   string            `json:"action"`   // "delete", "ban", "timeout"
+	Duration int               `json:"duration"` // только для таймаута
+	Enabled  bool              `json:"enabled"`
+	Words    []string          `json:"words"`
+	Regexp   []*regexp2.Regexp `json:"regexp"`
 }
 
-type Config struct {
-	App        App                    `json:"app"`
-	Enabled    bool                   `json:"enabled"`
-	Spam       Spam                   `json:"spam"`
-	Mword      map[string]*Mword      `json:"mword"`
-	MwordGroup map[string]*MwordGroup `json:"mword_group"`
-	Banwords   []string               `json:"banwords"`
+type Banwords struct {
+	Words  []string          `json:"words"`
+	Regexp []*regexp2.Regexp `json:"regexp"`
 }
 
 type Manager struct {
@@ -171,7 +177,6 @@ func (m *Manager) GetDefault() *Config {
 		},
 		Mword:      make(map[string]*Mword),
 		MwordGroup: make(map[string]*MwordGroup),
-		Banwords:   []string{},
 	}
 }
 

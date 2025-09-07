@@ -3,9 +3,7 @@ package twitch
 import (
 	"fmt"
 	"log/slog"
-	"twitchspam/internal/app/adapters/messages/admin"
 	"twitchspam/internal/app/adapters/messages/checker"
-	"twitchspam/internal/app/adapters/messages/user"
 )
 
 func (t *Twitch) checkMessage(msgEvent ChatMessageEvent) {
@@ -14,17 +12,26 @@ func (t *Twitch) checkMessage(msgEvent ChatMessageEvent) {
 		t.stats.AddMessage(msg.Chatter.Username)
 	}
 
-	if adminAction := t.admin.FindMessages(msg); adminAction != admin.None {
-		if err := t.SendChatMessage(msg.Broadcaster.UserID, fmt.Sprintf("@%s, %s", msg.Chatter.Username, adminAction)); err != nil {
-			t.log.Error("Failed to send message on chat", err)
+	sendMessages := func(targetID string, messages []string, isReply bool, username string) {
+		for _, message := range messages {
+			text := message
+			if isReply {
+				text = fmt.Sprintf("@%s, %s", username, message)
+			}
+
+			if err := t.SendChatMessage(targetID, text); err != nil {
+				t.log.Error("Failed to send message on chat", err)
+			}
 		}
+	}
+
+	if adminAction := t.admin.FindMessages(msg); adminAction != nil {
+		sendMessages(msg.Broadcaster.UserID, adminAction.Text, adminAction.IsReply, msg.Chatter.Username)
 		return
 	}
 
-	if userAction := t.user.FindMessages(msg); userAction != user.None {
-		if err := t.SendChatMessage(msg.Broadcaster.UserID, fmt.Sprintf("@%s, %s", msg.Chatter.Username, userAction)); err != nil {
-			t.log.Error("Failed to send message on chat", err)
-		}
+	if userAction := t.user.FindMessages(msg); userAction != nil {
+		sendMessages(msg.Broadcaster.UserID, userAction.Text, userAction.IsReply, msg.Chatter.Username)
 		return
 	}
 

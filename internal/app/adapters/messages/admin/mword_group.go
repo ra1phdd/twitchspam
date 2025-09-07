@@ -8,13 +8,18 @@ import (
 	"twitchspam/internal/app/ports"
 )
 
-func (a *Admin) handleMwg(cfg *config.Config, _ string, args []string) ports.ActionType {
+var NotFoundMwordGroup = &ports.AnswerType{
+	Text:    []string{"мворд группа не найдена!"},
+	IsReply: true,
+}
+
+func (a *Admin) handleMwg(cfg *config.Config, _ string, args []string) *ports.AnswerType {
 	if len(args) < 1 {
 		return NonParametr
 	}
 	mwgCmd, mwgArgs := args[0], args[1:]
 
-	handlers := map[string]func(cfg *config.Config, cmd string, args []string) ports.ActionType{
+	handlers := map[string]func(cfg *config.Config, cmd string, args []string) *ports.AnswerType{
 		"list":   a.handleMwgList,
 		"create": a.handleMwgCreate,
 		"set":    a.handleMwgSet,
@@ -22,29 +27,45 @@ func (a *Admin) handleMwg(cfg *config.Config, _ string, args []string) ports.Act
 		"del":    a.handleMwgDel,
 		"on":     a.handleMwgOnOff,
 		"off":    a.handleMwgOnOff,
-		"words":  a.handleMwgWords,
 	}
 
 	if handler, ok := handlers[mwgCmd]; ok {
 		return handler(cfg, mwgCmd, mwgArgs)
 	}
-	return NotFound
+	return NotFoundCmd
 }
 
-func (a *Admin) handleMwgList(cfg *config.Config, _ string, _ []string) ports.ActionType {
+func (a *Admin) handleMwgList(cfg *config.Config, _ string, _ []string) *ports.AnswerType {
 	if len(cfg.MwordGroup) == 0 {
-		return ErrNotFoundMwordGroups
+		return &ports.AnswerType{
+			Text:    []string{"мворд группы не найдены!"},
+			IsReply: true,
+		}
 	}
 
-	msg := "группы:"
-	for name := range cfg.MwordGroup {
-		msg += fmt.Sprintf(" %s", name)
-	}
+	var parts []string
+	for name, mwg := range cfg.MwordGroup {
+		var re []string
+		for _, pattern := range mwg.Regexp {
+			re = append(re, pattern.String())
+		}
 
-	return ports.ActionType(msg)
+		parts = append(parts, fmt.Sprintf("- %s (enabled: %v, action: %s, duration: %d, words: %s, regexp: %s)",
+			name, mwg.Enabled, mwg.Action, mwg.Duration, strings.Join(mwg.Words, ", "), strings.Join(re, ", ")))
+	}
+	msg := "мворд группы: \n" + strings.Join(parts, "\n")
+
+	key, err := a.fs.UploadToHaste(msg)
+	if err != nil {
+		return UnknownError
+	}
+	return &ports.AnswerType{
+		Text:    []string{a.fs.GetURL(key)},
+		IsReply: true,
+	}
 }
 
-func (a *Admin) handleMwgCreate(cfg *config.Config, _ string, args []string) ports.ActionType {
+func (a *Admin) handleMwgCreate(cfg *config.Config, _ string, args []string) *ports.AnswerType {
 	if len(args) < 2 {
 		return NonParametr
 	}
@@ -53,25 +74,27 @@ func (a *Admin) handleMwgCreate(cfg *config.Config, _ string, args []string) por
 	punishment := args[1]
 
 	if _, exists := cfg.MwordGroup[groupName]; exists {
-		return ErrFoundMwordGroup
+		return &ports.AnswerType{
+			Text:    []string{"мворд группа уже существует!"},
+			IsReply: true,
+		}
 	}
 
 	action, duration, err := parsePunishment(punishment)
 	if err != nil {
-		return ErrFound
+		return UnknownPunishment
 	}
 
 	cfg.MwordGroup[groupName] = &config.MwordGroup{
 		Action:   action,
 		Duration: duration,
 		Enabled:  true,
-		Words:    []string{},
 	}
 
-	return Success
+	return nil
 }
 
-func (a *Admin) handleMwgSet(cfg *config.Config, _ string, args []string) ports.ActionType {
+func (a *Admin) handleMwgSet(cfg *config.Config, _ string, args []string) *ports.AnswerType {
 	if len(args) < 2 {
 		return NonParametr
 	}
@@ -80,21 +103,21 @@ func (a *Admin) handleMwgSet(cfg *config.Config, _ string, args []string) ports.
 	punishment := args[1]
 
 	if _, exists := cfg.MwordGroup[groupName]; !exists {
-		return ErrNotFoundMwordGroup
+		return NotFoundMwordGroup
 	}
 
 	action, duration, err := parsePunishment(punishment)
 	if err != nil {
-		return ErrFound
+		return UnknownPunishment
 	}
 
 	cfg.MwordGroup[groupName].Action = action
 	cfg.MwordGroup[groupName].Duration = duration
 
-	return Success
+	return nil
 }
 
-func (a *Admin) handleMwgAdd(cfg *config.Config, _ string, args []string) ports.ActionType {
+func (a *Admin) handleMwgAdd(cfg *config.Config, _ string, args []string) *ports.AnswerType {
 	if len(args) < 2 {
 		return NonParametr
 	}
@@ -102,7 +125,7 @@ func (a *Admin) handleMwgAdd(cfg *config.Config, _ string, args []string) ports.
 	groupName := args[0]
 	group, exists := cfg.MwordGroup[groupName]
 	if !exists {
-		return NotFound
+		return NotFoundMwordGroup
 	}
 
 	words := a.regexp.SplitWords(strings.Join(args[1:], " "))
@@ -113,7 +136,10 @@ func (a *Admin) handleMwgAdd(cfg *config.Config, _ string, args []string) ports.
 		}
 
 		if re, err := a.regexp.Parse(trimmed); err != nil {
-			return ports.ActionType(err.Error())
+			return &ports.AnswerType{
+				Text:    []string{"неверное регулярное выражение!"},
+				IsReply: true,
+			}
 		} else if re != nil {
 			if !regexExists(group.Regexp, re) {
 				group.Regexp = append(group.Regexp, re)
@@ -126,10 +152,10 @@ func (a *Admin) handleMwgAdd(cfg *config.Config, _ string, args []string) ports.
 		}
 	}
 
-	return Success
+	return nil
 }
 
-func (a *Admin) handleMwgDel(cfg *config.Config, _ string, args []string) ports.ActionType {
+func (a *Admin) handleMwgDel(cfg *config.Config, _ string, args []string) *ports.AnswerType {
 	if len(args) < 2 {
 		return NonParametr
 	}
@@ -139,12 +165,12 @@ func (a *Admin) handleMwgDel(cfg *config.Config, _ string, args []string) ports.
 
 	group, exists := cfg.MwordGroup[groupName]
 	if !exists {
-		return NotFound
+		return NotFoundMwordGroup
 	}
 
 	if target == "all" {
 		delete(cfg.MwordGroup, groupName)
-		return Success
+		return nil
 	}
 
 	wordsToRemove := a.regexp.SplitWords(target)
@@ -157,38 +183,19 @@ func (a *Admin) handleMwgDel(cfg *config.Config, _ string, args []string) ports.
 	}
 	group.Words = newWords
 
-	return Success
+	return nil
 }
 
-func (a *Admin) handleMwgOnOff(cfg *config.Config, cmd string, args []string) ports.ActionType {
+func (a *Admin) handleMwgOnOff(cfg *config.Config, cmd string, args []string) *ports.AnswerType {
 	if len(args) < 1 {
 		return NonParametr
 	}
 	groupName := args[0]
 
 	if _, exists := cfg.MwordGroup[groupName]; !exists {
-		return ErrNotFoundMwordGroup
+		return NotFoundMwordGroup
 	}
 	cfg.MwordGroup[groupName].Enabled = cmd == "on"
 
-	return Success
-}
-
-func (a *Admin) handleMwgWords(cfg *config.Config, _ string, args []string) ports.ActionType {
-	if len(args) < 1 {
-		return NonParametr
-	}
-	groupName := args[0]
-
-	group, exists := cfg.MwordGroup[groupName]
-	if !exists {
-		return ErrNotFoundMwordGroup
-	}
-
-	if len(group.Words) == 0 {
-		return "cлова в группе отсутствуют"
-	}
-
-	msg := "cлова в группе: " + strings.Join(group.Words, ", ")
-	return ports.ActionType(msg)
+	return nil
 }

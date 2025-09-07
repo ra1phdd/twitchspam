@@ -8,7 +8,6 @@ import (
 	"time"
 	"twitchspam/internal/app/adapters/seventv"
 	"twitchspam/internal/app/domain"
-	"twitchspam/internal/app/domain/banwords"
 	"twitchspam/internal/app/domain/regex"
 	"twitchspam/internal/app/infrastructure/config"
 	"twitchspam/internal/app/infrastructure/storage"
@@ -17,10 +16,10 @@ import (
 )
 
 const (
-	None    ports.ActionType = "none"
-	Ban     ports.ActionType = "ban"
-	Timeout ports.ActionType = "timeout"
-	Delete  ports.ActionType = "delete"
+	None    string = "none"
+	Ban     string = "ban"
+	Timeout string = "timeout"
+	Delete  string = "delete"
 )
 
 type Empty struct{}
@@ -38,7 +37,7 @@ type Checker struct {
 	regexp   ports.RegexPort
 }
 
-func NewCheck(log logger.Logger, cfg *config.Config, stream ports.StreamPort, stats ports.StatsPort, regexp *regex.Regex) *Checker {
+func NewCheck(log logger.Logger, cfg *config.Config, stream ports.StreamPort, stats ports.StatsPort, bwords ports.BanwordsPort, regexp *regex.Regex) *Checker {
 	return &Checker{
 		log:    log,
 		cfg:    cfg,
@@ -53,7 +52,7 @@ func NewCheck(log logger.Logger, cfg *config.Config, stream ports.StreamPort, st
 
 			return int(max(defLimit, vipLimit))
 		}),
-		bwords:  banwords.New(cfg.Banwords),
+		bwords:  bwords,
 		sevenTV: seventv.New(log, stream),
 		regexp:  regexp,
 	}
@@ -71,12 +70,18 @@ func (c *Checker) Check(msg *ports.ChatMessage) *ports.CheckerAction {
 		return &ports.CheckerAction{Type: None}
 	}
 
-	if action := c.CheckBanwords(words); action != nil {
+	if action := c.CheckBanwords(text, msg.Message.Text); action != nil {
 		return action
 	}
 
-	if action := c.CheckMwords(text); action != nil {
+	if action := c.CheckAds(msg.Message.Text, msg.Chatter.Username); action != nil {
 		return action
+	}
+
+	for _, t := range []string{text, msg.Message.Text} {
+		if action := c.CheckMwords(t); action != nil {
+			return action
+		}
 	}
 
 	if action := c.checkWordLength(msg, words); action != nil {
@@ -103,8 +108,8 @@ func (c *Checker) checkBypass(msg *ports.ChatMessage) *ports.CheckerAction {
 	return nil
 }
 
-func (c *Checker) CheckBanwords(words []string) *ports.CheckerAction {
-	if !c.bwords.CheckMessage(words) {
+func (c *Checker) CheckBanwords(text, textOriginal string) *ports.CheckerAction {
+	if !c.bwords.CheckMessage(text, textOriginal) {
 		return nil
 	}
 
@@ -114,11 +119,27 @@ func (c *Checker) CheckBanwords(words []string) *ports.CheckerAction {
 	}
 }
 
+func (c *Checker) CheckAds(text string, username string) *ports.CheckerAction {
+	if !strings.Contains(text, "twitch.tv/") {
+		return nil
+	}
+
+	if !strings.Contains(text, "twitch.tv/"+strings.ToLower(username)) &&
+		!(strings.Contains(text, "подписывайтесь") || strings.Contains(text, "подпишитесь")) {
+		return nil
+	}
+
+	return &ports.CheckerAction{
+		Type:   Ban,
+		Reason: "реклама",
+	}
+}
+
 func (c *Checker) CheckMwords(text string) *ports.CheckerAction {
 	words := c.regexp.SplitWordsBySpace(text)
 	makeAction := func(action string, reason string, duration int) *ports.CheckerAction {
 		return &ports.CheckerAction{
-			Type:     ports.ActionType(action),
+			Type:     action,
 			Reason:   fmt.Sprintf("мворд (%s)", reason),
 			Duration: time.Duration(duration) * time.Second,
 		}
@@ -135,13 +156,16 @@ func (c *Checker) CheckMwords(text string) *ports.CheckerAction {
 			}
 
 			if matchPhrase(words, phrase) {
-				fmt.Println("хуй")
 				return makeAction(group.Action, phrase, group.Duration)
 			}
 		}
 
 		for _, re := range group.Regexp {
-			if re != nil && re.MatchString(text) {
+			if re == nil {
+				continue
+			}
+
+			if isMatch, _ := re.MatchString(text); isMatch {
 				return makeAction(group.Action, re.String(), group.Duration)
 			}
 		}
@@ -152,8 +176,10 @@ func (c *Checker) CheckMwords(text string) *ports.CheckerAction {
 			continue
 		}
 
-		if mw.Regexp != nil && mw.Regexp.MatchString(text) {
-			return makeAction(mw.Action, mw.Regexp.String(), mw.Duration)
+		if mw.Regexp != nil {
+			if isMatch, _ := mw.Regexp.MatchString(text); isMatch {
+				return makeAction(mw.Action, mw.Regexp.String(), mw.Duration)
+			}
 		}
 
 		if matchPhrase(words, strings.ToLower(phrase)) {
@@ -216,7 +242,13 @@ func (c *Checker) checkSpam(msg *ports.ChatMessage, text string) *ports.CheckerA
 	isException := false
 
 	for phrase, ex := range c.cfg.Spam.Exceptions {
-		if (ex.Regexp == nil || !ex.Regexp.MatchString(text)) && !matchPhrase(words, strings.ToLower(phrase)) {
+		if ex.Regexp != nil {
+			if isMatch, _ := ex.Regexp.MatchString(text); !isMatch {
+				continue
+			}
+		}
+
+		if !matchPhrase(words, strings.ToLower(phrase)) {
 			continue
 		}
 

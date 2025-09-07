@@ -67,11 +67,11 @@ func New(log logger.Logger, manager *config.Manager, client *http.Client, modCha
 	}
 
 	r := regex.New()
+	t.bwords = banwords.New(t.cfg.Banwords.Words, t.cfg.Banwords.Regexp)
 	t.moderation = twitch.New(log, t.cfg, t.stream, client)
-	t.checker = checker.NewCheck(log, t.cfg, t.stream, t.stats, r)
+	t.checker = checker.NewCheck(log, t.cfg, t.stream, t.stats, t.bwords, r)
 	t.admin = admin.New(log, manager, t.stream, r)
 	t.user = user.New(log, t.cfg, t.stream, t.stats)
-	t.bwords = banwords.New(t.cfg.Banwords)
 
 	go func() {
 		ticker := time.NewTicker(30 * time.Second)

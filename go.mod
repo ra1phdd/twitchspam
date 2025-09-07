@@ -13,6 +13,7 @@ require (
 )
 
 require (
+	github.com/dlclark/regexp2 v1.11.5 // indirect
 	github.com/go-ole/go-ole v1.2.6 // indirect
 	github.com/samber/lo v1.51.0 // indirect
 	github.com/samber/slog-common v0.19.0 // indirect

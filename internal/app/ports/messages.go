@@ -3,23 +3,27 @@ package ports
 import "time"
 
 type AdminPort interface {
-	FindMessages(msg *ChatMessage) ActionType
+	FindMessages(msg *ChatMessage) *AnswerType
 }
 
 type UserPort interface {
-	FindMessages(msg *ChatMessage) ActionType
+	FindMessages(msg *ChatMessage) *AnswerType
 }
 
 type CheckerPort interface {
 	Check(msg *ChatMessage) *CheckerAction
-	CheckBanwords(words []string) *CheckerAction
+	CheckBanwords(text, textOriginal string) *CheckerAction
+	CheckAds(text string, username string) *CheckerAction
 	CheckMwords(text string) *CheckerAction
 }
 
-type ActionType string
+type AnswerType struct {
+	Text    []string
+	IsReply bool
+}
 
 type CheckerAction struct {
-	Type     ActionType
+	Type     string
 	Reason   string
 	Duration time.Duration
 }

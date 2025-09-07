@@ -11,10 +11,6 @@ import (
 	"twitchspam/pkg/logger"
 )
 
-const (
-	None ports.ActionType = "none"
-)
-
 type User struct {
 	log          logger.Logger
 	cfg          *config.Config
@@ -35,30 +31,30 @@ func New(log logger.Logger, cfg *config.Config, stream ports.StreamPort, stats p
 	}
 }
 
-func (u *User) FindMessages(msg *ports.ChatMessage) ports.ActionType {
+func (u *User) FindMessages(msg *ports.ChatMessage) *ports.AnswerType {
 	text := strings.ToLower(domain.NormalizeText(msg.Message.Text))
 	if _, exists := u.usersLimiter[msg.Chatter.Username]; !exists {
 		u.usersLimiter[msg.Chatter.Username] = rate.NewLimiter(rate.Every(time.Minute), 3)
 	}
 
-	if action := u.handleStats(msg); action != None {
+	if action := u.handleStats(msg); action != nil {
 		return action
 	}
 
 	if !u.cfg.Enabled {
-		return None
+		return nil
 	}
 
-	if action := u.handleGameQuery(msg, text); action != None {
+	if action := u.handleGameQuery(msg, text); action != nil {
 		return action
 	}
 
-	return None
+	return nil
 }
 
-func (u *User) handleStats(msg *ports.ChatMessage) ports.ActionType {
+func (u *User) handleStats(msg *ports.ChatMessage) *ports.AnswerType {
 	if !strings.HasPrefix(msg.Message.Text, "!stats") || !u.usersLimiter[msg.Chatter.Username].Allow() {
-		return None
+		return nil
 	}
 
 	parts := strings.Fields(msg.Message.Text)
@@ -68,15 +64,21 @@ func (u *User) handleStats(msg *ports.ChatMessage) ports.ActionType {
 	}
 
 	if len(parts) > 1 && parts[1] == "all" {
-		return ports.ActionType(u.stats.GetStats())
+		return &ports.AnswerType{
+			Text:    []string{u.stats.GetStats()},
+			IsReply: false,
+		}
 	}
-	return ports.ActionType(u.stats.GetUserStats(target))
+	return &ports.AnswerType{
+		Text:    []string{u.stats.GetUserStats(target)},
+		IsReply: true,
+	}
 }
 
-func (u *User) handleGameQuery(msg *ports.ChatMessage, text string) ports.ActionType {
+func (u *User) handleGameQuery(msg *ports.ChatMessage, text string) *ports.AnswerType {
 	if !u.stream.IsLive() || u.stream.Category() == "Just Chatting" ||
 		!u.limiterGame.Allow() || !u.usersLimiter[msg.Chatter.Username].Allow() {
-		return None
+		return nil
 	}
 
 	queries := []string{
@@ -88,7 +90,10 @@ func (u *User) handleGameQuery(msg *ports.ChatMessage, text string) ports.Action
 	}
 
 	if slices.Contains(queries, text) {
-		return ports.ActionType(u.stream.Category())
+		return &ports.AnswerType{
+			Text:    []string{u.stream.Category()},
+			IsReply: true,
+		}
 	}
-	return None
+	return nil
 }

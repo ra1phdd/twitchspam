@@ -12,13 +12,15 @@ func (t *Twitch) checkAutomod(am AutomodHoldEvent) {
 	if !t.cfg.Enabled {
 		return
 	}
-
 	text := strings.ToLower(domain.NormalizeText(am.Message.Text))
-	words := strings.Fields(text)
 
-	if action := t.checker.CheckBanwords(words); action != nil {
+	if action := t.checker.CheckBanwords(text, am.Message.Text); action != nil {
 		time.Sleep(time.Duration(t.cfg.Spam.DelayAutomod) * time.Second)
-		t.moderation.Ban(am.UserID, "банворд")
+		t.moderation.Ban(am.UserID, action.Reason)
+	}
+
+	if action := t.checker.CheckAds(text, am.UserName); action != nil {
+		t.moderation.Ban(am.UserID, action.Reason)
 	}
 
 	action := t.checker.CheckMwords(text)

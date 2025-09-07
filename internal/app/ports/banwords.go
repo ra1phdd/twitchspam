@@ -1,5 +1,5 @@
 package ports
 
 type BanwordsPort interface {
-	CheckMessage(words []string) bool
+	CheckMessage(text, textOriginal string) bool
 }
