@@ -40,15 +40,19 @@ type Admin struct {
 	stream  ports.StreamPort
 	regexp  ports.RegexPort
 	fs      ports.FileServerPort
+	api     ports.APIPort
+	aliases ports.AliasesPort
 }
 
-func New(log logger.Logger, manager *config.Manager, stream ports.StreamPort, regexp *regex.Regex) *Admin {
+func New(log logger.Logger, manager *config.Manager, stream ports.StreamPort, regexp *regex.Regex, api ports.APIPort, aliases ports.AliasesPort) *Admin {
 	return &Admin{
 		log:     log,
 		manager: manager,
 		stream:  stream,
 		regexp:  regexp,
 		fs:      file_server.New(),
+		api:     api,
+		aliases: aliases,
 	}
 }
 
@@ -109,6 +113,10 @@ func (a *Admin) FindMessages(msg *ports.ChatMessage) *ports.AnswerType {
 		"mwg":   a.handleMwg,
 		"mw":    a.handleMw,
 		"ex":    a.handleEx,
+		"alias": a.handleAliases,
+		"mark": func(cfg *config.Config, cmd string, args []string) *ports.AnswerType {
+			return a.handleMarkers(cfg, cmd, args, msg.Chatter.Username)
+		},
 	}
 
 	handler, ok := handlers[cmd]

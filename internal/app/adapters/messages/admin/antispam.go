@@ -64,7 +64,7 @@ func (a *Admin) handleAntiSpamInfo(cfg *config.Config, _ string, _ []string) *po
 		"- таймаут за превышение длины слова: " + fmt.Sprint(cfg.Spam.SettingsVIP.MaxWordTimeoutTime),
 		"- минимальное количество разных сообщений между спамом: " + fmt.Sprint(cfg.Spam.SettingsVIP.MinGapMessages),
 	}
-	msg := "настройки:" + strings.Join(parts, "\n")
+	msg := "настройки:\n" + strings.Join(parts, "\n")
 
 	key, err := a.fs.UploadToHaste(msg)
 	if err != nil {

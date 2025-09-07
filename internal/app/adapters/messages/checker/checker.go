@@ -166,7 +166,7 @@ func (c *Checker) CheckMwords(text string) *ports.CheckerAction {
 			}
 
 			if isMatch, _ := re.MatchString(text); isMatch {
-				return makeAction(group.Action, re.String(), group.Duration)
+				return makeAction(group.Action, "регулярное выражение", group.Duration)
 			}
 		}
 	}
@@ -178,7 +178,7 @@ func (c *Checker) CheckMwords(text string) *ports.CheckerAction {
 
 		if mw.Regexp != nil {
 			if isMatch, _ := mw.Regexp.MatchString(text); isMatch {
-				return makeAction(mw.Action, mw.Regexp.String(), mw.Duration)
+				return makeAction(mw.Action, "регулярное выражение", mw.Duration)
 			}
 		}
 

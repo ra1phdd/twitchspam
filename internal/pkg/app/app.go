@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"time"
-	"twitchspam/internal/app/adapters/twitch"
+	"twitchspam/internal/app/adapters/twitch/event_sub"
 	"twitchspam/internal/app/infrastructure/config"
 	"twitchspam/pkg/logger"
 )
@@ -32,7 +32,7 @@ func New() error {
 	for _, channel := range a.cfg.App.ModChannels {
 		log := logger.NewPrefixedLogger(a.log, channel)
 
-		_, err := twitch.New(log, manager, a.client, channel)
+		_, err := event_sub.New(log, manager, a.client, channel)
 		if err != nil {
 			return err
 		}

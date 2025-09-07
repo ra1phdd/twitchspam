@@ -1,8 +1,11 @@
-package twitch
+package event_sub
 
-import "log/slog"
+import (
+	"log/slog"
+	"twitchspam/internal/app/adapters/twitch"
+)
 
-func (t *Twitch) subscribeEvents(payload SessionWelcomePayload) {
+func (t *Twitch) subscribeEvents(payload twitch.SessionWelcomePayload) {
 	if err := t.subscribeEvent("channel.chat.message", "1", map[string]string{
 		"broadcaster_user_id": t.stream.ChannelID(),
 		"user_id":             t.cfg.App.UserID,

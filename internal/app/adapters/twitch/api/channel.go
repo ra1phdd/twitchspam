@@ -1,4 +1,4 @@
-package twitch
+package api
 
 import (
 	"bytes"
@@ -7,10 +7,21 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"time"
+	"twitchspam/internal/app/adapters/twitch"
+	"twitchspam/internal/app/infrastructure/config"
 )
 
+type Twitch struct {
+	cfg *config.Config
+}
+
+func NewTwitch(cfg *config.Config) *Twitch {
+	return &Twitch{cfg: cfg}
+}
+
 func (t *Twitch) GetChannelID(username string) (string, error) {
-	var userResp UserResponse
+	var userResp twitch.UserResponse
 	if err := t.doTwitchRequest("GET", "https://api.twitch.tv/helix/users?login="+username, nil, &userResp); err != nil {
 		return "", err
 	}
@@ -24,6 +35,7 @@ type Stream struct {
 	ID          string
 	IsOnline    bool
 	ViewerCount int
+	StartedAt   time.Time
 }
 
 func (t *Twitch) GetLiveStream(broadcasterID string) (*Stream, error) {
@@ -31,7 +43,7 @@ func (t *Twitch) GetLiveStream(broadcasterID string) (*Stream, error) {
 	params.Set("user_id", broadcasterID)
 	params.Set("type", "live")
 
-	var streamResp StreamResponse
+	var streamResp twitch.StreamResponse
 	err := t.doTwitchRequest("GET", "https://api.twitch.tv/helix/streams?"+params.Encode(), nil, &streamResp)
 	if err != nil {
 		return nil, err
@@ -41,32 +53,49 @@ func (t *Twitch) GetLiveStream(broadcasterID string) (*Stream, error) {
 		return &Stream{ID: "", IsOnline: false, ViewerCount: 0}, nil
 	}
 
+	startTime, _ := time.Parse(time.RFC3339, streamResp.Data[0].StartedAt)
+	loc := time.Now().Location()
 	return &Stream{
 		ID:          streamResp.Data[0].ID,
 		IsOnline:    true,
 		ViewerCount: streamResp.Data[0].ViewerCount,
+		StartedAt:   startTime.In(loc),
 	}, nil
 }
 
-func (t *Twitch) GetUrlVOD(id string) (string, error) {
+func (t *Twitch) GetUrlVOD(broadcasterID string, streams []*config.Markers) (map[string]string, error) {
+	remaining := len(streams)
+	vods := make(map[string]string, remaining)
+
 	params := url.Values{}
-	params.Set("id", id)
+	params.Set("user_id", broadcasterID)
 	params.Set("type", "archive")
+	params.Set("first", "100")
 
-	var videoResp VideoResponse
-	err := t.doTwitchRequest("GET", "https://api.twitch.tv/helix/videos?"+params.Encode(), nil, &videoResp)
+	var videosResp twitch.VideoResponse
+	err := t.doTwitchRequest("GET", "https://api.twitch.tv/helix/videos?"+params.Encode(), nil, &videosResp)
 	if err != nil {
-		return "", err
+		return vods, err
 	}
 
-	if len(videoResp.Data) == 0 {
-		return "", fmt.Errorf("video %s not found", id)
+	if len(videosResp.Data) == 0 {
+		return vods, fmt.Errorf("videos (user_id %s) not found", broadcasterID)
 	}
-	return videoResp.Data[0].URL, nil
+
+	for i := range streams {
+		for _, v := range videosResp.Data {
+			if v.StreamID == streams[i].StreamID {
+				vods[v.StreamID] = v.URL
+				remaining--
+			}
+		}
+	}
+
+	return vods, nil
 }
 
 func (t *Twitch) SendChatMessage(broadcasterID, message string) error {
-	reqBody := ChatMessageRequest{
+	reqBody := twitch.ChatMessageRequest{
 		BroadcasterID: broadcasterID,
 		SenderID:      t.cfg.App.UserID,
 		Message:       message,
@@ -77,7 +106,7 @@ func (t *Twitch) SendChatMessage(broadcasterID, message string) error {
 		return err
 	}
 
-	var chatResp ChatMessageResponse
+	var chatResp twitch.ChatMessageResponse
 	err = t.doTwitchRequest("POST", "https://api.twitch.tv/helix/chat/messages", bytes.NewReader(bodyBytes), &chatResp)
 	if err != nil {
 		return err

@@ -1,14 +1,15 @@
-package twitch
+package event_sub
 
 import (
 	"log/slog"
 	"strings"
 	"time"
 	"twitchspam/internal/app/adapters/messages/checker"
+	"twitchspam/internal/app/adapters/twitch"
 	"twitchspam/internal/app/domain"
 )
 
-func (t *Twitch) checkAutomod(am AutomodHoldEvent) {
+func (t *Twitch) checkAutomod(am twitch.AutomodHoldEvent) {
 	if !t.cfg.Enabled {
 		return
 	}
@@ -39,7 +40,7 @@ func (t *Twitch) checkAutomod(am AutomodHoldEvent) {
 		}
 	case checker.Delete:
 		t.log.Warn("Muteword in phrase", slog.String("username", am.UserName), slog.String("text", am.Message.Text))
-		if err := t.DeleteChatMessage(am.BroadcasterUserID, am.MessageID); err != nil {
+		if err := t.api.DeleteChatMessage(am.BroadcasterUserID, am.MessageID); err != nil {
 			t.log.Error("Failed to delete message on chat", err)
 		}
 	}

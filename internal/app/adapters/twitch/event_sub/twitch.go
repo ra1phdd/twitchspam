@@ -1,4 +1,4 @@
-package twitch
+package event_sub
 
 import (
 	"bytes"
@@ -15,6 +15,9 @@ import (
 	"twitchspam/internal/app/adapters/messages/admin"
 	"twitchspam/internal/app/adapters/messages/checker"
 	"twitchspam/internal/app/adapters/messages/user"
+	twitch2 "twitchspam/internal/app/adapters/twitch"
+	"twitchspam/internal/app/adapters/twitch/api"
+	"twitchspam/internal/app/domain/aliases"
 	"twitchspam/internal/app/domain/banwords"
 	"twitchspam/internal/app/domain/regex"
 	"twitchspam/internal/app/domain/stats"
@@ -29,10 +32,12 @@ type Twitch struct {
 	log        logger.Logger
 	cfg        *config.Config
 	stream     ports.StreamPort
+	api        ports.APIPort
 	moderation ports.ModerationPort
 	checker    ports.CheckerPort
 	admin      ports.AdminPort
 	user       ports.UserPort
+	aliases    ports.AliasesPort
 	bwords     ports.BanwordsPort
 	stats      ports.StatsPort
 
@@ -45,13 +50,14 @@ func New(log logger.Logger, manager *config.Manager, client *http.Client, modCha
 		cfg:    manager.Get(),
 		client: client,
 	}
+	t.api = api.NewTwitch(t.cfg)
 
-	channelID, err := t.GetChannelID(modChannel)
+	channelID, err := t.api.GetChannelID(modChannel)
 	if err != nil {
 		return nil, err
 	}
 
-	live, err := t.GetLiveStream(channelID)
+	live, err := t.api.GetLiveStream(channelID)
 	if err != nil {
 		return nil, err
 	}
@@ -65,21 +71,22 @@ func New(log logger.Logger, manager *config.Manager, client *http.Client, modCha
 		t.stream.SetIslive(true)
 		t.stream.SetStreamID(live.ID)
 
-		t.stats.SetStartTime(time.Now())
+		t.stats.SetStartTime(live.StartedAt)
 		t.stats.SetOnline(live.ViewerCount)
 	}
 
 	r := regex.New()
+	t.aliases = aliases.New(t.cfg.Aliases)
 	t.bwords = banwords.New(t.cfg.Banwords.Words, t.cfg.Banwords.Regexp)
 	t.moderation = twitch.New(log, t.cfg, t.stream, client)
 	t.checker = checker.NewCheck(log, t.cfg, t.stream, t.stats, t.bwords, r)
-	t.admin = admin.New(log, manager, t.stream, r)
+	t.admin = admin.New(log, manager, t.stream, r, t.api, t.aliases)
 	t.user = user.New(log, t.cfg, t.stream, t.stats)
 
 	go func() {
 		ticker := time.NewTicker(30 * time.Second)
 		for range ticker.C {
-			live, err := t.GetLiveStream(channelID)
+			live, err := t.api.GetLiveStream(channelID)
 			if err != nil {
 				log.Error("Error getting viewer count", err)
 				return
@@ -93,24 +100,6 @@ func New(log logger.Logger, manager *config.Manager, client *http.Client, modCha
 		}
 	}()
 	go t.runEventLoop()
-
-	//go func() {
-	//	time.Sleep(5 * time.Second)
-	//	id, err := t.GetUrlVOD(t.stream.StreamID())
-	//	if err != nil {
-	//		t.log.Error("Failed to get live message", err)
-	//		return
-	//	}
-	//
-	//	duration := t.stats.GetEndTime().Sub(t.stats.GetStartTime()).Round(time.Second)
-	//
-	//	h := int(duration.Hours())
-	//	m := int(duration.Minutes()) % 60
-	//	s := int(duration.Seconds()) % 60
-	//
-	//	timecode := fmt.Sprintf("%02dh%02dm%02ds", h, m, s)
-	//	fmt.Printf("@aFsYGGA, %s - https://www.twitch.tv/videos/%s?t=%s\n", time.Now().Format("02-01"), id, timecode)
-	//}()
 
 	return t, nil
 }
@@ -166,7 +155,7 @@ func (t *Twitch) workerLoop(ctx context.Context, cancel context.CancelFunc, msgC
 }
 
 func (t *Twitch) handleMessage(cancel context.CancelFunc, msgBytes []byte) {
-	var event EventSubMessage
+	var event twitch2.EventSubMessage
 	if err := json.Unmarshal(msgBytes, &event); err != nil {
 		t.log.Error("Failed to decode Twitch message", err, slog.String("event", string(msgBytes)))
 		return
@@ -180,7 +169,7 @@ func (t *Twitch) handleMessage(cancel context.CancelFunc, msgBytes []byte) {
 	case "session_welcome":
 		t.log.Debug("Received session_welcome on Twitch")
 
-		var payload SessionWelcomePayload
+		var payload twitch2.SessionWelcomePayload
 		if err := json.Unmarshal(event.Payload, &payload); err != nil {
 			t.log.Error("Failed to decode session_welcome payload", err, slog.String("event", string(msgBytes)))
 			return
@@ -192,7 +181,7 @@ func (t *Twitch) handleMessage(cancel context.CancelFunc, msgBytes []byte) {
 	case "notification":
 		t.log.Debug("Received notification on Twitch")
 
-		var envelope EventSubEnvelope
+		var envelope twitch2.EventSubEnvelope
 		if err := json.Unmarshal(event.Payload, &envelope); err != nil {
 			t.log.Error("Failed to decode Twitch envelope", err)
 			return
@@ -200,7 +189,7 @@ func (t *Twitch) handleMessage(cancel context.CancelFunc, msgBytes []byte) {
 
 		switch envelope.Subscription.Type {
 		case "channel.chat.message":
-			var msgEvent ChatMessageEvent
+			var msgEvent twitch2.ChatMessageEvent
 			if err := json.Unmarshal(envelope.Event, &msgEvent); err != nil {
 				t.log.Error("Failed to decode channel.chat.message event", err)
 				return
@@ -209,7 +198,7 @@ func (t *Twitch) handleMessage(cancel context.CancelFunc, msgBytes []byte) {
 
 			t.checkMessage(msgEvent)
 		case "automod.message.hold":
-			var am AutomodHoldEvent
+			var am twitch2.AutomodHoldEvent
 			if err := json.Unmarshal(envelope.Event, &am); err != nil {
 				t.log.Error("Failed to decode automod event", err)
 				return
@@ -226,11 +215,11 @@ func (t *Twitch) handleMessage(cancel context.CancelFunc, msgBytes []byte) {
 			t.stream.SetIslive(false)
 			t.stats.SetEndTime(time.Now())
 
-			if err := t.SendChatMessage(t.stream.ChannelID(), t.stats.GetStats()); err != nil {
+			if err := t.api.SendChatMessage(t.stream.ChannelID(), t.stats.GetStats()); err != nil {
 				t.log.Error("Failed to send message on chat", err)
 			}
 		case "channel.update":
-			var upd ChannelUpdateEvent
+			var upd twitch2.ChannelUpdateEvent
 			if err := json.Unmarshal(envelope.Event, &upd); err != nil {
 				t.log.Error("Failed to decode channel.update event", err)
 				return
@@ -241,7 +230,7 @@ func (t *Twitch) handleMessage(cancel context.CancelFunc, msgBytes []byte) {
 				t.stream.SetCategory(upd.CategoryName)
 			}
 		case "channel.moderate":
-			var modEvent ChannelModerateEvent
+			var modEvent twitch2.ChannelModerateEvent
 			if err := json.Unmarshal(envelope.Event, &modEvent); err != nil {
 				t.log.Error("Failed to decode channel.moderate event", err)
 				return
@@ -308,7 +297,7 @@ func (t *Twitch) subscribeEvent(eventType, version string, condition map[string]
 	return nil
 }
 
-func (t *Twitch) convertMap(msgEvent ChatMessageEvent) *ports.ChatMessage {
+func (t *Twitch) convertMap(msgEvent twitch2.ChatMessageEvent) *ports.ChatMessage {
 	var isBroadcaster, isMod, isVip, isSubscriber, emoteOnly bool
 	var emotes []string
 

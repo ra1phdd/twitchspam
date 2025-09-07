@@ -1,9 +1,16 @@
 package ports
 
-type Chat interface {
+import (
+	"twitchspam/internal/app/adapters/twitch/api"
+	"twitchspam/internal/app/infrastructure/config"
+)
+
+type APIPort interface {
 	GetChannelID(username string) (string, error)
-	GetOnline(username string) (int, bool, error)
-	SendChatMessage(broadcasterID, senderID, message string) error
+	GetLiveStream(broadcasterID string) (*api.Stream, error)
+	GetUrlVOD(broadcasterID string, streams []*config.Markers) (map[string]string, error)
+	SendChatMessage(broadcasterID string, message string) error
+	DeleteChatMessage(broadcasterID, messageID string) error
 }
 
 type ModerationPort interface {

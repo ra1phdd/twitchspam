@@ -12,13 +12,14 @@ import (
 )
 
 type Config struct {
-	App        App                    `json:"app"`
-	Enabled    bool                   `json:"enabled"`
-	Spam       Spam                   `json:"spam"`
-	Mword      map[string]*Mword      `json:"mword"`
-	MwordGroup map[string]*MwordGroup `json:"mword_group"`
-	Aliases    map[string]string      `json:"aliases"` // ключ - алиас, значение - оригинальная команда
-	Banwords   Banwords               `json:"banwords"`
+	App        App                              `json:"app"`
+	Enabled    bool                             `json:"enabled"`
+	Spam       Spam                             `json:"spam"`
+	Mword      map[string]*Mword                `json:"mword"`
+	MwordGroup map[string]*MwordGroup           `json:"mword_group"`
+	Aliases    map[string]string                `json:"aliases"` // ключ - алиас, значение - оригинальная команда
+	Markers    map[string]map[string][]*Markers `json:"markers"` // первый ключ - юзернейм, второй ключ - название маркера
+	Banwords   Banwords                         `json:"banwords"`
 }
 
 type App struct {
@@ -79,6 +80,12 @@ type MwordGroup struct {
 	Enabled  bool              `json:"enabled"`
 	Words    []string          `json:"words"`
 	Regexp   []*regexp2.Regexp `json:"regexp"`
+}
+
+type Markers struct {
+	StreamID  string        `json:"stream_id"`
+	CreatedAt time.Time     `json:"date"`
+	Timecode  time.Duration `json:"time_code"`
 }
 
 type Banwords struct {
@@ -177,6 +184,8 @@ func (m *Manager) GetDefault() *Config {
 		},
 		Mword:      make(map[string]*Mword),
 		MwordGroup: make(map[string]*MwordGroup),
+		Aliases:    make(map[string]string),
+		Markers:    make(map[string]map[string][]*Markers),
 	}
 }
 
@@ -251,6 +260,14 @@ func (m *Manager) validate(cfg *Config) error {
 
 	if cfg.MwordGroup == nil {
 		cfg.MwordGroup = make(map[string]*MwordGroup)
+	}
+
+	if cfg.Aliases == nil {
+		cfg.Aliases = make(map[string]string)
+	}
+
+	if cfg.Markers == nil {
+		cfg.Markers = make(map[string]map[string][]*Markers)
 	}
 
 	return nil

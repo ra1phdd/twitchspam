@@ -1,8 +1,11 @@
-package twitch
+package event_sub
 
-import "log/slog"
+import (
+	"log/slog"
+	"twitchspam/internal/app/adapters/twitch"
+)
 
-func (t *Twitch) checkModerate(modEvent ChannelModerateEvent) {
+func (t *Twitch) checkModerate(modEvent twitch.ChannelModerateEvent) {
 	switch modEvent.Action {
 	case "delete":
 		t.log.Info("The moderator deleted the user's message", slog.String("mod_username", modEvent.ModeratorUserName))

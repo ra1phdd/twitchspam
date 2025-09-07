@@ -1,12 +1,13 @@
-package twitch
+package event_sub
 
 import (
 	"fmt"
 	"log/slog"
 	"twitchspam/internal/app/adapters/messages/checker"
+	"twitchspam/internal/app/adapters/twitch"
 )
 
-func (t *Twitch) checkMessage(msgEvent ChatMessageEvent) {
+func (t *Twitch) checkMessage(msgEvent twitch.ChatMessageEvent) {
 	msg := t.convertMap(msgEvent)
 	if t.stream.IsLive() {
 		t.stats.AddMessage(msg.Chatter.Username)
@@ -19,12 +20,13 @@ func (t *Twitch) checkMessage(msgEvent ChatMessageEvent) {
 				text = fmt.Sprintf("@%s, %s", username, message)
 			}
 
-			if err := t.SendChatMessage(targetID, text); err != nil {
+			if err := t.api.SendChatMessage(targetID, text); err != nil {
 				t.log.Error("Failed to send message on chat", err)
 			}
 		}
 	}
 
+	msg.Message.Text = t.aliases.ReplaceOne(msg.Message.Text)
 	if adminAction := t.admin.FindMessages(msg); adminAction != nil {
 		sendMessages(msg.Broadcaster.UserID, adminAction.Text, adminAction.IsReply, msg.Chatter.Username)
 		return
@@ -60,7 +62,7 @@ func (t *Twitch) checkMessage(msgEvent ChatMessageEvent) {
 		}
 	case checker.Delete:
 		t.log.Warn("Muteword in phrase", slog.String("username", msg.Chatter.Username), slog.String("text", msg.Message.Text))
-		if err := t.DeleteChatMessage(msg.Broadcaster.UserID, msg.Message.ID); err != nil {
+		if err := t.api.DeleteChatMessage(msg.Broadcaster.UserID, msg.Message.ID); err != nil {
 			t.log.Error("Failed to delete message on chat", err)
 		}
 	}
