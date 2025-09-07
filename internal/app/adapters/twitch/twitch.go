@@ -2,12 +2,15 @@ package twitch
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"github.com/gorilla/websocket"
 	"io"
 	"log/slog"
 	"net/http"
+	"runtime"
+	"sync"
 	"time"
 	"twitchspam/internal/app/adapters/messages/admin"
 	"twitchspam/internal/app/adapters/messages/checker"
@@ -130,97 +133,138 @@ func (t *Twitch) connectAndHandleEvents() error {
 	}
 	defer ws.Close()
 
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	var wg sync.WaitGroup
+	msgChan := make(chan []byte, 10000)
+	t.startWorkers(ctx, cancel, &wg, msgChan)
+
 	t.log.Info("Connected to Twitch Twitch WebSocket")
+	return t.readMessages(ctx, ws, msgChan, &wg)
+}
+
+func (t *Twitch) startWorkers(ctx context.Context, cancel context.CancelFunc, wg *sync.WaitGroup, msgChan chan []byte) {
+	for i := 0; i < runtime.NumCPU(); i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			t.workerLoop(ctx, cancel, msgChan)
+		}()
+	}
+}
+
+func (t *Twitch) workerLoop(ctx context.Context, cancel context.CancelFunc, msgChan chan []byte) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case msgBytes := <-msgChan:
+			t.handleMessage(cancel, msgBytes)
+		}
+	}
+}
+
+func (t *Twitch) handleMessage(cancel context.CancelFunc, msgBytes []byte) {
+	var event EventSubMessage
+	if err := json.Unmarshal(msgBytes, &event); err != nil {
+		t.log.Error("Failed to decode Twitch message", err, slog.String("event", string(msgBytes)))
+		return
+	}
+
+	switch event.Metadata.MessageType {
+	case "session_reconnect":
+		t.log.Debug("Received session_reconnect on Twitch")
+		cancel()
+		return
+	case "session_welcome":
+		t.log.Debug("Received session_welcome on Twitch")
+
+		var payload SessionWelcomePayload
+		if err := json.Unmarshal(event.Payload, &payload); err != nil {
+			t.log.Error("Failed to decode session_welcome payload", err, slog.String("event", string(msgBytes)))
+			return
+		}
+
+		t.subscribeEvents(payload)
+	case "session_keepalive":
+		t.log.Trace("Received session_keepalive on Twitch")
+	case "notification":
+		t.log.Debug("Received notification on Twitch")
+
+		var envelope EventSubEnvelope
+		if err := json.Unmarshal(event.Payload, &envelope); err != nil {
+			t.log.Error("Failed to decode Twitch envelope", err)
+			return
+		}
+
+		switch envelope.Subscription.Type {
+		case "channel.chat.message":
+			var msgEvent ChatMessageEvent
+			if err := json.Unmarshal(envelope.Event, &msgEvent); err != nil {
+				t.log.Error("Failed to decode channel.chat.message event", err)
+				return
+			}
+			t.log.Debug("New message", slog.String("username", msgEvent.ChatterUserName), slog.String("text", msgEvent.Message.Text))
+
+			t.checkMessage(msgEvent)
+		case "automod.message.hold":
+			var am AutomodHoldEvent
+			if err := json.Unmarshal(envelope.Event, &am); err != nil {
+				t.log.Error("Failed to decode automod event", err)
+				return
+			}
+			t.log.Info("AutoMod held message", slog.String("user_id", am.UserID), slog.String("message_id", am.MessageID), slog.String("text", am.Message.Text))
+
+			t.checkAutomod(am)
+		case "stream.online":
+			t.log.Info("Stream started")
+			t.stream.SetIslive(true)
+			t.stats.SetStartTime(time.Now())
+		case "stream.offline":
+			t.log.Info("Stream ended")
+			t.stream.SetIslive(false)
+			t.stats.SetEndTime(time.Now())
+
+			if err := t.SendChatMessage(t.stream.ChannelID(), t.stats.GetStats()); err != nil {
+				t.log.Error("Failed to send message on chat", err)
+			}
+		case "channel.update":
+			var upd ChannelUpdateEvent
+			if err := json.Unmarshal(envelope.Event, &upd); err != nil {
+				t.log.Error("Failed to decode channel.update event", err)
+				return
+			}
+			t.log.Info("Channel updated", slog.String("title", upd.Title), slog.String("category", upd.CategoryName), slog.String("lang", upd.Language))
+
+			if upd.CategoryName != "" { // TODO
+				t.stream.SetCategory(upd.CategoryName)
+			}
+		case "channel.moderate":
+			var modEvent ChannelModerateEvent
+			if err := json.Unmarshal(envelope.Event, &modEvent); err != nil {
+				t.log.Error("Failed to decode channel.moderate event", err)
+				return
+			}
+
+			t.checkModerate(modEvent)
+		}
+	}
+}
+
+func (t *Twitch) readMessages(ctx context.Context, ws *websocket.Conn, msgChan chan []byte, wg *sync.WaitGroup) error {
 	for {
 		_, msgBytes, err := ws.ReadMessage()
 		if err != nil {
-			t.log.Error("Error while reading websocket message", err)
 			return err
 		}
 
-		var event EventSubMessage
-		if err := json.Unmarshal(msgBytes, &event); err != nil {
-			t.log.Error("Failed to decode Twitch message", err, slog.String("event", string(msgBytes)))
-			continue
-		}
-
-		switch event.Metadata.MessageType {
-		case "session_welcome":
-			t.log.Debug("Received session_welcome on Twitch")
-
-			var payload SessionWelcomePayload
-			if err := json.Unmarshal(event.Payload, &payload); err != nil {
-				t.log.Error("Failed to decode session_welcome payload", err, slog.String("event", string(msgBytes)))
-				break
-			}
-
-			t.subscribeEvents(payload)
-		case "session_keepalive":
-			t.log.Trace("Received session_keepalive on Twitch")
-			break
-		case "notification":
-			t.log.Debug("Received notification on Twitch")
-
-			var envelope EventSubEnvelope
-			if err := json.Unmarshal(event.Payload, &envelope); err != nil {
-				t.log.Error("Failed to decode Twitch envelope", err)
-				break
-			}
-
-			switch envelope.Subscription.Type {
-			case "channel.chat.message":
-				var msgEvent ChatMessageEvent
-				if err := json.Unmarshal(envelope.Event, &msgEvent); err != nil {
-					t.log.Error("Failed to decode channel.chat.message event", err)
-					break
-				}
-				t.log.Debug("New message", slog.String("username", msgEvent.ChatterUserName), slog.String("text", msgEvent.Message.Text))
-
-				t.checkMessage(msgEvent)
-			case "automod.message.hold":
-				var am AutomodHoldEvent
-				if err := json.Unmarshal(envelope.Event, &am); err != nil {
-					t.log.Error("Failed to decode automod event", err)
-					break
-				}
-				t.log.Info("AutoMod held message", slog.String("user_id", am.UserID), slog.String("message_id", am.MessageID), slog.String("text", am.Message.Text))
-
-				t.checkAutomod(am)
-			case "stream.online":
-				t.log.Info("Stream started")
-				t.stream.SetIslive(true)
-				t.stats.SetStartTime(time.Now())
-			case "stream.offline":
-				t.log.Info("Stream ended")
-				t.stream.SetIslive(false)
-				t.stats.SetEndTime(time.Now())
-
-				if err := t.SendChatMessage(t.stream.ChannelID(), t.stats.GetStats()); err != nil {
-					t.log.Error("Failed to send message on chat", err)
-				}
-			case "channel.update":
-				var upd ChannelUpdateEvent
-				if err := json.Unmarshal(envelope.Event, &upd); err != nil {
-					t.log.Error("Failed to decode channel.update event", err)
-					break
-				}
-				t.log.Info("Channel updated", slog.String("title", upd.Title), slog.String("category", upd.CategoryName), slog.String("lang", upd.Language))
-
-				if upd.CategoryName != "" { // TODO
-					t.stream.SetCategory(upd.CategoryName)
-				}
-			case "channel.moderate":
-				var modEvent ChannelModerateEvent
-				if err := json.Unmarshal(envelope.Event, &modEvent); err != nil {
-					t.log.Error("Failed to decode channel.moderate event", err)
-					break
-				}
-
-				t.checkModerate(modEvent)
-			case "session_reconnect":
-				t.log.Debug("Received session_reconnect on Twitch")
-				return nil
-			}
+		select {
+		case <-ctx.Done():
+			wg.Wait()
+			close(msgChan)
+			return nil
+		case msgChan <- msgBytes:
 		}
 	}
 }
