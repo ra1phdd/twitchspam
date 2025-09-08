@@ -44,7 +44,7 @@ type Spam struct {
 
 type SpamSettings struct {
 	Enabled             bool    `json:"enabled"`
-	SimilarityThreshold float64 `json:"similarity_threshold"`  // !am sim <0.0-1.0>
+	SimilarityThreshold float64 `json:"similarity_threshold"`  // !am sim <0.1-1.0>
 	MessageLimit        int     `json:"message_limit"`         // !am msg <2-15 или off>
 	Timeouts            []int   `json:"timeouts"`              // !am to <значения через запятую>
 	ResetTimeoutSeconds int     `json:"reset_timeout_seconds"` // !am rto <значение>
@@ -228,7 +228,7 @@ func (m *Manager) validate(cfg *Config) error {
 		return errors.New("app.mod_channels is required")
 	}
 
-	if cfg.Spam.SettingsDefault.SimilarityThreshold < 0 || cfg.Spam.SettingsDefault.SimilarityThreshold > 1 {
+	if cfg.Spam.SettingsDefault.SimilarityThreshold < 0.1 || cfg.Spam.SettingsDefault.SimilarityThreshold > 1 {
 		return errors.New("spam.similarity_threshold must be in [0,1]")
 	}
 	if cfg.Spam.Mode != "online" && cfg.Spam.Mode != "always" {

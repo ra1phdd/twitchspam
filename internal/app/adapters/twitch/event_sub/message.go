@@ -37,19 +37,6 @@ func (t *Twitch) checkMessage(msgEvent twitch.ChatMessageEvent) {
 		return
 	}
 
-	//if strings.HasPrefix(msg.Message.Text, "!vn") {
-	//	id, err := t.GetUrlVOD(t.stream.StreamID())
-	//	if err != nil {
-	//		t.log.Error("Failed to get live message", err)
-	//		return
-	//	}
-	//
-	//	if err := t.SendChatMessage(msg.Broadcaster.UserID, fmt.Sprintf("@%s, %s - https://www.twitch.tv/videos/%s?t=%s",
-	//		msg.Chatter.Username, time.Now().Format("02-01"), id, t.stats.GetStartTime().Round(time.Second).String())); err != nil {
-	//		t.log.Error("Failed to send message on chat", err)
-	//	}
-	//}
-
 	action := t.checker.Check(msg)
 	switch action.Type {
 	case checker.Ban:

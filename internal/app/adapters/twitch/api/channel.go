@@ -13,11 +13,12 @@ import (
 )
 
 type Twitch struct {
-	cfg *config.Config
+	cfg    *config.Config
+	client *http.Client
 }
 
-func NewTwitch(cfg *config.Config) *Twitch {
-	return &Twitch{cfg: cfg}
+func NewTwitch(cfg *config.Config, client *http.Client) *Twitch {
+	return &Twitch{cfg: cfg, client: client}
 }
 
 func (t *Twitch) GetChannelID(username string) (string, error) {
@@ -112,7 +113,7 @@ func (t *Twitch) SendChatMessage(broadcasterID, message string) error {
 		return err
 	}
 
-	if !chatResp.Data[0].IsSent {
+	if len(chatResp.Data) == 0 || !chatResp.Data[0].IsSent {
 		return fmt.Errorf("%s is not sent", message)
 	}
 
@@ -135,12 +136,16 @@ func (t *Twitch) DeleteChatMessage(broadcasterID, messageID string) error {
 }
 
 func (t *Twitch) doTwitchRequest(method, url string, body io.Reader, target interface{}) error {
-	req, _ := http.NewRequest(method, url, body)
+	req, err := http.NewRequest(method, url, body)
+	if err != nil {
+		return err
+	}
+
 	req.Header.Set("Authorization", "Bearer "+t.cfg.App.OAuth)
 	req.Header.Set("Client-Id", t.cfg.App.ClientID)
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := t.client.Do(req)
 	if err != nil {
 		return err
 	}
@@ -149,6 +154,11 @@ func (t *Twitch) doTwitchRequest(method, url string, body io.Reader, target inte
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
 		raw, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("twitch returned %s: %s", resp.Status, string(raw))
+	}
+
+	if target == nil {
+		_, _ = io.Copy(io.Discard, resp.Body)
+		return nil
 	}
 
 	return json.NewDecoder(resp.Body).Decode(target)

@@ -50,7 +50,7 @@ func New(log logger.Logger, manager *config.Manager, client *http.Client, modCha
 		cfg:    manager.Get(),
 		client: client,
 	}
-	t.api = api.NewTwitch(t.cfg)
+	t.api = api.NewTwitch(t.cfg, t.client)
 
 	channelID, err := t.api.GetChannelID(modChannel)
 	if err != nil {
@@ -148,7 +148,10 @@ func (t *Twitch) workerLoop(ctx context.Context, cancel context.CancelFunc, msgC
 		select {
 		case <-ctx.Done():
 			return
-		case msgBytes := <-msgChan:
+		case msgBytes, ok := <-msgChan:
+			if !ok {
+				return
+			}
 			t.handleMessage(cancel, msgBytes)
 		}
 	}

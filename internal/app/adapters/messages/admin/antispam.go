@@ -102,12 +102,12 @@ func (a *Admin) handleSim(cfg *config.Config, _ string, args []string, typeSpam 
 		target = &cfg.Spam.SettingsDefault.SimilarityThreshold
 	}
 
-	if val, ok := parseFloatArg(args, 0, 1); ok {
+	if val, ok := parseFloatArg(args, 0.1, 1); ok {
 		*target = val
 		return nil
 	}
 	return &ports.AnswerType{
-		Text:    []string{"значение порога схожести сообщений должно быть от 0.0 до 1.0!"},
+		Text:    []string{"значение порога схожести сообщений должно быть от 0.1 до 1.0!"},
 		IsReply: true,
 	}
 }

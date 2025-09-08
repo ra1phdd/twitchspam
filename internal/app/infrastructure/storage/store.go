@@ -97,32 +97,36 @@ func (s *Store[T]) Cleanup() {
 		sh := &s.shards[i]
 
 		for {
+			sh.userMu.Lock()
 			sh.heapMu.Lock()
 			if len(sh.expHeap) == 0 {
 				sh.heapMu.Unlock()
+				sh.userMu.Unlock()
 				break
 			}
 
 			item := sh.expHeap[0]
 			if item.TTL > now {
 				sh.heapMu.Unlock()
+				sh.userMu.Unlock()
 				break
 			}
 			heap.Pop(&sh.expHeap)
 			sh.heapMu.Unlock()
 
-			sh.userMu.Lock()
-			userItems := sh.userData[item.Username]
-			newItems := userItems[:0]
-			for _, it := range userItems {
-				if it != item {
-					newItems = append(newItems, it)
+			userItems, ok := sh.userData[item.Username]
+			if ok && userItems != nil {
+				newItems := userItems[:0]
+				for _, it := range userItems {
+					if it != item {
+						newItems = append(newItems, it)
+					}
 				}
-			}
-			if len(newItems) == 0 {
-				delete(sh.userData, item.Username)
-			} else {
-				sh.userData[item.Username] = newItems
+				if len(newItems) == 0 {
+					delete(sh.userData, item.Username)
+				} else {
+					sh.userData[item.Username] = newItems
+				}
 			}
 			sh.userMu.Unlock()
 		}
@@ -141,26 +145,27 @@ func (s *Store[T]) CleanupUser(username string) {
 	delete(sh.userData, username)
 	sh.userMu.Unlock()
 
-	sh.heapMu.Lock()
-	defer sh.heapMu.Unlock()
-
-	if len(sh.expHeap) == 0 {
+	if len(msgs) == 0 {
 		return
 	}
 
-	newHeap := sh.expHeap[:0]
-	for _, m := range sh.expHeap {
-		remove := false
-		for _, um := range msgs {
-			if m == um {
-				remove = true
-				break
+	sh.heapMu.Lock()
+	if len(sh.expHeap) > 0 {
+		newHeap := sh.expHeap[:0]
+		for _, m := range sh.expHeap {
+			remove := false
+			for _, um := range msgs {
+				if m == um {
+					remove = true
+					break
+				}
+			}
+			if !remove {
+				newHeap = append(newHeap, m)
 			}
 		}
-		if !remove {
-			newHeap = append(newHeap, m)
-		}
+		sh.expHeap = newHeap
+		heap.Init(&sh.expHeap)
 	}
-	sh.expHeap = newHeap
-	heap.Init(&sh.expHeap)
+	sh.heapMu.Unlock()
 }

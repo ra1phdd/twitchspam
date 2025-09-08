@@ -2,80 +2,129 @@ package aliases
 
 import (
 	"regexp"
-	"sort"
 	"strconv"
 	"strings"
 )
 
-type Aliases struct {
-	aliases    map[string]string
-	sortedKeys []string
+type node struct {
+	children map[string]*node // дочерние узлы для каждого слова
+	alias    string           // строка замены, если путь до узла совпал с ключом
 }
 
-var queryRe = regexp.MustCompile(`\{query(\d*)\}`)
+type Aliases struct {
+	root *node
+}
 
-func New(aliases map[string]string) *Aliases {
-	m := &Aliases{
-		aliases: make(map[string]string),
-	}
-	m.Update(aliases)
+var queryRe = regexp.MustCompile(`\{query(\d*)}`)
 
-	return m
+func New(m map[string]string) *Aliases {
+	return &Aliases{root: buildTree(m)}
 }
 
 func (a *Aliases) Update(newAliases map[string]string) {
-	a.aliases = make(map[string]string, len(newAliases))
-	a.sortedKeys = make([]string, 0, len(newAliases))
-	for k, v := range newAliases {
-		a.aliases[k] = v
-		a.sortedKeys = append(a.sortedKeys, k)
+	a.root = buildTree(newAliases)
+}
+
+func buildTree(m map[string]string) *node {
+	root := &node{children: make(map[string]*node)}
+	for k, v := range m {
+		cur := root
+		for _, w := range strings.Fields(k) {
+			if cur.children[w] == nil {
+				cur.children[w] = &node{children: make(map[string]*node)}
+			}
+			cur = cur.children[w]
+		}
+		cur.alias = v
 	}
-	sort.Slice(a.sortedKeys, func(i, j int) bool {
-		return len(a.sortedKeys[i]) > len(a.sortedKeys[j])
-	})
+	return root
 }
 
 func (a *Aliases) ReplaceOne(text string) string {
-	for _, alias := range a.sortedKeys {
-		if strings.Contains(text, alias) {
-			if strings.Contains(a.aliases[alias], "{query") {
-				parts := strings.Fields(text)
-				aliasParts := strings.Fields(alias)
+	var bestAlias string
+	var bestStart, bestEnd int
+	parts := strings.Fields(text)
 
-				return a.replaceQueryPlaceholders(a.aliases[alias], parts[len(aliasParts):])
+	for i := 0; i < len(parts); i++ {
+		cur := a.root
+		j := i
+
+		for j < len(parts) {
+			next, ok := cur.children[parts[j]]
+			if !ok {
+				break
 			}
 
-			return strings.Replace(text, alias, a.aliases[alias], 1)
+			cur = next
+			j++
+
+			if cur.alias != "" {
+				bestAlias = cur.alias
+				bestStart = i
+				bestEnd = j
+			}
 		}
 	}
-	return text
+
+	if bestAlias == "" {
+		return text
+	}
+
+	if strings.Index(bestAlias, "{query") != -1 {
+		return a.replaceQueryPlaceholders(bestAlias, parts[bestEnd:])
+	}
+
+	// это можно было сделать в одну строку через append, но это +лишние аллокации памяти
+	var sb strings.Builder
+	for k := 0; k < bestStart; k++ {
+		sb.WriteString(parts[k])
+		sb.WriteByte(' ')
+	}
+	sb.WriteString(bestAlias)
+	if bestEnd < len(parts) {
+		sb.WriteByte(' ')
+		for k := bestEnd; k < len(parts); k++ {
+			sb.WriteString(parts[k])
+			if k+1 < len(parts) {
+				sb.WriteByte(' ')
+			}
+		}
+	}
+	return sb.String()
 }
 
-func (a *Aliases) replaceQueryPlaceholders(template string, args []string) string {
+func (a *Aliases) replaceQueryPlaceholders(template string, queryParts []string) string {
+	var sb strings.Builder
 	nextIdx := 0
-	result := queryRe.ReplaceAllStringFunc(template, func(ph string) string {
-		match := queryRe.FindStringSubmatch(ph)
-		if match[1] == "" {
-			// {query} — берём следующий по порядку
-			if nextIdx < len(args) {
-				val := args[nextIdx]
+	last := 0
+
+	for _, loc := range queryRe.FindAllStringSubmatchIndex(template, -1) {
+		sb.WriteString(template[last:loc[0]])
+		matchNum := template[loc[2]:loc[3]]
+		if matchNum == "" {
+			if nextIdx < len(queryParts) {
+				sb.WriteString(queryParts[nextIdx])
 				nextIdx++
-				return val
 			}
-			return ""
+		} else {
+			i, _ := strconv.Atoi(matchNum)
+			if i >= 1 && i <= len(queryParts) {
+				sb.WriteString(queryParts[i-1])
+			}
 		}
-
-		// {queryN} — берём конкретный аргумент
-		i, err := strconv.Atoi(match[1])
-		if err != nil || i < 1 || i > len(args) {
-			return ""
-		}
-		return args[i-1]
-	})
-
-	if nextIdx < len(args) {
-		result += " " + strings.Join(args[nextIdx:], " ")
+		last = loc[1]
 	}
 
-	return result
+	sb.WriteString(template[last:])
+	if nextIdx < len(queryParts) {
+		sb.WriteByte(' ')
+		for k := nextIdx; k < len(queryParts); k++ {
+			sb.WriteString(queryParts[k])
+			if k+1 < len(queryParts) {
+				sb.WriteByte(' ')
+			}
+		}
+	}
+
+	return sb.String()
 }
