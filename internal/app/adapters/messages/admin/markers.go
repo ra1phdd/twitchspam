@@ -50,7 +50,7 @@ func (a *Admin) handleMarkersAdd(cfg *config.Config, markerCmd string, args []st
 		cfg.Markers[userKey] = make(map[string][]*config.Markers)
 	}
 
-	live, err := a.api.GetLiveStream(a.stream.ChannelID())
+	live, err := a.api.GetLiveStream()
 	if err != nil {
 		a.log.Error("Failed to get live stream", err, slog.String("channelID", a.stream.ChannelID()))
 		return UnknownError
@@ -104,7 +104,7 @@ func (a *Admin) handleMarkersList(cfg *config.Config, _ string, args []string, u
 	if len(args) < 1 {
 		for name, markers := range userMarkers {
 			parts = append(parts, name+":")
-			vods, err := a.api.GetUrlVOD(a.stream.ChannelID(), markers)
+			vods, err := a.api.GetUrlVOD(markers)
 			if err != nil {
 				return UnknownError
 			}
@@ -124,7 +124,7 @@ func (a *Admin) handleMarkersList(cfg *config.Config, _ string, args []string, u
 			}
 		}
 
-		vods, err := a.api.GetUrlVOD(a.stream.ChannelID(), markers)
+		vods, err := a.api.GetUrlVOD(markers)
 		if err != nil {
 			return UnknownError
 		}

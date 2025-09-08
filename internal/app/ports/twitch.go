@@ -1,21 +1,25 @@
 package ports
 
 import (
-	"twitchspam/internal/app/adapters/twitch/api"
+	"time"
 	"twitchspam/internal/app/infrastructure/config"
 )
 
 type APIPort interface {
 	GetChannelID(username string) (string, error)
-	GetLiveStream(broadcasterID string) (*api.Stream, error)
-	GetUrlVOD(broadcasterID string, streams []*config.Markers) (map[string]string, error)
-	SendChatMessage(broadcasterID string, message string) error
-	DeleteChatMessage(broadcasterID, messageID string) error
+	GetLiveStream() (*Stream, error)
+	GetUrlVOD(streams []*config.Markers) (map[string]string, error)
+	SendChatMessage(message string) error
+	DeleteChatMessage(messageID string) error
+	TimeoutUser(userID string, duration int, reason string)
+	BanUser(userID string, reason string)
 }
 
-type ModerationPort interface {
-	Timeout(userID string, duration int, reason string)
-	Ban(userID string, reason string)
+type Stream struct {
+	ID          string
+	IsOnline    bool
+	ViewerCount int
+	StartedAt   time.Time
 }
 
 type ChatMessage struct {

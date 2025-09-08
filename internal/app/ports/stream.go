@@ -6,6 +6,7 @@ type StreamPort interface {
 	StreamID() string
 	SetStreamID(streamID string)
 	ChannelID() string
+	SetChannelID(channelID string)
 	ChannelName() string
 	SetCategory(category string)
 	Category() string

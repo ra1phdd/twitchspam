@@ -8,9 +8,8 @@ type Stream struct {
 	category    string
 }
 
-func NewStream(channelID string, channelName string) *Stream {
+func NewStream(channelName string) *Stream {
 	return &Stream{
-		channelID:   channelID,
 		channelName: channelName,
 	}
 }
@@ -33,6 +32,10 @@ func (s *Stream) SetStreamID(streamID string) {
 
 func (s *Stream) ChannelID() string {
 	return s.channelID
+}
+
+func (s *Stream) SetChannelID(channelID string) {
+	s.channelID = channelID
 }
 
 func (s *Stream) ChannelName() string {
