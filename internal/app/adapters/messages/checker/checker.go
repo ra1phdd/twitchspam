@@ -35,9 +35,10 @@ type Checker struct {
 	bwords   ports.BanwordsPort
 	sevenTV  ports.SevenTVPort
 	regexp   ports.RegexPort
+	irc      ports.IRCPort
 }
 
-func NewCheck(log logger.Logger, cfg *config.Config, stream ports.StreamPort, stats ports.StatsPort, bwords ports.BanwordsPort, regexp *regex.Regex) *Checker {
+func NewCheck(log logger.Logger, cfg *config.Config, stream ports.StreamPort, stats ports.StatsPort, bwords ports.BanwordsPort, regexp *regex.Regex, irc ports.IRCPort) *Checker {
 	return &Checker{
 		log:    log,
 		cfg:    cfg,
@@ -55,6 +56,7 @@ func NewCheck(log logger.Logger, cfg *config.Config, stream ports.StreamPort, st
 		bwords:  bwords,
 		sevenTV: seventv.New(log, stream),
 		regexp:  regexp,
+		irc:     irc,
 	}
 }
 
@@ -155,7 +157,7 @@ func (c *Checker) CheckMwords(text string) *ports.CheckerAction {
 				continue
 			}
 
-			if matchPhrase(words, phrase) {
+			if c.regexp.MatchPhrase(words, phrase) {
 				return makeAction(group.Action, phrase, group.Duration)
 			}
 		}
@@ -182,7 +184,7 @@ func (c *Checker) CheckMwords(text string) *ports.CheckerAction {
 			}
 		}
 
-		if matchPhrase(words, strings.ToLower(phrase)) {
+		if c.regexp.MatchPhrase(words, strings.ToLower(phrase)) {
 			return makeAction(mw.Action, phrase, mw.Duration)
 		}
 	}
@@ -248,7 +250,7 @@ func (c *Checker) checkSpam(msg *ports.ChatMessage, text string) *ports.CheckerA
 			}
 		}
 
-		if !matchPhrase(words, strings.ToLower(phrase)) {
+		if !c.regexp.MatchPhrase(words, strings.ToLower(phrase)) {
 			continue
 		}
 
@@ -273,30 +275,4 @@ func (c *Checker) checkSpam(msg *ports.ChatMessage, text string) *ports.CheckerA
 		Reason:   "спам",
 		Duration: dur,
 	}
-}
-
-func matchPhrase(words []string, phrase string) bool {
-	phraseParts := strings.Split(phrase, " ")
-	if len(phraseParts) == 1 {
-		for _, w := range words {
-			if w == phrase {
-				return true
-			}
-		}
-		return false
-	}
-
-	for i := 0; i <= len(words)-len(phraseParts); i++ {
-		match := true
-		for j := 0; j < len(phraseParts); j++ {
-			if words[i+j] != phraseParts[j] {
-				match = false
-				break
-			}
-		}
-		if match {
-			return true
-		}
-	}
-	return false
 }

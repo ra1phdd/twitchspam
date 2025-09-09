@@ -3,6 +3,7 @@ package event_sub
 import (
 	"fmt"
 	"log/slog"
+	"strings"
 	"twitchspam/internal/app/adapters/messages/checker"
 )
 
@@ -25,14 +26,12 @@ func (es *EventSub) checkMessage(msgEvent ChatMessageEvent) {
 		}
 	}
 
-	msg.Message.Text = es.aliases.ReplaceOne(msg.Message.Text)
-	if adminAction := es.admin.FindMessages(msg); adminAction != nil {
-		sendMessages(adminAction.Text, adminAction.IsReply, msg.Chatter.Username)
-		return
+	if !strings.Contains(msg.Message.Text, "!am alias") {
+		msg.Message.Text = es.aliases.ReplaceOne(msg.Message.Text)
 	}
 
-	if userAction := es.user.FindMessages(msg); userAction != nil {
-		sendMessages(userAction.Text, userAction.IsReply, msg.Chatter.Username)
+	if adminAction := es.admin.FindMessages(msg); adminAction != nil {
+		sendMessages(adminAction.Text, adminAction.IsReply, msg.Chatter.Username)
 		return
 	}
 
@@ -51,5 +50,15 @@ func (es *EventSub) checkMessage(msgEvent ChatMessageEvent) {
 		if err := es.api.DeleteChatMessage(msg.Message.ID); err != nil {
 			es.log.Error("Failed to delete message on chat", err)
 		}
+	}
+
+	if userAction := es.user.FindMessages(msg); userAction != nil {
+		username := msg.Chatter.Username
+		if userAction.ReplyUsername != "" {
+			username = userAction.ReplyUsername
+		}
+
+		sendMessages(userAction.Text, userAction.IsReply, username)
+		return
 	}
 }

@@ -18,8 +18,9 @@ type CheckerPort interface {
 }
 
 type AnswerType struct {
-	Text    []string
-	IsReply bool
+	Text          []string
+	IsReply       bool
+	ReplyUsername string
 }
 
 type CheckerAction struct {

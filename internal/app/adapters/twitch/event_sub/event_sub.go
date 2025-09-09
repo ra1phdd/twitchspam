@@ -273,7 +273,7 @@ func (es *EventSub) convertMap(msgEvent ChatMessageEvent) *ports.ChatMessage {
 		}
 	}
 
-	return &ports.ChatMessage{
+	msg := &ports.ChatMessage{
 		Broadcaster: ports.Broadcaster{
 			UserID:   msgEvent.BroadcasterUserID,
 			Login:    msgEvent.BroadcasterUserLogin,
@@ -295,4 +295,20 @@ func (es *EventSub) convertMap(msgEvent ChatMessageEvent) *ports.ChatMessage {
 			Emotes:    emotes,
 		},
 	}
+
+	if msgEvent.Reply != nil {
+		msg.Reply = &ports.Reply{
+			ParentChatter: ports.Chatter{
+				UserID:   msgEvent.Reply.ParentUserID,
+				Login:    msgEvent.Reply.ParentUserLogin,
+				Username: msgEvent.Reply.ParentUserName,
+			},
+			ParentMessage: ports.Message{
+				ID:   msgEvent.Reply.ParentMessageID,
+				Text: msgEvent.Reply.ParentMessageBody,
+			},
+		}
+	}
+
+	return msg
 }

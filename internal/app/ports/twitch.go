@@ -15,6 +15,11 @@ type APIPort interface {
 	BanUser(userID string, reason string)
 }
 
+type IRCPort interface {
+	WaitForIRC(msgID string, timeout time.Duration) (bool, bool)
+	NotifyIRC(msgID string, isFirst bool)
+}
+
 type Stream struct {
 	ID          string
 	IsOnline    bool
@@ -26,6 +31,7 @@ type ChatMessage struct {
 	Broadcaster Broadcaster
 	Chatter     Chatter
 	Message     Message
+	Reply       *Reply
 }
 
 type Broadcaster struct {
@@ -49,4 +55,9 @@ type Message struct {
 	Text      string
 	EmoteOnly bool     // если Fragments type == "text" отсутствует
 	Emotes    []string // text в Fragments при type == "emote"
+}
+
+type Reply struct {
+	ParentChatter Chatter
+	ParentMessage Message
 }

@@ -96,7 +96,7 @@ func (a *Admin) handleMwList(cfg *config.Config, _ string, _ []string) *ports.An
 	for word, mw := range cfg.Mword {
 		parts = append(parts, fmt.Sprintf("- %s (action: %s, duration: %d)", word, mw.Action, mw.Duration))
 	}
-	msg := "мворды:  \n" + strings.Join(parts, "\n")
+	msg := "мворды: \n" + strings.Join(parts, "\n")
 
 	key, err := a.fs.UploadToHaste(msg)
 	if err != nil {

@@ -2,8 +2,8 @@ package aliases
 
 import (
 	"regexp"
-	"strconv"
 	"strings"
+	"twitchspam/internal/app/ports"
 )
 
 type node struct {
@@ -12,13 +12,42 @@ type node struct {
 }
 
 type Aliases struct {
-	root *node
+	root   *node
+	stream ports.StreamPort
 }
 
 var queryRe = regexp.MustCompile(`\{query(\d*)}`)
 
-func New(m map[string]string) *Aliases {
-	return &Aliases{root: buildTree(m)}
+var nonGameCategories = map[string]struct{}{
+	"Just Chatting":                 {},
+	"IRL":                           {},
+	"I'm Only Sleeping":             {},
+	"DJs":                           {},
+	"Music":                         {},
+	"Games + Demos":                 {},
+	"ASMR":                          {},
+	"Special Events":                {},
+	"Art":                           {},
+	"Politics":                      {},
+	"Pools, Hot Tubs, and Beaches":  {},
+	"Slots":                         {},
+	"Food & Drink":                  {},
+	"Science & Technology":          {},
+	"Sports":                        {},
+	"Animals, Aquariums, and Zoos":  {},
+	"Crypto":                        {},
+	"Talk Shows & Podcasts":         {},
+	"Co-working & Studying":         {},
+	"Software and Game Development": {},
+	"Makers & Crafting":             {},
+	"Writing & Reading":             {},
+}
+
+func New(m map[string]string, stream ports.StreamPort) *Aliases {
+	return &Aliases{
+		root:   buildTree(m),
+		stream: stream,
+	}
 }
 
 func (a *Aliases) Update(newAliases map[string]string) {
@@ -43,8 +72,8 @@ func buildTree(m map[string]string) *node {
 func (a *Aliases) ReplaceOne(text string) string {
 	var bestAlias string
 	var bestStart, bestEnd int
-	parts := strings.Fields(text)
 
+	parts := strings.Fields(text)
 	for i := 0; i < len(parts); i++ {
 		cur := a.root
 		j := i
@@ -90,41 +119,33 @@ func (a *Aliases) ReplaceOne(text string) string {
 			}
 		}
 	}
+
 	return sb.String()
 }
 
-func (a *Aliases) replaceQueryPlaceholders(template string, queryParts []string) string {
-	var sb strings.Builder
-	nextIdx := 0
-	last := 0
+func (a *Aliases) ReplacePlaceholders(text string, parts []string) string {
+	text = a.replaceGamePlaceholder(text)
+	text = a.replaceCategoryPlaceholder(text)
+	text = a.replaceChannelPlaceholder(text)
+	text = a.replaceCountdownPlaceholder(text)
+	text = a.replaceCountupPlaceholder(text)
+	text = a.replaceRandintPlaceholder(text)
 
-	for _, loc := range queryRe.FindAllStringSubmatchIndex(template, -1) {
-		sb.WriteString(template[last:loc[0]])
-		matchNum := template[loc[2]:loc[3]]
-		if matchNum == "" {
-			if nextIdx < len(queryParts) {
-				sb.WriteString(queryParts[nextIdx])
-				nextIdx++
-			}
-		} else {
-			i, _ := strconv.Atoi(matchNum)
-			if i >= 1 && i <= len(queryParts) {
-				sb.WriteString(queryParts[i-1])
-			}
-		}
-		last = loc[1]
+	if strings.Index(text, "{query") == -1 {
+		return text
 	}
 
-	sb.WriteString(template[last:])
-	if nextIdx < len(queryParts) {
-		sb.WriteByte(' ')
-		for k := nextIdx; k < len(queryParts); k++ {
-			sb.WriteString(queryParts[k])
-			if k+1 < len(queryParts) {
-				sb.WriteByte(' ')
-			}
+	cmdIdx := -1
+	for i, part := range parts {
+		if strings.Contains(part, "!") {
+			cmdIdx = i
+			break
 		}
 	}
 
-	return sb.String()
+	if cmdIdx != -1 {
+		parts = parts[cmdIdx+1:]
+	}
+
+	return a.replaceQueryPlaceholders(text, parts)
 }

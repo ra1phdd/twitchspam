@@ -117,6 +117,7 @@ func (a *Admin) FindMessages(msg *ports.ChatMessage) *ports.AnswerType {
 		"mark": func(cfg *config.Config, cmd string, args []string) *ports.AnswerType {
 			return a.handleMarkers(cfg, cmd, args, msg.Chatter.Username)
 		},
+		"link": a.handleLink,
 	}
 
 	handler, ok := handlers[cmd]

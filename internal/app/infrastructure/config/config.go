@@ -19,7 +19,8 @@ type Config struct {
 	MwordGroup map[string]*MwordGroup           `json:"mword_group"`
 	Aliases    map[string]string                `json:"aliases"` // ключ - алиас, значение - оригинальная команда
 	Markers    map[string]map[string][]*Markers `json:"markers"` // первый ключ - юзернейм, второй ключ - название маркера
-	Links      map[string]string                `json:"links"`
+	Links      map[string]*Links                `json:"links"`
+	Answers    map[string]*Answers              `json:"answers"` // ключ
 	Banwords   Banwords                         `json:"banwords"`
 }
 
@@ -87,6 +88,17 @@ type Markers struct {
 	StreamID  string        `json:"stream_id"`
 	CreatedAt time.Time     `json:"date"`
 	Timecode  time.Duration `json:"time_code"`
+}
+
+type Links struct {
+	Text string `json:"text"`
+}
+
+type Answers struct {
+	Enabled bool              `json:"enabled"`
+	Words   []string          `json:"words"`
+	Regexp  []*regexp2.Regexp `json:"regexp"`
+	Text    string            `json:"text"`
 }
 
 type Banwords struct {
@@ -187,7 +199,8 @@ func (m *Manager) GetDefault() *Config {
 		MwordGroup: make(map[string]*MwordGroup),
 		Aliases:    make(map[string]string),
 		Markers:    make(map[string]map[string][]*Markers),
-		Links:      make(map[string]string),
+		Links:      make(map[string]*Links),
+		Answers:    make(map[string]*Answers),
 	}
 }
 
@@ -273,7 +286,11 @@ func (m *Manager) validate(cfg *Config) error {
 	}
 
 	if cfg.Links == nil {
-		cfg.Links = make(map[string]string)
+		cfg.Links = make(map[string]*Links)
+	}
+
+	if cfg.Answers == nil {
+		cfg.Answers = make(map[string]*Answers)
 	}
 
 	return nil
