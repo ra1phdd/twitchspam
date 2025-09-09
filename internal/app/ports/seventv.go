@@ -4,7 +4,8 @@ import "encoding/json"
 
 type SevenTVPort interface {
 	GetUserChannel() (*User, error)
-	IsOnlyEmotes(text string) bool
+	IsOnlyEmotes(words []string) bool
+	CountEmotes(words []string) int
 }
 
 type User struct {

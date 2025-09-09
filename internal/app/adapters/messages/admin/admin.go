@@ -28,10 +28,6 @@ var (
 		Text:    []string{"неизвестная ошибка!"},
 		IsReply: true,
 	}
-	UnknownPunishment = &ports.AnswerType{
-		Text:    []string{"неизвестное наказание!"},
-		IsReply: true,
-	}
 )
 
 type Admin struct {
@@ -89,17 +85,17 @@ func (a *Admin) FindMessages(msg *ports.ChatMessage) *ports.AnswerType {
 			return a.handleMsg(cfg, cmd, args, "default")
 		},
 		"time": a.handleTime,
-		"to": func(cfg *config.Config, cmd string, args []string) *ports.AnswerType {
-			return a.handleTo(cfg, cmd, args, "default")
+		"p": func(cfg *config.Config, cmd string, args []string) *ports.AnswerType {
+			return a.handlePunishments(cfg, cmd, args, "default")
 		},
-		"rto": func(cfg *config.Config, cmd string, args []string) *ports.AnswerType {
-			return a.handleRto(cfg, cmd, args, "default")
+		"rp": func(cfg *config.Config, cmd string, args []string) *ports.AnswerType {
+			return a.handleDurationResetPunishments(cfg, cmd, args, "default")
 		},
 		"mwlen": func(cfg *config.Config, cmd string, args []string) *ports.AnswerType {
 			return a.handleMwLen(cfg, cmd, args, "default")
 		},
-		"mwt": func(cfg *config.Config, cmd string, args []string) *ports.AnswerType {
-			return a.handleMwt(cfg, cmd, args, "default")
+		"mwp": func(cfg *config.Config, cmd string, args []string) *ports.AnswerType {
+			return a.handleMwPunishment(cfg, cmd, args, "default")
 		},
 		"min_gap": func(cfg *config.Config, cmd string, args []string) *ports.AnswerType {
 			return a.handleMinGap(cfg, cmd, args, "default")
@@ -117,7 +113,7 @@ func (a *Admin) FindMessages(msg *ports.ChatMessage) *ports.AnswerType {
 		"mark": func(cfg *config.Config, cmd string, args []string) *ports.AnswerType {
 			return a.handleMarkers(cfg, cmd, args, msg.Chatter.Username)
 		},
-		"link": a.handleLink,
+		"cmd": a.handleCommand,
 	}
 
 	handler, ok := handlers[cmd]
@@ -141,24 +137,6 @@ func (a *Admin) FindMessages(msg *ports.ChatMessage) *ports.AnswerType {
 		Text:    []string{"успешно!"},
 		IsReply: true,
 	}
-}
-
-func parsePunishment(punishment string) (string, int, error) {
-	punishment = strings.TrimSpace(punishment)
-	if punishment == "-" {
-		return "delete", 0, nil
-	}
-
-	if punishment == "0" {
-		return "ban", 0, nil
-	}
-
-	duration, err := strconv.Atoi(punishment)
-	if err != nil || duration < 1 || duration > 1209600 {
-		return "", 0, fmt.Errorf("invalid timeout value")
-	}
-
-	return "timeout", duration, nil
 }
 
 func parseIntArg(args []string, min, max int) (int, bool) {
@@ -194,4 +172,48 @@ func regexExists(list []*regexp2.Regexp, re *regexp2.Regexp) bool {
 		}
 	}
 	return false
+}
+
+func parsePunishment(punishment string, allowInherit bool) (config.Punishment, error) {
+	punishment = strings.TrimSpace(punishment)
+	if punishment == "-" {
+		return config.Punishment{Action: "delete"}, nil
+	}
+
+	if allowInherit && punishment == "*" {
+		return config.Punishment{Action: "inherit"}, nil
+	}
+
+	if punishment == "0" {
+		return config.Punishment{Action: "ban"}, nil
+	}
+
+	duration, err := strconv.Atoi(punishment)
+	if err != nil || duration < 1 || duration > 1209600 {
+		return config.Punishment{}, fmt.Errorf("invalid timeout value")
+	}
+
+	return config.Punishment{Action: "timeout", Duration: duration}, nil
+}
+
+func formatPunishments(punishments []config.Punishment) []string {
+	result := make([]string, 0, len(punishments))
+	for _, p := range punishments {
+		result = append(result, formatPunishment(p))
+	}
+	return result
+}
+
+func formatPunishment(punishment config.Punishment) string {
+	var result string
+	switch punishment.Action {
+	case "delete":
+		result = "удаление сообщения"
+	case "timeout":
+		result = fmt.Sprintf("таймаут (%d)", punishment.Duration)
+	case "ban":
+		result = "бан"
+	}
+
+	return result
 }

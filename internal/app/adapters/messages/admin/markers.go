@@ -47,7 +47,7 @@ func (a *Admin) handleMarkersAdd(cfg *config.Config, markerCmd string, args []st
 
 	userKey := username + "_" + a.stream.ChannelID()
 	if _, ok := cfg.Markers[userKey]; !ok {
-		cfg.Markers[userKey] = make(map[string][]*config.Markers)
+		cfg.Markers[userKey] = make(map[string][]config.Markers)
 	}
 
 	live, err := a.api.GetLiveStream()
@@ -56,7 +56,7 @@ func (a *Admin) handleMarkersAdd(cfg *config.Config, markerCmd string, args []st
 		return UnknownError
 	}
 
-	marker := &config.Markers{
+	marker := config.Markers{
 		StreamID:  live.ID,
 		CreatedAt: time.Now(),
 		Timecode:  time.Since(live.StartedAt),
@@ -87,7 +87,7 @@ func (a *Admin) handleMarkersList(cfg *config.Config, _ string, args []string, u
 		}
 	}
 
-	formatMarker := func(m *config.Markers, vods map[string]string) string {
+	formatMarker := func(m config.Markers, vods map[string]string) string {
 		timecode := fmt.Sprintf("%02dh%02dm%02ds",
 			int(m.Timecode.Hours()),
 			int(m.Timecode.Minutes())%60,

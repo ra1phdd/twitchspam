@@ -54,15 +54,22 @@ func (a *Admin) handleMwAdd(cfg *config.Config, mwCmd string, args []string) *po
 			}
 		}
 
-		action, duration, errParse := parsePunishment(punishArg)
-		if errParse != nil {
-			return UnknownPunishment
+		var punishments []config.Punishment
+		punishmentsArgs := strings.Split(punishArg, ",")
+		for _, pa := range punishmentsArgs {
+			p, err := parsePunishment(pa, false)
+			if err != nil {
+				return &ports.AnswerType{
+					Text:    []string{fmt.Sprintf("не удалось распарсить наказания (%s)!", pa)},
+					IsReply: true,
+				}
+			}
+			punishments = append(punishments, p)
 		}
 
-		cfg.Mword[word] = &config.Mword{
-			Action:   action,
-			Duration: duration,
-			Regexp:   re,
+		cfg.Mword[word] = config.Mword{
+			Punishments: punishments,
+			Regexp:      re,
 		}
 	}
 
@@ -94,7 +101,7 @@ func (a *Admin) handleMwList(cfg *config.Config, _ string, _ []string) *ports.An
 
 	var parts []string
 	for word, mw := range cfg.Mword {
-		parts = append(parts, fmt.Sprintf("- %s (action: %s, duration: %d)", word, mw.Action, mw.Duration))
+		parts = append(parts, fmt.Sprintf("- %s (punishments: %s)", word, formatPunishments(mw.Punishments)))
 	}
 	msg := "мворды: \n" + strings.Join(parts, "\n")
 

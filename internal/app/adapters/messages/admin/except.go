@@ -37,7 +37,7 @@ func (a *Admin) handleExList(cfg *config.Config, _ string, _ []string) *ports.An
 
 	var parts []string
 	for word, ex := range cfg.Spam.Exceptions {
-		parts = append(parts, fmt.Sprintf("- %s (message_limit: %d, timeout: %d)", word, ex.MessageLimit, ex.Timeout))
+		parts = append(parts, fmt.Sprintf("- %s (message_limit: %d, punishments: %s)", word, ex.MessageLimit, formatPunishments(ex.Punishments)))
 	}
 	msg := "исключения: \n" + strings.Join(parts, "\n")
 
@@ -65,12 +65,23 @@ func (a *Admin) handleExAdd(cfg *config.Config, _ string, args []string) *ports.
 		}
 	}
 
-	timeout, err := strconv.Atoi(args[1])
-	if err != nil {
-		return &ports.AnswerType{
-			Text:    []string{"не указана длительность таймаута!"},
-			IsReply: true,
+	var punishments []config.Punishment
+	punishmentsArgs := strings.Split(args[1], ",")
+	for _, pa := range punishmentsArgs {
+		p, err := parsePunishment(pa, true)
+		if err != nil {
+			return &ports.AnswerType{
+				Text:    []string{fmt.Sprintf("не удалось распарсить наказания (%s)!", pa)},
+				IsReply: true,
+			}
 		}
+
+		if p.Action == "inherit" {
+			punishments = cfg.Spam.SettingsDefault.Punishments
+			break
+		}
+
+		punishments = append(punishments, p)
 	}
 
 	words := a.regexp.SplitWords(strings.Join(args[2:], " "))
@@ -88,9 +99,9 @@ func (a *Admin) handleExAdd(cfg *config.Config, _ string, args []string) *ports.
 			}
 		}
 
-		cfg.Spam.Exceptions[w] = &config.SpamExceptionsSettings{
+		cfg.Spam.Exceptions[w] = config.SpamExceptionsSettings{
 			MessageLimit: messageLimit,
-			Timeout:      timeout,
+			Punishments:  punishments,
 			Regexp:       re,
 		}
 	}
@@ -102,12 +113,7 @@ func (a *Admin) handleExSet(cfg *config.Config, _ string, args []string) *ports.
 	if len(args) < 3 {
 		return NonParametr
 	}
-
 	field := args[0]
-	value, err := strconv.Atoi(args[1])
-	if err != nil {
-		return NonParametr
-	}
 
 	var updated, notFound []string
 	words := a.regexp.SplitWords(strings.Join(args[2:], " "))
@@ -116,9 +122,31 @@ func (a *Admin) handleExSet(cfg *config.Config, _ string, args []string) *ports.
 		if exWord, ok := cfg.Spam.Exceptions[w]; ok {
 			switch field {
 			case "ml":
+				value, err := strconv.Atoi(args[1])
+				if err != nil {
+					return NonParametr
+				}
 				exWord.MessageLimit = value
-			case "to":
-				exWord.Timeout = value
+			case "p":
+				var punishments []config.Punishment
+				punishmentsArgs := strings.Split(args[1], ",")
+				for _, pa := range punishmentsArgs {
+					p, err := parsePunishment(pa, true)
+					if err != nil {
+						return &ports.AnswerType{
+							Text:    []string{fmt.Sprintf("не удалось распарсить наказания (%s)!", pa)},
+							IsReply: true,
+						}
+					}
+
+					if p.Action == "inherit" {
+						punishments = cfg.Spam.SettingsDefault.Punishments
+						break
+					}
+
+					punishments = append(punishments, p)
+				}
+				exWord.Punishments = punishments
 			default:
 				return NonParametr
 			}

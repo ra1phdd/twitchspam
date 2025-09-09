@@ -8,7 +8,7 @@ import (
 type APIPort interface {
 	GetChannelID(username string) (string, error)
 	GetLiveStream() (*Stream, error)
-	GetUrlVOD(streams []*config.Markers) (map[string]string, error)
+	GetUrlVOD(streams []config.Markers) (map[string]string, error)
 	SendChatMessage(message string) error
 	DeleteChatMessage(messageID string) error
 	TimeoutUser(userID string, duration int, reason string)

@@ -14,7 +14,7 @@ type CheckerPort interface {
 	Check(msg *ChatMessage) *CheckerAction
 	CheckBanwords(text, textOriginal string) *CheckerAction
 	CheckAds(text string, username string) *CheckerAction
-	CheckMwords(text string) *CheckerAction
+	CheckMwords(text, username string) *CheckerAction
 }
 
 type AnswerType struct {

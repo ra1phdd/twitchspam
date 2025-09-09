@@ -8,7 +8,6 @@ import (
 	"time"
 	"twitchspam/internal/app/adapters/seventv"
 	"twitchspam/internal/app/domain"
-	"twitchspam/internal/app/domain/regex"
 	"twitchspam/internal/app/infrastructure/config"
 	"twitchspam/internal/app/infrastructure/storage"
 	"twitchspam/internal/app/ports"
@@ -30,7 +29,14 @@ type Checker struct {
 
 	stream   ports.StreamPort
 	stats    ports.StatsPort
-	timeouts ports.StorePort[Empty]
+	timeouts struct {
+		spam             ports.StorePort[Empty]
+		emote            ports.StorePort[Empty]
+		exceptionsSpam   ports.StorePort[Empty]
+		exceptionsEmotes ports.StorePort[Empty]
+		mword            ports.StorePort[Empty]
+		mwordGroup       ports.StorePort[Empty]
+	}
 	messages ports.StorePort[string]
 	bwords   ports.BanwordsPort
 	sevenTV  ports.SevenTVPort
@@ -38,15 +44,27 @@ type Checker struct {
 	irc      ports.IRCPort
 }
 
-func NewCheck(log logger.Logger, cfg *config.Config, stream ports.StreamPort, stats ports.StatsPort, bwords ports.BanwordsPort, regexp *regex.Regex, irc ports.IRCPort) *Checker {
+func NewCheck(log logger.Logger, cfg *config.Config, stream ports.StreamPort, stats ports.StatsPort, bwords ports.BanwordsPort, regexp ports.RegexPort, irc ports.IRCPort) *Checker {
 	return &Checker{
 		log:    log,
 		cfg:    cfg,
 		stream: stream,
 		stats:  stats,
-		timeouts: storage.New[Empty](runtime.NumCPU(), 500*time.Millisecond, func() int {
-			return 15
-		}),
+		timeouts: struct {
+			spam             ports.StorePort[Empty]
+			emote            ports.StorePort[Empty]
+			exceptionsSpam   ports.StorePort[Empty]
+			exceptionsEmotes ports.StorePort[Empty]
+			mword            ports.StorePort[Empty]
+			mwordGroup       ports.StorePort[Empty]
+		}{
+			spam:             storage.New[Empty](runtime.NumCPU(), 500*time.Millisecond, func() int { return 15 }),
+			emote:            storage.New[Empty](runtime.NumCPU(), 500*time.Millisecond, func() int { return 15 }),
+			exceptionsSpam:   storage.New[Empty](runtime.NumCPU(), 500*time.Millisecond, func() int { return 15 }),
+			exceptionsEmotes: storage.New[Empty](runtime.NumCPU(), 500*time.Millisecond, func() int { return 15 }),
+			mword:            storage.New[Empty](runtime.NumCPU(), 500*time.Millisecond, func() int { return 15 }),
+			mwordGroup:       storage.New[Empty](runtime.NumCPU(), 500*time.Millisecond, func() int { return 15 }),
+		},
 		messages: storage.New[string](runtime.NumCPU(), 500*time.Millisecond, func() int {
 			defLimit := float64(cfg.Spam.SettingsDefault.MessageLimit*cfg.Spam.SettingsDefault.MinGapMessages) / cfg.Spam.SettingsDefault.SimilarityThreshold
 			vipLimit := float64(cfg.Spam.SettingsVIP.MessageLimit*cfg.Spam.SettingsVIP.MinGapMessages) / cfg.Spam.SettingsVIP.SimilarityThreshold
@@ -64,33 +82,25 @@ func (c *Checker) Check(msg *ports.ChatMessage) *ports.CheckerAction {
 	if action := c.checkBypass(msg); action != nil {
 		return action
 	}
+	lowerText := strings.ToLower(msg.Message.Text)
+	normalizedText := domain.NormalizeText(lowerText)
 
-	text := strings.ToLower(domain.NormalizeText(msg.Message.Text))
-	words := strings.Fields(text)
-
-	if !c.cfg.Spam.SettingsEmotes.Enabled && (msg.Message.EmoteOnly || c.sevenTV.IsOnlyEmotes(msg.Message.Text)) {
-		return &ports.CheckerAction{Type: None}
-	}
-
-	if action := c.CheckBanwords(text, msg.Message.Text); action != nil {
+	if action := c.CheckBanwords(normalizedText, msg.Message.Text); action != nil {
 		return action
 	}
 
-	if action := c.CheckAds(msg.Message.Text, msg.Chatter.Username); action != nil {
+	if action := c.CheckAds(lowerText, msg.Chatter.Username); action != nil {
 		return action
 	}
 
-	for _, t := range []string{text, msg.Message.Text} {
-		if action := c.CheckMwords(t); action != nil {
+	for _, t := range []string{normalizedText, msg.Message.Text} {
+		if action := c.CheckMwords(t, msg.Chatter.Username); action != nil {
 			return action
 		}
 	}
 
-	if action := c.checkWordLength(msg, words); action != nil {
-		return action
-	}
-
-	if action := c.checkSpam(msg, text); action != nil {
+	c.messages.Push(msg.Chatter.Username, normalizedText, time.Duration(c.cfg.Spam.CheckWindowSeconds)*time.Second)
+	if action := c.checkSpam(msg, normalizedText); action != nil {
 		return action
 	}
 
@@ -98,7 +108,7 @@ func (c *Checker) Check(msg *ports.ChatMessage) *ports.CheckerAction {
 }
 
 func (c *Checker) checkBypass(msg *ports.ChatMessage) *ports.CheckerAction {
-	if !c.cfg.Enabled || msg.Chatter.IsBroadcaster || msg.Chatter.IsMod || !c.cfg.Spam.SettingsDefault.Enabled ||
+	if !c.cfg.Enabled || msg.Chatter.IsBroadcaster || msg.Chatter.IsMod ||
 		(c.cfg.Spam.Mode == "online" && !c.stream.IsLive()) {
 		return &ports.CheckerAction{Type: None}
 	}
@@ -122,7 +132,7 @@ func (c *Checker) CheckBanwords(text, textOriginal string) *ports.CheckerAction 
 }
 
 func (c *Checker) CheckAds(text string, username string) *ports.CheckerAction {
-	if !strings.Contains(text, "twitch.tv/") {
+	if !strings.Contains(text, "twitch.tv/") || strings.Contains(text, "twitch.tv/"+strings.ToLower(c.stream.ChannelName())) {
 		return nil
 	}
 
@@ -137,13 +147,14 @@ func (c *Checker) CheckAds(text string, username string) *ports.CheckerAction {
 	}
 }
 
-func (c *Checker) CheckMwords(text string) *ports.CheckerAction {
+func (c *Checker) CheckMwords(text, username string) *ports.CheckerAction {
 	words := c.regexp.SplitWordsBySpace(text)
-	makeAction := func(action string, reason string, duration int) *ports.CheckerAction {
+	makeAction := func(punishments []config.Punishment, reason string, countPunishments int) *ports.CheckerAction {
+		action, dur := domain.GetPunishment(punishments, countPunishments)
 		return &ports.CheckerAction{
 			Type:     action,
 			Reason:   fmt.Sprintf("мворд (%s)", reason),
-			Duration: time.Duration(duration) * time.Second,
+			Duration: dur,
 		}
 	}
 
@@ -158,7 +169,7 @@ func (c *Checker) CheckMwords(text string) *ports.CheckerAction {
 			}
 
 			if c.regexp.MatchPhrase(words, phrase) {
-				return makeAction(group.Action, phrase, group.Duration)
+				return makeAction(group.Punishments, phrase, c.timeouts.mwordGroup.Len(username))
 			}
 		}
 
@@ -168,7 +179,7 @@ func (c *Checker) CheckMwords(text string) *ports.CheckerAction {
 			}
 
 			if isMatch, _ := re.MatchString(text); isMatch {
-				return makeAction(group.Action, "регулярное выражение", group.Duration)
+				return makeAction(group.Punishments, "регулярное выражение", c.timeouts.mwordGroup.Len(username))
 			}
 		}
 	}
@@ -180,33 +191,12 @@ func (c *Checker) CheckMwords(text string) *ports.CheckerAction {
 
 		if mw.Regexp != nil {
 			if isMatch, _ := mw.Regexp.MatchString(text); isMatch {
-				return makeAction(mw.Action, "регулярное выражение", mw.Duration)
+				return makeAction(mw.Punishments, "регулярное выражение", c.timeouts.mword.Len(username))
 			}
 		}
 
 		if c.regexp.MatchPhrase(words, strings.ToLower(phrase)) {
-			return makeAction(mw.Action, phrase, mw.Duration)
-		}
-	}
-	return nil
-}
-
-func (c *Checker) checkWordLength(msg *ports.ChatMessage, words []string) *ports.CheckerAction {
-	settings := c.cfg.Spam.SettingsDefault
-	if msg.Chatter.IsVip {
-		settings = c.cfg.Spam.SettingsVIP
-		if !settings.Enabled {
-			return &ports.CheckerAction{Type: None}
-		}
-	}
-
-	for _, word := range words {
-		if settings.MaxWordLength > 0 && len(word) >= settings.MaxWordLength && settings.MaxWordTimeoutTime > 0 {
-			return &ports.CheckerAction{
-				Type:     Timeout,
-				Reason:   "превышена максимальная длина слова",
-				Duration: time.Duration(settings.MaxWordTimeoutTime) * time.Second,
-			}
+			return makeAction(mw.Punishments, phrase, c.timeouts.mword.Len(username))
 		}
 	}
 	return nil
@@ -216,11 +206,44 @@ func (c *Checker) checkSpam(msg *ports.ChatMessage, text string) *ports.CheckerA
 	settings := c.cfg.Spam.SettingsDefault
 	if msg.Chatter.IsVip {
 		settings = c.cfg.Spam.SettingsVIP
-		if !settings.Enabled {
-			return nil
-		}
 	}
 
+	if !settings.Enabled {
+		return nil
+	}
+
+	countSpam := c.countSpamMessages(msg, text, settings)
+	if countSpam < settings.MessageLimit {
+		return nil
+	}
+
+	words := c.regexp.SplitWordsBySpace(text)
+	if action := c.handleWordLength(words, settings); action != nil {
+		return action
+	}
+
+	if action := c.handleEmotes(msg, text, words, countSpam); action != nil {
+		c.messages.CleanupUser(msg.Chatter.Username)
+		return action
+	}
+
+	if action := c.handleExceptions(msg, text, words, countSpam); action != nil {
+		c.messages.CleanupUser(msg.Chatter.Username)
+		return action
+	}
+
+	action, dur := domain.GetPunishment(settings.Punishments, c.timeouts.spam.Len(msg.Chatter.Username))
+	c.timeouts.spam.Push(msg.Chatter.Username, Empty{}, time.Duration(settings.DurationResetPunishments)*time.Second)
+
+	c.messages.CleanupUser(msg.Chatter.Username)
+	return &ports.CheckerAction{
+		Type:     action,
+		Reason:   "спам",
+		Duration: dur,
+	}
+}
+
+func (c *Checker) countSpamMessages(msg *ports.ChatMessage, text string, settings config.SpamSettings) int {
 	var countSpam, gap int
 	c.messages.ForEach(msg.Chatter.Username, func(item *storage.Item[string]) {
 		similarity := domain.JaccardSimilarity(text, item.Data)
@@ -233,16 +256,83 @@ func (c *Checker) checkSpam(msg *ports.ChatMessage, text string) *ports.CheckerA
 			gap++
 		}
 	})
+	return countSpam
+}
 
-	if countSpam < settings.MessageLimit-1 {
-		c.messages.Push(msg.Chatter.Username, text, time.Duration(c.cfg.Spam.CheckWindowSeconds)*time.Second)
+func (c *Checker) handleWordLength(words []string, settings config.SpamSettings) *ports.CheckerAction {
+	for _, word := range words {
+		if settings.MaxWordLength > 0 && len(word) >= settings.MaxWordLength {
+			return &ports.CheckerAction{
+				Type:     settings.MaxWordPunishment.Action,
+				Reason:   "превышена максимальная длина слова",
+				Duration: time.Duration(settings.MaxWordPunishment.Duration) * time.Second,
+			}
+		}
+	}
+	return nil
+}
+
+func (c *Checker) handleEmotes(msg *ports.ChatMessage, text string, words []string, countSpam int) *ports.CheckerAction {
+	if !c.cfg.Spam.SettingsEmotes.Enabled {
 		return nil
 	}
 
-	words := c.regexp.SplitWordsBySpace(text)
-	var dur time.Duration
-	isException := false
+	if action := c.handleEmotesExceptions(msg, text, words, countSpam); action != nil {
+		return action
+	}
 
+	if countSpam < c.cfg.Spam.SettingsEmotes.MessageLimit {
+		return nil
+	}
+
+	if c.cfg.Spam.SettingsEmotes.MaxEmotesLength > 0 && c.sevenTV.CountEmotes(words) >= c.cfg.Spam.SettingsEmotes.MaxEmotesLength {
+		return &ports.CheckerAction{
+			Type:     c.cfg.Spam.SettingsEmotes.MaxEmotesPunishment.Action,
+			Reason:   "превышено максимальное кол-во эмоутов в сообщении",
+			Duration: time.Duration(c.cfg.Spam.SettingsEmotes.MaxEmotesPunishment.Duration) * time.Second,
+		}
+	}
+
+	action, dur := domain.GetPunishment(c.cfg.Spam.SettingsEmotes.Punishments, c.timeouts.emote.Len(msg.Chatter.Username))
+	c.timeouts.emote.Push(msg.Chatter.Username, Empty{}, time.Duration(c.cfg.Spam.SettingsEmotes.DurationResetPunishments)*time.Second)
+
+	return &ports.CheckerAction{
+		Type:     action,
+		Reason:   "спам эмоутов",
+		Duration: dur,
+	}
+}
+
+func (c *Checker) handleEmotesExceptions(msg *ports.ChatMessage, text string, words []string, countSpam int) *ports.CheckerAction {
+	for phrase, ex := range c.cfg.Spam.SettingsEmotes.Exceptions {
+		if ex.Regexp != nil {
+			if isMatch, _ := ex.Regexp.MatchString(text); !isMatch {
+				continue
+			}
+		}
+
+		if !c.regexp.MatchPhrase(words, strings.ToLower(phrase)) {
+			continue
+		}
+
+		if countSpam < ex.MessageLimit {
+			return nil
+		}
+
+		action, dur := domain.GetPunishment(ex.Punishments, c.timeouts.exceptionsEmotes.Len(msg.Chatter.Username))
+		c.timeouts.exceptionsEmotes.Push(msg.Chatter.Username, Empty{}, time.Duration(c.cfg.Spam.SettingsEmotes.DurationResetPunishments)*time.Second)
+
+		return &ports.CheckerAction{
+			Type:     action,
+			Reason:   "спам",
+			Duration: dur,
+		}
+	}
+
+	return nil
+}
+
+func (c *Checker) handleExceptions(msg *ports.ChatMessage, text string, words []string, countSpam int) *ports.CheckerAction {
 	for phrase, ex := range c.cfg.Spam.Exceptions {
 		if ex.Regexp != nil {
 			if isMatch, _ := ex.Regexp.MatchString(text); !isMatch {
@@ -254,25 +344,19 @@ func (c *Checker) checkSpam(msg *ports.ChatMessage, text string) *ports.CheckerA
 			continue
 		}
 
-		if countSpam < ex.MessageLimit-1 {
-			c.messages.Push(msg.Chatter.Username, text, time.Duration(c.cfg.Spam.CheckWindowSeconds)*time.Second)
+		if countSpam < ex.MessageLimit {
 			return nil
 		}
-		dur = time.Duration(ex.Timeout) * time.Second
-		isException = true
-		break
+
+		action, dur := domain.GetPunishment(ex.Punishments, c.timeouts.exceptionsSpam.Len(msg.Chatter.Username))
+		c.timeouts.exceptionsSpam.Push(msg.Chatter.Username, Empty{}, time.Duration(c.cfg.Spam.SettingsDefault.DurationResetPunishments)*time.Second)
+
+		return &ports.CheckerAction{
+			Type:     action,
+			Reason:   "спам",
+			Duration: dur,
+		}
 	}
 
-	if !isException {
-		sec := domain.GetByIndexOrLast(settings.Timeouts, c.timeouts.Len(msg.Chatter.Username))
-		dur = time.Duration(sec) * time.Second
-		c.timeouts.Push(msg.Chatter.Username, Empty{}, time.Duration(settings.ResetTimeoutSeconds)*time.Second)
-	}
-
-	c.messages.CleanupUser(msg.Chatter.Username)
-	return &ports.CheckerAction{
-		Type:     Timeout,
-		Reason:   "спам",
-		Duration: dur,
-	}
+	return nil
 }

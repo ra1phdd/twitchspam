@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"strings"
 	"twitchspam/internal/app/ports"
 	"twitchspam/pkg/logger"
 )
@@ -54,9 +53,7 @@ func (sv *SevenTV) GetUserChannel() (*ports.User, error) {
 	return &user, nil
 }
 
-func (sv *SevenTV) IsOnlyEmotes(text string) bool {
-	words := strings.Fields(text)
-
+func (sv *SevenTV) IsOnlyEmotes(words []string) bool {
 	if len(words) == 0 {
 		return false
 	}
@@ -68,6 +65,21 @@ func (sv *SevenTV) IsOnlyEmotes(text string) bool {
 	}
 
 	return true
+}
+
+func (sv *SevenTV) CountEmotes(words []string) int {
+	if len(words) == 0 {
+		return 0
+	}
+
+	var emotes int
+	for _, w := range words {
+		if _, ok := sv.emoteSet[w]; ok {
+			emotes++
+		}
+	}
+
+	return emotes
 }
 
 //func (sv *SevenTV) runEventLoop() {

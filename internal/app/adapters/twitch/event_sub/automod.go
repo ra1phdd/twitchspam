@@ -23,7 +23,7 @@ func (es *EventSub) checkAutomod(am AutomodHoldEvent) {
 		es.api.BanUser(am.UserID, action.Reason)
 	}
 
-	action := es.checker.CheckMwords(text)
+	action := es.checker.CheckMwords(text, am.UserName)
 	if action == nil {
 		return
 	}

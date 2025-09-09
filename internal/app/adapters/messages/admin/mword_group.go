@@ -50,8 +50,8 @@ func (a *Admin) handleMwgList(cfg *config.Config, _ string, _ []string) *ports.A
 			re = append(re, pattern.String())
 		}
 
-		parts = append(parts, fmt.Sprintf("- %s (enabled: %v, action: %s, duration: %d, words: %s, regexp: %s)",
-			name, mwg.Enabled, mwg.Action, mwg.Duration, strings.Join(mwg.Words, ", "), strings.Join(re, ", ")))
+		parts = append(parts, fmt.Sprintf("- %s (enabled: %v, punishments: (%s), words: %s, regexp: %s)",
+			name, mwg.Enabled, formatPunishments(mwg.Punishments), strings.Join(mwg.Words, ", "), strings.Join(re, ", ")))
 	}
 	msg := "мворд группы: \n" + strings.Join(parts, "\n")
 
@@ -80,15 +80,22 @@ func (a *Admin) handleMwgCreate(cfg *config.Config, _ string, args []string) *po
 		}
 	}
 
-	action, duration, err := parsePunishment(punishment)
-	if err != nil {
-		return UnknownPunishment
+	var punishments []config.Punishment
+	punishmentsArgs := strings.Split(punishment, ",")
+	for _, pa := range punishmentsArgs {
+		p, err := parsePunishment(pa, false)
+		if err != nil {
+			return &ports.AnswerType{
+				Text:    []string{fmt.Sprintf("не удалось распарсить наказания (%s)!", pa)},
+				IsReply: true,
+			}
+		}
+		punishments = append(punishments, p)
 	}
 
-	cfg.MwordGroup[groupName] = &config.MwordGroup{
-		Action:   action,
-		Duration: duration,
-		Enabled:  true,
+	cfg.MwordGroup[groupName] = config.MwordGroup{
+		Punishments: punishments,
+		Enabled:     true,
 	}
 
 	return nil
@@ -102,17 +109,24 @@ func (a *Admin) handleMwgSet(cfg *config.Config, _ string, args []string) *ports
 	groupName := args[0]
 	punishment := args[1]
 
-	if _, exists := cfg.MwordGroup[groupName]; !exists {
+	mwg, exists := cfg.MwordGroup[groupName]
+	if !exists {
 		return NotFoundMwordGroup
 	}
 
-	action, duration, err := parsePunishment(punishment)
-	if err != nil {
-		return UnknownPunishment
+	var punishments []config.Punishment
+	punishmentsArgs := strings.Split(punishment, ",")
+	for _, pa := range punishmentsArgs {
+		p, err := parsePunishment(pa, false)
+		if err != nil {
+			return &ports.AnswerType{
+				Text:    []string{fmt.Sprintf("не удалось распарсить наказания (%s)!", pa)},
+				IsReply: true,
+			}
+		}
+		punishments = append(punishments, p)
 	}
-
-	cfg.MwordGroup[groupName].Action = action
-	cfg.MwordGroup[groupName].Duration = duration
+	mwg.Punishments = punishments
 
 	return nil
 }
@@ -192,10 +206,11 @@ func (a *Admin) handleMwgOnOff(cfg *config.Config, cmd string, args []string) *p
 	}
 	groupName := args[0]
 
-	if _, exists := cfg.MwordGroup[groupName]; !exists {
+	mwg, exists := cfg.MwordGroup[groupName]
+	if !exists {
 		return NotFoundMwordGroup
 	}
-	cfg.MwordGroup[groupName].Enabled = cmd == "on"
+	mwg.Enabled = cmd == "on"
 
 	return nil
 }
