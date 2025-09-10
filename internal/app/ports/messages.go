@@ -1,9 +1,16 @@
 package ports
 
-import "time"
+import (
+	"time"
+	"twitchspam/internal/app/infrastructure/config"
+)
 
 type AdminPort interface {
 	FindMessages(msg *ChatMessage) *AnswerType
+}
+
+type AdminCommand interface {
+	Execute(cfg *config.Config, cmd string, args []string) *AnswerType
 }
 
 type UserPort interface {

@@ -213,7 +213,7 @@ func (c *Checker) checkSpam(msg *ports.ChatMessage, text string) *ports.CheckerA
 	}
 
 	countSpam := c.countSpamMessages(msg, text, settings)
-	if countSpam < settings.MessageLimit {
+	if countSpam <= settings.MessageLimit-1 {
 		return nil
 	}
 
@@ -223,12 +223,16 @@ func (c *Checker) checkSpam(msg *ports.ChatMessage, text string) *ports.CheckerA
 	}
 
 	if action := c.handleEmotes(msg, text, words, countSpam); action != nil {
-		c.messages.CleanupUser(msg.Chatter.Username)
+		if action.Type != None {
+			c.messages.CleanupUser(msg.Chatter.Username)
+		}
 		return action
 	}
 
 	if action := c.handleExceptions(msg, text, words, countSpam); action != nil {
-		c.messages.CleanupUser(msg.Chatter.Username)
+		if action.Type != None {
+			c.messages.CleanupUser(msg.Chatter.Username)
+		}
 		return action
 	}
 
@@ -273,7 +277,7 @@ func (c *Checker) handleWordLength(words []string, settings config.SpamSettings)
 }
 
 func (c *Checker) handleEmotes(msg *ports.ChatMessage, text string, words []string, countSpam int) *ports.CheckerAction {
-	if !c.cfg.Spam.SettingsEmotes.Enabled {
+	if !c.cfg.Spam.SettingsEmotes.Enabled || !c.sevenTV.IsOnlyEmotes(words) {
 		return nil
 	}
 
@@ -281,8 +285,8 @@ func (c *Checker) handleEmotes(msg *ports.ChatMessage, text string, words []stri
 		return action
 	}
 
-	if countSpam < c.cfg.Spam.SettingsEmotes.MessageLimit {
-		return nil
+	if countSpam <= c.cfg.Spam.SettingsEmotes.MessageLimit-1 {
+		return &ports.CheckerAction{Type: None}
 	}
 
 	if c.cfg.Spam.SettingsEmotes.MaxEmotesLength > 0 && c.sevenTV.CountEmotes(words) >= c.cfg.Spam.SettingsEmotes.MaxEmotesLength {
@@ -315,8 +319,8 @@ func (c *Checker) handleEmotesExceptions(msg *ports.ChatMessage, text string, wo
 			continue
 		}
 
-		if countSpam < ex.MessageLimit {
-			return nil
+		if countSpam <= ex.MessageLimit-1 {
+			return &ports.CheckerAction{Type: None}
 		}
 
 		action, dur := domain.GetPunishment(ex.Punishments, c.timeouts.exceptionsEmotes.Len(msg.Chatter.Username))
@@ -344,8 +348,8 @@ func (c *Checker) handleExceptions(msg *ports.ChatMessage, text string, words []
 			continue
 		}
 
-		if countSpam < ex.MessageLimit {
-			return nil
+		if countSpam <= ex.MessageLimit-1 {
+			return &ports.CheckerAction{Type: None}
 		}
 
 		action, dur := domain.GetPunishment(ex.Punishments, c.timeouts.exceptionsSpam.Len(msg.Chatter.Username))

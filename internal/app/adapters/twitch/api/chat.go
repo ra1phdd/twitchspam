@@ -77,7 +77,7 @@ func (t *Twitch) TimeoutUser(userID string, duration int, reason string) {
 	params.Set("broadcaster_id", t.stream.ChannelID())
 	params.Set("moderator_id", t.cfg.App.UserID)
 
-	err = t.doTwitchRequest("DELETE", "https://api.twitch.tv/helix/moderation/bans?"+params.Encode(), bytes.NewReader(bodyBytes), nil)
+	err = t.doTwitchRequest("POST", "https://api.twitch.tv/helix/moderation/bans?"+params.Encode(), bytes.NewReader(bodyBytes), nil)
 	if err != nil {
 		t.log.Error("Failed to send timeout request", err)
 	}

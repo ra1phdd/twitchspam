@@ -254,6 +254,7 @@ func (m *Manager) readParseValidate(path string) (*Config, error) {
 }
 
 func (m *Manager) validate(cfg *Config) error {
+	// app
 	validLevels := map[string]bool{"debug": true, "info": true, "warn": true, "error": true}
 	if cfg.App.LogLevel != "" && !validLevels[cfg.App.LogLevel] {
 		return fmt.Errorf("app.log_level must be one of debug, info, warn, error; got %s", cfg.App.LogLevel)
@@ -275,26 +276,38 @@ func (m *Manager) validate(cfg *Config) error {
 		return errors.New("app.mod_channels is required")
 	}
 
-	if cfg.Spam.SettingsDefault.SimilarityThreshold < 0.1 || cfg.Spam.SettingsDefault.SimilarityThreshold > 1 {
-		return errors.New("spam.similarity_threshold must be in [0,1]")
-	}
+	// spam
 	if cfg.Spam.Mode != "online" && cfg.Spam.Mode != "always" {
 		return errors.New("spam.mode must be 'online' or 'always'")
-	}
-	if cfg.Spam.SettingsDefault.MessageLimit < 2 || cfg.Spam.SettingsDefault.MessageLimit > 15 {
-		return errors.New("spam.message_limit must be 2..15")
 	}
 	if cfg.Spam.CheckWindowSeconds < 1 || cfg.Spam.CheckWindowSeconds > 300 {
 		return errors.New("spam.check_window_seconds must be 1..300")
 	}
-	if cfg.Spam.SettingsDefault.DurationResetPunishments < 0 {
-		return errors.New("spam.reset_timeout_seconds must be >= 0")
+	if cfg.Spam.DelayAutomod < 0 || cfg.Spam.DelayAutomod > 10 {
+		return errors.New("spam.delay_automod must be between 0 and 10")
 	}
-	if cfg.Spam.SettingsDefault.MaxWordLength < 0 {
-		return errors.New("spam.max_word must be >= 0")
+
+	spam := map[string]SpamSettings{
+		"default": cfg.Spam.SettingsDefault,
+		"vip":     cfg.Spam.SettingsVIP,
 	}
-	if cfg.Spam.SettingsDefault.MinGapMessages < 0 || cfg.Spam.SettingsDefault.MinGapMessages > 15 {
-		return errors.New("spam.min_gap_messages must be in 0..15")
+
+	for _, s := range spam {
+		if s.SimilarityThreshold < 0.1 || cfg.Spam.SettingsDefault.SimilarityThreshold > 1 {
+			return errors.New("spam.similarity_threshold must be in [0.1,1.0]")
+		}
+		if cfg.Spam.SettingsDefault.MessageLimit < 2 || cfg.Spam.SettingsDefault.MessageLimit > 15 {
+			return errors.New("spam.message_limit must be 2..15")
+		}
+		if cfg.Spam.SettingsDefault.DurationResetPunishments < 0 {
+			return errors.New("spam.reset_timeout_seconds must be >= 0")
+		}
+		if cfg.Spam.SettingsDefault.MaxWordLength < 0 {
+			return errors.New("spam.max_word must be >= 0")
+		}
+		if cfg.Spam.SettingsDefault.MinGapMessages < 0 || cfg.Spam.SettingsDefault.MinGapMessages > 15 {
+			return errors.New("spam.min_gap_messages must be in 0..15")
+		}
 	}
 
 	if cfg.Spam.Exceptions == nil {

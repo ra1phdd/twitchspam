@@ -92,10 +92,10 @@ func (a *Admin) FindMessages(msg *ports.ChatMessage) *ports.AnswerType {
 			return a.handleDurationResetPunishments(cfg, cmd, args, "default")
 		},
 		"mwlen": func(cfg *config.Config, cmd string, args []string) *ports.AnswerType {
-			return a.handleMwLen(cfg, cmd, args, "default")
+			return a.handleMaxLen(cfg, cmd, args, "default")
 		},
 		"mwp": func(cfg *config.Config, cmd string, args []string) *ports.AnswerType {
-			return a.handleMwPunishment(cfg, cmd, args, "default")
+			return a.handleMaxPunishment(cfg, cmd, args, "default")
 		},
 		"min_gap": func(cfg *config.Config, cmd string, args []string) *ports.AnswerType {
 			return a.handleMinGap(cfg, cmd, args, "default")

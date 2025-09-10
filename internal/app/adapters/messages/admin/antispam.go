@@ -156,11 +156,11 @@ func (a *Admin) handlePunishments(cfg *config.Config, _ string, args []string, t
 			break
 		}
 
-		allowInherit := typeSpam == "default"
+		allowInherit := typeSpam != "default"
 		p, err := parsePunishment(str, allowInherit)
 		if err != nil {
 			return &ports.AnswerType{
-				Text:    []string{fmt.Sprintf("не удалось распарсить наказания (%s)!", str)},
+				Text:    []string{fmt.Sprintf("не удалось распарсить наказание (%s)!", str)},
 				IsReply: true,
 			}
 		}
@@ -216,7 +216,7 @@ func (a *Admin) handleDurationResetPunishments(cfg *config.Config, _ string, arg
 	}
 }
 
-func (a *Admin) handleMwLen(cfg *config.Config, _ string, args []string, typeSpam string) *ports.AnswerType {
+func (a *Admin) handleMaxLen(cfg *config.Config, _ string, args []string, typeSpam string) *ports.AnswerType {
 	var target *int
 	var maxInt int
 	var errText string
@@ -247,13 +247,12 @@ func (a *Admin) handleMwLen(cfg *config.Config, _ string, args []string, typeSpa
 	}
 }
 
-func (a *Admin) handleMwPunishment(cfg *config.Config, _ string, args []string, typeSpam string) *ports.AnswerType {
+func (a *Admin) handleMaxPunishment(cfg *config.Config, _ string, args []string, typeSpam string) *ports.AnswerType {
 	if len(args) == 0 {
 		return NonParametr
 	}
 
-	allowInherit := typeSpam == "default"
-	p, err := parsePunishment(args[0], allowInherit)
+	p, err := parsePunishment(args[0], true)
 	if err != nil {
 		return &ports.AnswerType{
 			Text:    []string{fmt.Sprintf("не удалось распарсить наказание (%s)!", args[0])},
@@ -424,10 +423,10 @@ func (a *Admin) handleVip(cfg *config.Config, _ string, args []string) *ports.An
 			return a.handleDurationResetPunishments(cfg, cmd, args, "vip")
 		},
 		"mwlen": func(cfg *config.Config, cmd string, args []string) *ports.AnswerType {
-			return a.handleMwLen(cfg, cmd, args, "vip")
+			return a.handleMaxLen(cfg, cmd, args, "vip")
 		},
 		"mwp": func(cfg *config.Config, cmd string, args []string) *ports.AnswerType {
-			return a.handleMwPunishment(cfg, cmd, args, "vip")
+			return a.handleMaxPunishment(cfg, cmd, args, "vip")
 		},
 		"min_gap": func(cfg *config.Config, cmd string, args []string) *ports.AnswerType {
 			return a.handleMinGap(cfg, cmd, args, "vip")
@@ -463,10 +462,10 @@ func (a *Admin) handleEmote(cfg *config.Config, _ string, args []string) *ports.
 			return a.handleDurationResetPunishments(cfg, cmd, args, "emote")
 		},
 		"melen": func(cfg *config.Config, cmd string, args []string) *ports.AnswerType {
-			return a.handleMwLen(cfg, cmd, args, "emote")
+			return a.handleMaxLen(cfg, cmd, args, "emote")
 		},
 		"mep": func(cfg *config.Config, cmd string, args []string) *ports.AnswerType {
-			return a.handleMwPunishment(cfg, cmd, args, "emote")
+			return a.handleMaxPunishment(cfg, cmd, args, "emote")
 		},
 	}
 
