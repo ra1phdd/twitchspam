@@ -1,7 +1,9 @@
 package ports
 
 import (
+	"strings"
 	"time"
+	"twitchspam/internal/app/domain"
 	"twitchspam/internal/app/infrastructure/config"
 )
 
@@ -52,12 +54,86 @@ type Chatter struct {
 
 type Message struct {
 	ID        string
-	Text      string
+	Text      MessageText
 	EmoteOnly bool     // если Fragments type == "text" отсутствует
 	Emotes    []string // text в Fragments при type == "emote"
+}
+
+type MessageText struct {
+	Original string
+
+	lower          *string
+	normalized     *string
+	lowerNorm      *string
+	words          *[]string
+	wordsLower     *[]string
+	wordsNorm      *[]string
+	wordsLowerNorm *[]string
 }
 
 type Reply struct {
 	ParentChatter Chatter
 	ParentMessage Message
+}
+
+func (m *MessageText) Lower() string {
+	if m.lower == nil {
+		l := strings.ToLower(m.Original)
+		m.lower = &l
+	}
+	return *m.lower
+}
+
+func (m *MessageText) Normalized() string {
+	if m.normalized == nil {
+		n := domain.NormalizeText(m.Original)
+		m.normalized = &n
+	}
+	return *m.normalized
+}
+
+func (m *MessageText) LowerNorm() string {
+	if m.lowerNorm == nil {
+		ln := strings.ToLower(m.Normalized())
+		m.lowerNorm = &ln
+	}
+	return *m.lowerNorm
+}
+
+func (m *MessageText) Words() []string {
+	if m.words == nil {
+		w := strings.Fields(m.Original)
+		m.words = &w
+	}
+	return *m.words
+}
+
+func (m *MessageText) WordsLower() []string {
+	if m.wordsLower == nil {
+		wl := make([]string, len(m.Words()))
+		for i, w := range m.Words() {
+			wl[i] = strings.ToLower(w)
+		}
+		m.wordsLower = &wl
+	}
+	return *m.wordsLower
+}
+
+func (m *MessageText) WordsNorm() []string {
+	if m.wordsNorm == nil {
+		wn := strings.Fields(m.Normalized())
+		m.wordsNorm = &wn
+	}
+	return *m.wordsNorm
+}
+
+func (m *MessageText) WordsLowerNorm() []string {
+	if m.wordsLowerNorm == nil {
+		wln := make([]string, len(m.WordsNorm()))
+		for i, w := range m.WordsNorm() {
+			wln[i] = strings.ToLower(w)
+		}
+		m.wordsLowerNorm = &wln
+	}
+	return *m.wordsLowerNorm
 }

@@ -55,11 +55,11 @@ func New(log logger.Logger, manager *config.Manager, stream ports.StreamPort, re
 var startApp = time.Now()
 
 func (a *Admin) FindMessages(msg *ports.ChatMessage) *ports.AnswerType {
-	if !(msg.Chatter.IsBroadcaster || msg.Chatter.IsMod) || !strings.HasPrefix(msg.Message.Text, "!am") {
+	if !(msg.Chatter.IsBroadcaster || msg.Chatter.IsMod) || !strings.HasPrefix(msg.Message.Text.Original, "!am") {
 		return nil
 	}
 
-	parts := strings.Fields(msg.Message.Text)
+	parts := msg.Message.Text.Words()
 	if len(parts) < 2 {
 		return NotFoundCmd
 	}
@@ -126,7 +126,7 @@ func (a *Admin) FindMessages(msg *ports.ChatMessage) *ports.AnswerType {
 	if err := a.manager.Update(func(cfg *config.Config) {
 		result = handler(cfg, cmd, args)
 	}); err != nil {
-		a.log.Error("Failed update config", err, slog.String("msg", msg.Message.Text))
+		a.log.Error("Failed update config", err, slog.String("msg", msg.Message.Text.Original))
 		return UnknownError
 	}
 

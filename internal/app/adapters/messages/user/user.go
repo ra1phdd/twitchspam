@@ -5,7 +5,6 @@ import (
 	"slices"
 	"strings"
 	"time"
-	"twitchspam/internal/app/domain"
 	"twitchspam/internal/app/infrastructure/config"
 	"twitchspam/internal/app/ports"
 	"twitchspam/pkg/logger"
@@ -36,13 +35,11 @@ func New(log logger.Logger, cfg *config.Config, stream ports.StreamPort, stats p
 }
 
 func (u *User) FindMessages(msg *ports.ChatMessage) *ports.AnswerType {
-	text := strings.ToLower(domain.NormalizeText(msg.Message.Text))
 	if _, exists := u.usersLimiter[msg.Chatter.Username]; !exists {
 		u.usersLimiter[msg.Chatter.Username] = rate.NewLimiter(rate.Every(time.Minute), 3)
 	}
-	words := strings.Fields(msg.Message.Text)
 
-	if action := u.handleStats(msg, words); action != nil {
+	if action := u.handleStats(msg, msg.Message.Text.WordsLower()); action != nil {
 		return action
 	}
 
@@ -50,15 +47,15 @@ func (u *User) FindMessages(msg *ports.ChatMessage) *ports.AnswerType {
 		return nil
 	}
 
-	if action := u.handleLinks(msg, words); action != nil {
+	if action := u.handleLinks(msg, msg.Message.Text.WordsLower()); action != nil {
 		return action
 	}
 
-	if action := u.handleAnswers(text); action != nil {
+	if action := u.handleAnswers(msg.Message.Text.Lower()); action != nil {
 		return action
 	}
 
-	if action := u.handleGameQuery(msg, text); action != nil {
+	if action := u.handleGameQuery(msg, msg.Message.Text.Lower()); action != nil {
 		return action
 	}
 
@@ -66,7 +63,7 @@ func (u *User) FindMessages(msg *ports.ChatMessage) *ports.AnswerType {
 }
 
 func (u *User) handleStats(msg *ports.ChatMessage, words []string) *ports.AnswerType {
-	if !strings.HasPrefix(msg.Message.Text, "!stats") || !u.usersLimiter[msg.Chatter.Username].Allow() {
+	if !strings.HasPrefix(msg.Message.Text.Original, "!stats") || !u.usersLimiter[msg.Chatter.Username].Allow() {
 		return nil
 	}
 

@@ -82,25 +82,23 @@ func (c *Checker) Check(msg *ports.ChatMessage) *ports.CheckerAction {
 	if action := c.checkBypass(msg); action != nil {
 		return action
 	}
-	lowerText := strings.ToLower(msg.Message.Text)
-	normalizedText := domain.NormalizeText(lowerText)
 
-	if action := c.CheckBanwords(normalizedText, msg.Message.Text); action != nil {
+	if action := c.CheckBanwords(msg.Message.Text.LowerNorm(), msg.Message.Text.Original); action != nil {
 		return action
 	}
 
-	if action := c.CheckAds(lowerText, msg.Chatter.Username); action != nil {
+	if action := c.CheckAds(msg.Message.Text.Lower(), msg.Chatter.Username); action != nil {
 		return action
 	}
 
-	for _, t := range []string{normalizedText, msg.Message.Text} {
+	for _, t := range []string{msg.Message.Text.LowerNorm(), msg.Message.Text.Original} {
 		if action := c.CheckMwords(t, msg.Chatter.Username); action != nil {
 			return action
 		}
 	}
 
-	c.messages.Push(msg.Chatter.Username, normalizedText, time.Duration(c.cfg.Spam.CheckWindowSeconds)*time.Second)
-	if action := c.checkSpam(msg, normalizedText); action != nil {
+	c.messages.Push(msg.Chatter.Username, msg.Message.Text.Original, time.Duration(c.cfg.Spam.CheckWindowSeconds)*time.Second)
+	if action := c.checkSpam(msg, msg.Message.Text.LowerNorm(), msg.Message.Text.Original); action != nil {
 		return action
 	}
 
@@ -202,7 +200,7 @@ func (c *Checker) CheckMwords(text, username string) *ports.CheckerAction {
 	return nil
 }
 
-func (c *Checker) checkSpam(msg *ports.ChatMessage, text string) *ports.CheckerAction {
+func (c *Checker) checkSpam(msg *ports.ChatMessage, text, textOriginal string) *ports.CheckerAction {
 	settings := c.cfg.Spam.SettingsDefault
 	if msg.Chatter.IsVip {
 		settings = c.cfg.Spam.SettingsVIP
@@ -222,7 +220,7 @@ func (c *Checker) checkSpam(msg *ports.ChatMessage, text string) *ports.CheckerA
 		return action
 	}
 
-	if action := c.handleEmotes(msg, text, words, countSpam); action != nil {
+	if action := c.handleEmotes(msg, text, textOriginal, words, countSpam); action != nil {
 		if action.Type != None {
 			c.messages.CleanupUser(msg.Chatter.Username)
 		}
@@ -276,8 +274,8 @@ func (c *Checker) handleWordLength(words []string, settings config.SpamSettings)
 	return nil
 }
 
-func (c *Checker) handleEmotes(msg *ports.ChatMessage, text string, words []string, countSpam int) *ports.CheckerAction {
-	if !c.cfg.Spam.SettingsEmotes.Enabled || !c.sevenTV.IsOnlyEmotes(words) {
+func (c *Checker) handleEmotes(msg *ports.ChatMessage, text, textOriginal string, words []string, countSpam int) *ports.CheckerAction {
+	if !c.cfg.Spam.SettingsEmotes.Enabled || !(c.sevenTV.IsOnlyEmotes(textOriginal) || msg.Message.EmoteOnly) {
 		return nil
 	}
 

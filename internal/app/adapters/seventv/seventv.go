@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"twitchspam/internal/app/ports"
 	"twitchspam/pkg/logger"
 )
@@ -31,7 +32,7 @@ func New(log logger.Logger, stream ports.StreamPort) *SevenTV {
 
 	s.setID = user.EmoteSetID
 	for _, e := range user.EmoteSet.Emotes {
-		s.emoteSet[e.Name] = struct{}{}
+		s.emoteSet[strings.TrimSpace(e.Name)] = struct{}{}
 	}
 
 	//go s.runEventLoop()
@@ -53,13 +54,14 @@ func (sv *SevenTV) GetUserChannel() (*ports.User, error) {
 	return &user, nil
 }
 
-func (sv *SevenTV) IsOnlyEmotes(words []string) bool {
-	if len(words) == 0 {
+func (sv *SevenTV) IsOnlyEmotes(text string) bool {
+	if text == "" {
 		return false
 	}
+	words := strings.Fields(text)
 
 	for _, w := range words {
-		if _, ok := sv.emoteSet[w]; !ok {
+		if _, ok := sv.emoteSet[strings.TrimSpace(w)]; !ok {
 			return false
 		}
 	}

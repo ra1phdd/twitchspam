@@ -289,8 +289,10 @@ func (es *EventSub) convertMap(msgEvent ChatMessageEvent) *ports.ChatMessage {
 			IsSubscriber:  isSubscriber,
 		},
 		Message: ports.Message{
-			ID:        msgEvent.MessageID,
-			Text:      msgEvent.Message.Text,
+			ID: msgEvent.MessageID,
+			Text: ports.MessageText{
+				Original: msgEvent.Message.Text,
+			},
 			EmoteOnly: emoteOnly,
 			Emotes:    emotes,
 		},
@@ -304,8 +306,10 @@ func (es *EventSub) convertMap(msgEvent ChatMessageEvent) *ports.ChatMessage {
 				Username: msgEvent.Reply.ParentUserName,
 			},
 			ParentMessage: ports.Message{
-				ID:   msgEvent.Reply.ParentMessageID,
-				Text: msgEvent.Reply.ParentMessageBody,
+				ID: msgEvent.Reply.ParentMessageID,
+				Text: ports.MessageText{
+					Original: msgEvent.Reply.ParentMessageBody,
+				},
 			},
 		}
 	}

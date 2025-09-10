@@ -4,10 +4,13 @@ import (
 	"fmt"
 	"math"
 	"sort"
+	"sync"
 	"time"
 )
 
 type Stats struct {
+	mu sync.Mutex
+
 	startTime time.Time
 	endTime   time.Time
 	online    struct {
@@ -26,6 +29,9 @@ func New() *Stats {
 }
 
 func (s *Stats) SetStartTime(t time.Time) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	*s = Stats{
 		startTime: t,
 		endTime:   t,
@@ -42,14 +48,22 @@ func (s *Stats) SetStartTime(t time.Time) {
 }
 
 func (s *Stats) GetStartTime() time.Time {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	return s.startTime
 }
 
 func (s *Stats) SetEndTime(t time.Time) {
+	s.mu.Lock()
 	s.endTime = t
+	s.mu.Unlock()
 }
 
 func (s *Stats) GetEndTime() time.Time {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	return s.endTime
 }
 
@@ -58,15 +72,20 @@ func (s *Stats) SetOnline(viewers int) {
 		return
 	}
 
+	s.mu.Lock()
 	if viewers > s.online.maxViewers {
 		s.online.maxViewers = viewers
 	}
 
 	s.online.sumViewers += int64(viewers)
 	s.online.count++
+	s.mu.Unlock()
 }
 
 func (s *Stats) AddMessage(username string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	if s.countMessages == nil {
 		return
 	}
@@ -75,6 +94,9 @@ func (s *Stats) AddMessage(username string) {
 }
 
 func (s *Stats) AddDeleted(username string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	if s.countDeletes == nil {
 		return
 	}
@@ -83,6 +105,9 @@ func (s *Stats) AddDeleted(username string) {
 }
 
 func (s *Stats) AddTimeout(username string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	if s.countTimeouts == nil {
 		return
 	}
@@ -91,6 +116,9 @@ func (s *Stats) AddTimeout(username string) {
 }
 
 func (s *Stats) AddBan(username string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	if s.countBans == nil {
 		return
 	}
@@ -99,6 +127,9 @@ func (s *Stats) AddBan(username string) {
 }
 
 func (s *Stats) GetStats() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	if s.startTime.IsZero() {
 		return "нет данных за последний стрим"
 	}
@@ -161,6 +192,9 @@ func (s *Stats) GetStats() string {
 }
 
 func (s *Stats) GetUserStats(username string) string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	if s.startTime.IsZero() {
 		return "нет данных за последний стрим"
 	}
