@@ -10,55 +10,97 @@ func NewOptions() *OptionsTemplate {
 	return &OptionsTemplate{}
 }
 
-func (ot *OptionsTemplate) parse(words *[]string) (bool, config.Options) {
-	opts := config.Options{}
+var SpamOptions = map[string]struct{}{
+	"-regex": {}, "-first": {}, "-nosub": {}, "-novip": {},
+	"-norepeat": {}, "-repeat": {}, "-oneword": {}, "-nofirst": {},
+	"-contains": {}, "-nocontains": {}, "-vip": {}, "-sub": {},
+}
+
+var TimersOptions = map[string]struct{}{
+	"-a": {}, "-noa": {}, "-online": {}, "-always": {},
+}
+
+func (ot *OptionsTemplate) parseAll(words *[]string, opts map[string]struct{}) map[string]bool {
 	clean := (*words)[:0]
 
-	isRegex := false
+	founds := make(map[string]bool)
 	for _, w := range *words {
-		switch w {
-		case "-regex":
-			isRegex = true
-		case "-first":
-			*opts.IsFirst = true
-		case "-nosub":
-			*opts.NoSub = true
-		case "-novip":
-			*opts.NoVip = true
-		case "-norepeat":
-			*opts.NoRepeat = true
-		case "-oneword":
-			*opts.OneWord = true
-		case "-contains":
-			*opts.Contains = true
-		case "-sub", "-vip", "-nocontains":
+		if _, ok := opts[w]; ok {
+			founds[w] = true
 			continue
-		default:
-			clean = append(clean, w)
 		}
+
+		clean = append(clean, w)
 	}
 
 	*words = clean
-	return isRegex, opts
+	return founds
 }
 
-func (ot *OptionsTemplate) merge(dst, src *config.Options) {
-	if src.IsFirst != nil {
-		dst.IsFirst = src.IsFirst
+func (ot *OptionsTemplate) parse(words *[]string, opt string) *bool {
+	clean := (*words)[:0]
+
+	var foundOpt *bool
+	for _, w := range *words {
+		if w == opt {
+			*foundOpt = true
+			break
+		}
+
+		clean = append(clean, w)
+
 	}
-	if src.NoSub != nil {
-		dst.NoSub = src.NoSub
+
+	*words = clean
+	return foundOpt
+}
+
+func (ot *OptionsTemplate) merge(dst *config.SpamOptions, src map[string]bool) {
+	if dst == nil {
+		return
 	}
-	if src.NoVip != nil {
-		dst.NoVip = src.NoVip
+
+	if _, ok := src["-nofirst"]; ok {
+		dst.IsFirst = false
 	}
-	if src.NoRepeat != nil {
-		dst.NoRepeat = src.NoRepeat
+
+	if _, ok := src["-first"]; ok {
+		dst.IsFirst = true
 	}
-	if src.OneWord != nil {
-		dst.OneWord = src.OneWord
+
+	if _, ok := src["-nosub"]; ok {
+		dst.NoSub = true
 	}
-	if src.Contains != nil {
-		dst.Contains = src.Contains
+
+	if _, ok := src["-sub"]; ok {
+		dst.NoSub = false
+	}
+
+	if _, ok := src["-novip"]; ok {
+		dst.NoVip = true
+	}
+
+	if _, ok := src["-vip"]; ok {
+		dst.NoVip = false
+	}
+
+	if _, ok := src["-norepeat"]; ok {
+		dst.NoRepeat = true
+	}
+
+	if _, ok := src["-repeat"]; ok {
+		dst.NoRepeat = false
+	}
+
+	if _, ok := src["-oneword"]; ok {
+		dst.OneWord = true
+	}
+
+	if _, ok := src["-noontains"]; ok {
+		dst.Contains = false
+	}
+
+	if _, ok := src["-contains"]; ok {
+		dst.Contains = true
 	}
 }

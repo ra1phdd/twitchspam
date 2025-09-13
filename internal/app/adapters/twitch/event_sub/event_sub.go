@@ -27,11 +27,12 @@ type EventSub struct {
 	user     ports.UserPort
 	template ports.TemplatePort
 	stats    ports.StatsPort
+	timers   ports.TimersPort
 
 	client *http.Client
 }
 
-func New(log logger.Logger, cfg *config.Config, stream ports.StreamPort, api ports.APIPort, checker ports.CheckerPort, admin ports.AdminPort, user ports.UserPort, template ports.TemplatePort, stats ports.StatsPort, client *http.Client) *EventSub {
+func New(log logger.Logger, cfg *config.Config, stream ports.StreamPort, api ports.APIPort, checker ports.CheckerPort, admin ports.AdminPort, user ports.UserPort, template ports.TemplatePort, stats ports.StatsPort, timers ports.TimersPort, client *http.Client) *EventSub {
 	es := &EventSub{
 		log:      log,
 		cfg:      cfg,
@@ -42,7 +43,26 @@ func New(log logger.Logger, cfg *config.Config, stream ports.StreamPort, api por
 		user:     user,
 		template: template,
 		stats:    stats,
+		timers:   timers,
 		client:   client,
+	}
+
+	for cmd, data := range es.cfg.Commands {
+		if data.Timer == nil || !data.Timer.Enabled {
+			continue
+		}
+
+		es.timers.AddTimer(cmd, data.Timer.Interval, true, map[string]any{
+			"text":  data.Text,
+			"count": data.Timer.Count,
+		}, func(args map[string]any) {
+			msg := &ports.AnswerType{}
+			for i := 0; i < args["count"].(int); i++ {
+				msg.Text = append(msg.Text, args["text"].(string))
+			}
+
+			es.api.SendChatMessages(msg)
+		})
 	}
 
 	return es

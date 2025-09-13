@@ -8,7 +8,8 @@ import (
 )
 
 func (a *Admin) handleAntiSpam(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
-	if len(text.Words()) != 3 { // !am as on/off/info
+	words := text.Words()
+	if len(words) < 3 { // !am as on/off/info
 		return NonParametr
 	}
 
@@ -22,7 +23,7 @@ func (a *Admin) handleAntiSpam(cfg *config.Config, text *ports.MessageText) *por
 		"info": a.handleAntiSpamInfo,
 	}
 
-	antispamCmd := text.Words()[2]
+	antispamCmd := words[2]
 	if handler, ok := handlers[antispamCmd]; ok {
 		return handler(cfg, text)
 	}
@@ -117,16 +118,17 @@ func (a *Admin) handleMode(cfg *config.Config, mode string) *ports.AnswerType {
 }
 
 func (a *Admin) handleSim(cfg *config.Config, text *ports.MessageText, typeSpam string) *ports.AnswerType {
-	target, idx := &cfg.Spam.SettingsDefault.SimilarityThreshold, 2 // !am sim <значение> или !am vip sim <значение>
+	words := text.Words()
+	target, idx := &cfg.Spam.SettingsDefault.SimilarityThreshold, 2
 	if typeSpam == "vip" {
 		target, idx = &cfg.Spam.SettingsVIP.SimilarityThreshold, 3
 	}
 
-	if len(text.Words()) != idx+1 {
+	if len(words) < idx+1 { // !am sim <значение> или !am vip sim <значение>
 		return NonParametr
 	}
 
-	if val, ok := parseFloatArg(text.Words()[idx], 0.1, 1); ok {
+	if val, ok := parseFloatArg(words[idx], 0.1, 1); ok {
 		*target = val
 		return nil
 	}
@@ -138,6 +140,7 @@ func (a *Admin) handleSim(cfg *config.Config, text *ports.MessageText, typeSpam 
 }
 
 func (a *Admin) handleMsg(cfg *config.Config, text *ports.MessageText, typeSpam string) *ports.AnswerType {
+	words := text.Words()
 	target, idx := &cfg.Spam.SettingsDefault.MessageLimit, 2
 	if typeSpam == "vip" {
 		target, idx = &cfg.Spam.SettingsVIP.MessageLimit, 3
@@ -145,11 +148,11 @@ func (a *Admin) handleMsg(cfg *config.Config, text *ports.MessageText, typeSpam 
 		target, idx = &cfg.Spam.SettingsEmotes.MessageLimit, 3
 	}
 
-	if len(text.Words()) != idx+1 { // !am msg <значение> или !am vip/emote msg <значение>
+	if len(words) < idx+1 { // !am msg <значение> или !am vip/emote msg <значение>
 		return NonParametr
 	}
 
-	if val, ok := parseIntArg(text.Words()[idx], 2, 15); ok {
+	if val, ok := parseIntArg(words[idx], 2, 15); ok {
 		*target = val
 		return nil
 	}
@@ -161,6 +164,7 @@ func (a *Admin) handleMsg(cfg *config.Config, text *ports.MessageText, typeSpam 
 }
 
 func (a *Admin) handlePunishments(cfg *config.Config, text *ports.MessageText, typeSpam string) *ports.AnswerType {
+	words := text.Words()
 	target, idx := &cfg.Spam.SettingsDefault.Punishments, 2
 	if typeSpam == "vip" {
 		target, idx = &cfg.Spam.SettingsVIP.Punishments, 3
@@ -168,7 +172,7 @@ func (a *Admin) handlePunishments(cfg *config.Config, text *ports.MessageText, t
 		target, idx = &cfg.Spam.SettingsEmotes.Punishments, 3
 	}
 
-	if len(text.Words()) != idx+1 { // !am p <наказания через запятую> или !am vip/emote p <наказания через запятую>
+	if len(words) < idx+1 { // !am p <наказания через запятую> или !am vip/emote p <наказания через запятую>
 		return NonParametr
 	}
 
@@ -215,6 +219,7 @@ func (a *Admin) handlePunishments(cfg *config.Config, text *ports.MessageText, t
 }
 
 func (a *Admin) handleDurationResetPunishments(cfg *config.Config, text *ports.MessageText, typeSpam string) *ports.AnswerType {
+	words := text.Words()
 	target, idx := &cfg.Spam.SettingsDefault.DurationResetPunishments, 2
 	if typeSpam == "vip" {
 		target, idx = &cfg.Spam.SettingsVIP.DurationResetPunishments, 3
@@ -222,11 +227,11 @@ func (a *Admin) handleDurationResetPunishments(cfg *config.Config, text *ports.M
 		target, idx = &cfg.Spam.SettingsEmotes.DurationResetPunishments, 3
 	}
 
-	if len(text.Words()) != idx+1 { // !am rp <значение> или !am vip/emote rp <значение>
+	if len(words) < idx+1 { // !am rp <значение> или !am vip/emote rp <значение>
 		return NonParametr
 	}
 
-	if val, ok := parseIntArg(text.Words()[idx], 1, 86400); ok {
+	if val, ok := parseIntArg(words[idx], 1, 86400); ok {
 		*target = val
 		return nil
 	}
@@ -238,6 +243,7 @@ func (a *Admin) handleDurationResetPunishments(cfg *config.Config, text *ports.M
 }
 
 func (a *Admin) handleMaxLen(cfg *config.Config, text *ports.MessageText, typeSpam string) *ports.AnswerType {
+	words := text.Words()
 	params := map[string]struct {
 		target *int
 		idx    int
@@ -250,11 +256,11 @@ func (a *Admin) handleMaxLen(cfg *config.Config, text *ports.MessageText, typeSp
 	}
 
 	if param, ok := params[typeSpam]; ok {
-		if len(text.Words()) != param.idx+1 { // !am mwlen <значение> или !am vip/emote mwlen/melen <значение>
+		if len(words) < param.idx+1 { // !am mwlen <значение> или !am vip/emote mwlen/melen <значение>
 			return NonParametr
 		}
 
-		if val, ok := parseIntArg(text.Words()[param.idx], 0, param.max); ok {
+		if val, ok := parseIntArg(words[param.idx], 0, param.max); ok {
 			*param.target = val
 			return nil
 		}
@@ -269,6 +275,7 @@ func (a *Admin) handleMaxLen(cfg *config.Config, text *ports.MessageText, typeSp
 }
 
 func (a *Admin) handleMaxPunishment(cfg *config.Config, text *ports.MessageText, typeSpam string) *ports.AnswerType {
+	words := text.Words()
 	target, idx := &cfg.Spam.SettingsDefault.MaxWordPunishment, 2
 	if typeSpam == "vip" {
 		target, idx = &cfg.Spam.SettingsVIP.MaxWordPunishment, 3
@@ -276,14 +283,14 @@ func (a *Admin) handleMaxPunishment(cfg *config.Config, text *ports.MessageText,
 		target, idx = &cfg.Spam.SettingsEmotes.MaxEmotesPunishment, 3
 	}
 
-	if len(text.Words()) != idx+1 { // !am mwp <наказание> или !am vip/emote mwp/mep <наказание>
+	if len(words) < idx+1 { // !am mwp <наказание> или !am vip/emote mwp/mep <наказание>
 		return NonParametr
 	}
 
-	p, err := parsePunishment(text.Words()[idx], true)
+	p, err := parsePunishment(words[idx], true)
 	if err != nil {
 		return &ports.AnswerType{
-			Text:    []string{fmt.Sprintf("не удалось распарсить наказание (%s)!", text.Words()[2])},
+			Text:    []string{fmt.Sprintf("не удалось распарсить наказание (%s)!", words[2])},
 			IsReply: true,
 		}
 	}
@@ -304,16 +311,17 @@ func (a *Admin) handleMaxPunishment(cfg *config.Config, text *ports.MessageText,
 }
 
 func (a *Admin) handleMinGap(cfg *config.Config, text *ports.MessageText, typeSpam string) *ports.AnswerType {
+	words := text.Words()
 	target, idx := &cfg.Spam.SettingsDefault.MinGapMessages, 2
 	if typeSpam == "vip" {
 		target, idx = &cfg.Spam.SettingsVIP.MinGapMessages, 3
 	}
 
-	if len(text.Words()) != idx+1 { // !am min_gap <значение> или !am vip min_gap <значение>
+	if len(words) < idx+1 { // !am min_gap <значение> или !am vip min_gap <значение>
 		return NonParametr
 	}
 
-	if val, ok := parseIntArg(text.Words()[idx], 0, 15); ok {
+	if val, ok := parseIntArg(words[idx], 0, 15); ok {
 		*target = val
 		return nil
 	}
@@ -325,11 +333,12 @@ func (a *Admin) handleMinGap(cfg *config.Config, text *ports.MessageText, typeSp
 }
 
 func (a *Admin) handleTime(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
-	if len(text.Words()) != 3 { // !am time <значение>
+	words := text.Words()
+	if len(words) < 3 { // !am time <значение>
 		return NonParametr
 	}
 
-	if val, ok := parseIntArg(text.Words()[2], 1, 300); ok {
+	if val, ok := parseIntArg(words[2], 1, 300); ok {
 		cfg.Spam.CheckWindowSeconds = val
 		return nil
 	}
@@ -341,12 +350,13 @@ func (a *Admin) handleTime(cfg *config.Config, text *ports.MessageText) *ports.A
 }
 
 func (a *Admin) handleAdd(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
-	if len(text.Words()) != 3 { // !am add <пользователи через запятую>
+	words := text.Words()
+	if len(words) < 3 { // !am add <пользователи через запятую>
 		return NonParametr
 	}
 
 	var added, alreadyExists []string
-	for _, user := range strings.Split(text.Tail(2), ",") {
+	for _, user := range strings.Split(words[2], ",") {
 		user = strings.TrimSpace(user)
 		if user == "" {
 			continue
@@ -360,34 +370,17 @@ func (a *Admin) handleAdd(cfg *config.Config, text *ports.MessageText) *ports.An
 		}
 	}
 
-	var msgParts []string
-	if len(added) > 0 {
-		msgParts = append(msgParts, fmt.Sprintf("добавлены в список: %s", strings.Join(added, ", ")))
-	}
-	if len(alreadyExists) > 0 {
-		msgParts = append(msgParts, fmt.Sprintf("уже в списке: %s", strings.Join(alreadyExists, ", ")))
-	}
-
-	if len(msgParts) == 0 {
-		return &ports.AnswerType{
-			Text:    []string{"пользователи не указаны!"},
-			IsReply: true,
-		}
-	}
-
-	return &ports.AnswerType{
-		Text:    []string{strings.Join(msgParts, " • ") + "!"},
-		IsReply: true,
-	}
+	return a.buildResponse(added, "добавлены в список", alreadyExists, "уже есть в списке", "пользователи не указаны")
 }
 
 func (a *Admin) handleDel(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
-	if len(text.Words()) != 3 { // !am del <пользователи через запятую>
+	words := text.Words()
+	if len(words) < 3 { // !am del <пользователи через запятую>
 		return NonParametr
 	}
 
 	var removed, notFound []string
-	for _, user := range strings.Split(text.Tail(2), ",") {
+	for _, user := range strings.Split(words[2], ",") {
 		user = strings.TrimSpace(user)
 		if user == "" {
 			continue
@@ -401,29 +394,12 @@ func (a *Admin) handleDel(cfg *config.Config, text *ports.MessageText) *ports.An
 		}
 	}
 
-	var msgParts []string
-	if len(removed) > 0 {
-		msgParts = append(msgParts, fmt.Sprintf("удалены из списка: %s", strings.Join(removed, ", ")))
-	}
-	if len(notFound) > 0 {
-		msgParts = append(msgParts, fmt.Sprintf("не найдены: %s", strings.Join(notFound, ", ")))
-	}
-
-	if len(msgParts) == 0 {
-		return &ports.AnswerType{
-			Text:    []string{"пользователи не указаны!"},
-			IsReply: true,
-		}
-	}
-
-	return &ports.AnswerType{
-		Text:    []string{strings.Join(msgParts, " • ") + "!"},
-		IsReply: true,
-	}
+	return a.buildResponse(removed, "удалены из списока", notFound, "не найдены", "пользователи не указаны")
 }
 
 func (a *Admin) handleVip(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
-	if len(text.Words()) < 3 { // !am vip on/off/sim/...
+	words := text.Words()
+	if len(words) < 3 { // !am vip on/off/sim/...
 		return NonParametr
 	}
 
@@ -457,7 +433,7 @@ func (a *Admin) handleVip(cfg *config.Config, text *ports.MessageText) *ports.An
 		},
 	}
 
-	vipCmd := text.Words()[2]
+	vipCmd := words[2]
 	if handler, ok := handlers[vipCmd]; ok {
 		return handler(cfg, text)
 	}
@@ -465,7 +441,8 @@ func (a *Admin) handleVip(cfg *config.Config, text *ports.MessageText) *ports.An
 }
 
 func (a *Admin) handleEmote(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
-	if len(text.Words()) < 3 { // !am emote on/off/sim/...
+	words := text.Words()
+	if len(words) < 3 { // !am emote on/off/sim/...
 		return NonParametr
 	}
 
@@ -493,7 +470,7 @@ func (a *Admin) handleEmote(cfg *config.Config, text *ports.MessageText) *ports.
 		},
 	}
 
-	emoteCmd := text.Words()[2]
+	emoteCmd := words[2]
 	if handler, ok := handlers[emoteCmd]; ok {
 		return handler(cfg, text)
 	}

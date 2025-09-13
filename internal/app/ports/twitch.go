@@ -119,7 +119,7 @@ func (m *MessageText) Words() []string {
 				}
 
 				if buf.Len() > 0 {
-					words = append(words, buf.String())
+					words = append(words, strings.TrimSpace(buf.String()))
 					buf.Reset()
 				}
 			} else {

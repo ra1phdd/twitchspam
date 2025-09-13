@@ -6,11 +6,12 @@ import (
 )
 
 func (a *Admin) handleDelayAutomod(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
-	if len(text.Words()) != 3 { // !am da <значение>
+	words := text.Words()
+	if len(words) < 3 { // !am da <значение>
 		return NonParametr
 	}
 
-	if val, ok := parseIntArg(text.Words()[2], 0, 10); ok {
+	if val, ok := parseIntArg(words[2], 0, 10); ok {
 		cfg.Spam.DelayAutomod = val
 		return nil
 	}

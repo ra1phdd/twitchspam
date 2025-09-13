@@ -8,7 +8,9 @@ import (
 type Timer struct {
 	ID       string
 	Interval time.Duration
-	Task     func()
+	Task     func(map[string]any)
+	Args     map[string]any
+	Repeat   bool
 	stop     chan struct{}
 }
 
@@ -48,10 +50,10 @@ func (tw *TimingWheel) start() {
 		currentSlot := tw.slots[tw.currentPos]
 
 		for id, timer := range currentSlot.timers {
-			go timer.Task() // запуск задачи
-			// для повторяющихся таймеров перепланируем
-			nextPos := (tw.currentPos + int(timer.Interval/tw.tickDuration)) % tw.slotsCount
-			if nextPos != tw.currentPos {
+			go timer.Task(timer.Args)
+
+			if timer.Repeat {
+				nextPos := (tw.currentPos + int(timer.Interval/tw.tickDuration)) % tw.slotsCount
 				tw.slots[nextPos].timers[id] = timer
 			}
 			delete(currentSlot.timers, id)
@@ -62,7 +64,7 @@ func (tw *TimingWheel) start() {
 	}
 }
 
-func (tw *TimingWheel) AddTimer(id string, interval time.Duration, task func()) {
+func (tw *TimingWheel) AddTimer(id string, interval time.Duration, repeat bool, args map[string]any, task func(map[string]any)) {
 	tw.mutex.Lock()
 	defer tw.mutex.Unlock()
 
@@ -70,6 +72,8 @@ func (tw *TimingWheel) AddTimer(id string, interval time.Duration, task func()) 
 		ID:       id,
 		Interval: interval,
 		Task:     task,
+		Args:     args,
+		Repeat:   repeat,
 		stop:     make(chan struct{}),
 	}
 
@@ -83,20 +87,5 @@ func (tw *TimingWheel) RemoveTimer(id string) {
 
 	for _, s := range tw.slots {
 		delete(s.timers, id)
-	}
-}
-
-func (tw *TimingWheel) UpdateTimer(id string, newInterval time.Duration) {
-	tw.mutex.Lock()
-	defer tw.mutex.Unlock()
-
-	for _, s := range tw.slots {
-		if t, ok := s.timers[id]; ok {
-			delete(s.timers, id)
-			t.Interval = newInterval
-			pos := (tw.currentPos + int(newInterval/tw.tickDuration)) % tw.slotsCount
-			tw.slots[pos].timers[id] = t
-			return
-		}
 	}
 }

@@ -102,7 +102,7 @@ func (u *User) handleCommands(msg *ports.ChatMessage) *ports.AnswerType {
 			continue
 		}
 
-		if link, ok := u.cfg.Links[word]; ok {
+		if link, ok := u.cfg.Commands[word]; ok {
 			text = u.template.ReplacePlaceholders(link.Text, words)
 			break
 		}
@@ -125,7 +125,7 @@ func (u *User) handleCommands(msg *ports.ChatMessage) *ports.AnswerType {
 
 func (u *User) handleAnswers(msg *ports.ChatMessage) *ports.AnswerType {
 	words := msg.Message.Text.WordsLower()
-	for _, answer := range u.cfg.Answers {
+	for _, answer := range u.cfg.Asks {
 		if !answer.Enabled {
 			continue
 		}

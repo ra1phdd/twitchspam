@@ -2,7 +2,6 @@ package admin
 
 import (
 	"fmt"
-	"github.com/dlclark/regexp2"
 	"log/slog"
 	"math"
 	"strconv"
@@ -35,9 +34,10 @@ type Admin struct {
 	fs       ports.FileServerPort
 	api      ports.APIPort
 	template ports.TemplatePort
+	timers   ports.TimersPort
 }
 
-func New(log logger.Logger, manager *config.Manager, stream ports.StreamPort, api ports.APIPort, template ports.TemplatePort, fs ports.FileServerPort) *Admin {
+func New(log logger.Logger, manager *config.Manager, stream ports.StreamPort, api ports.APIPort, template ports.TemplatePort, fs ports.FileServerPort, timers ports.TimersPort) *Admin {
 	return &Admin{
 		log:      log,
 		manager:  manager,
@@ -45,6 +45,7 @@ func New(log logger.Logger, manager *config.Manager, stream ports.StreamPort, ap
 		fs:       fs,
 		api:      api,
 		template: template,
+		timers:   timers,
 	}
 }
 
@@ -55,11 +56,12 @@ func (a *Admin) FindMessages(msg *ports.ChatMessage) *ports.AnswerType {
 		return nil
 	}
 
-	if len(msg.Message.Text.Words()) < 2 {
+	words := msg.Message.Text.Words()
+	if len(words) < 2 {
 		return NotFoundCmd
 	}
 
-	cmd := msg.Message.Text.Words()[1]
+	cmd := words[1]
 	if cmd == "ping" {
 		return a.handlePing()
 	}
@@ -117,7 +119,8 @@ func (a *Admin) FindMessages(msg *ports.ChatMessage) *ports.AnswerType {
 		"mark": func(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
 			return a.handleMarkers(cfg, text, msg.Chatter.Username)
 		},
-		"cmd": a.handleCommand,
+		"cmd":    a.handleCommand,
+		"timers": a.handleTimersList,
 	}
 
 	handler, ok := handlers[cmd]
@@ -163,15 +166,6 @@ func parseFloatArg(valStr string, min, max float64) (float64, bool) {
 	return math.Round(val*100) / 100, true
 }
 
-func regexExists(list []*regexp2.Regexp, re *regexp2.Regexp) bool {
-	for _, r := range list {
-		if r.String() == re.String() {
-			return true
-		}
-	}
-	return false
-}
-
 func parsePunishment(punishment string, allowInherit bool) (config.Punishment, error) {
 	punishment = strings.TrimSpace(punishment)
 	if punishment == "-" {
@@ -214,4 +208,106 @@ func formatPunishment(punishment config.Punishment) string {
 	}
 
 	return result
+}
+
+func (a *Admin) mergeSpamOptions(dst *config.SpamOptions, src map[string]bool) *config.SpamOptions {
+	if dst == nil {
+		dst = &config.SpamOptions{}
+	}
+
+	if _, ok := src["-nofirst"]; ok {
+		dst.IsFirst = false
+	}
+
+	if _, ok := src["-first"]; ok {
+		dst.IsFirst = true
+	}
+
+	if _, ok := src["-nosub"]; ok {
+		dst.NoSub = true
+	}
+
+	if _, ok := src["-sub"]; ok {
+		dst.NoSub = false
+	}
+
+	if _, ok := src["-novip"]; ok {
+		dst.NoVip = true
+	}
+
+	if _, ok := src["-vip"]; ok {
+		dst.NoVip = false
+	}
+
+	if _, ok := src["-norepeat"]; ok {
+		dst.NoRepeat = true
+	}
+
+	if _, ok := src["-repeat"]; ok {
+		dst.NoRepeat = false
+	}
+
+	if _, ok := src["-oneword"]; ok {
+		dst.OneWord = true
+	}
+
+	if _, ok := src["-noontains"]; ok {
+		dst.Contains = false
+	}
+
+	if _, ok := src["-contains"]; ok {
+		dst.Contains = true
+	}
+
+	return dst
+}
+
+func (a *Admin) mergeTimerOptions(dst *config.TimerOptions, src map[string]bool) *config.TimerOptions {
+	if dst == nil {
+		dst = &config.TimerOptions{}
+	}
+
+	if _, ok := src["-noa"]; ok {
+		dst.IsAnnounce = false
+	}
+
+	if _, ok := src["-a"]; ok {
+		dst.IsAnnounce = true
+	}
+
+	if _, ok := src["-online"]; ok {
+		dst.IsAlways = false
+	}
+
+	if _, ok := src["-always"]; ok {
+		dst.IsAlways = true
+	}
+
+	return dst
+}
+
+func (a *Admin) buildResponse(arg1 []string, nameArg1 string, arg2 []string, nameArg2, err string) *ports.AnswerType {
+	var msgParts []string
+	if len(arg1) > 0 {
+		msgParts = append(msgParts, fmt.Sprintf("%s: %s", nameArg1, strings.Join(arg1, ", ")))
+	}
+	if len(arg2) > 0 {
+		msgParts = append(msgParts, fmt.Sprintf("%s: %s", nameArg2, strings.Join(arg2, ", ")))
+	}
+
+	if len(msgParts) == 0 {
+		return &ports.AnswerType{
+			Text:    []string{err + "!"},
+			IsReply: true,
+		}
+	}
+
+	if len(arg2) == 0 {
+		return nil
+	}
+
+	return &ports.AnswerType{
+		Text:    []string{strings.Join(msgParts, " • ") + "!"},
+		IsReply: true,
+	}
 }

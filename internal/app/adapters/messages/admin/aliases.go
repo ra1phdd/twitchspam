@@ -8,7 +8,8 @@ import (
 )
 
 func (a *Admin) handleAliases(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
-	if len(text.Words()) < 3 { // !am alias add/del/list
+	words := text.Words()
+	if len(words) < 3 { // !am alias add/del/list
 		return NonParametr
 	}
 
@@ -18,7 +19,7 @@ func (a *Admin) handleAliases(cfg *config.Config, text *ports.MessageText) *port
 		"list": a.handleAliasesList,
 	}
 
-	aliasCmd := text.Words()[2]
+	aliasCmd := words[2]
 	if handler, ok := handlers[aliasCmd]; ok {
 		return handler(cfg, text)
 	}
@@ -26,27 +27,28 @@ func (a *Admin) handleAliases(cfg *config.Config, text *ports.MessageText) *port
 }
 
 func (a *Admin) handleAliasesAdd(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
-	if len(text.Words()) < 6 { // !am alias add <алиас> from <оригинальная команда>
+	words := text.Words()
+	if len(words) < 6 { // !am alias add <алиас> from <оригинальная команда>
 		return NonParametr
 	}
 
 	var fromIndex = -1
-	for i, arg := range text.Words() {
+	for i, arg := range words {
 		if arg == "from" {
 			fromIndex = i
 			break
 		}
 	}
 
-	if fromIndex == -1 || fromIndex == 0 || fromIndex == len(text.Words())-1 {
+	if fromIndex == -1 || fromIndex == 0 || fromIndex == len(words)-1 {
 		return &ports.AnswerType{
 			Text:    []string{"некорректный синтаксис!"},
 			IsReply: true,
 		}
 	}
 
-	alias := strings.Join(text.Words()[3:fromIndex], " ")
-	original := strings.Join(text.Words()[fromIndex+1:], " ")
+	alias := strings.Join(words[3:fromIndex], " ")
+	original := strings.Join(words[fromIndex+1:], " ")
 
 	if !strings.HasPrefix(alias, "!") {
 		alias = "!" + alias
@@ -65,11 +67,12 @@ func (a *Admin) handleAliasesAdd(cfg *config.Config, text *ports.MessageText) *p
 }
 
 func (a *Admin) handleAliasesDel(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
-	if len(text.Words()) < 4 { // !am alias del <алиас>
+	words := text.Words()
+	if len(words) < 4 { // !am alias del <алиас>
 		return NonParametr
 	}
 
-	alias := strings.Join(text.Words()[3:], " ")
+	alias := text.Tail(3)
 	if !strings.HasPrefix(alias, "!") {
 		alias = "!" + alias
 	}

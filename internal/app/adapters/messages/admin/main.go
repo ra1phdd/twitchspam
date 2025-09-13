@@ -34,7 +34,8 @@ func (a *Admin) handleOnOff(cfg *config.Config, enabled bool) *ports.AnswerType 
 }
 
 func (a *Admin) handleCategory(_ *config.Config, text *ports.MessageText) *ports.AnswerType {
-	if len(text.Words()) < 3 { // !am game <игра>
+	words := text.Words()
+	if len(words) < 3 { // !am game <игра>
 		return NonParametr
 	}
 
@@ -57,10 +58,16 @@ func (a *Admin) handleCategory(_ *config.Config, text *ports.MessageText) *ports
 }
 
 func (a *Admin) handleStatus(cfg *config.Config, _ *ports.MessageText) *ports.AnswerType {
+	if !cfg.Enabled {
+		return &ports.AnswerType{
+			Text:    []string{"бот выключен!"},
+			IsReply: true,
+		}
+	}
+
 	return &ports.AnswerType{
 		Text: []string{strings.Join([]string{
-			map[bool]string{true: "бот включён", false: "бот выключен"}[cfg.Enabled],
-			map[bool]string{true: "антиспам включён", false: "антиспам выключен"}[cfg.Spam.SettingsDefault.Enabled],
+			"бот включён", map[bool]string{true: "антиспам включён", false: "антиспам выключен"}[cfg.Spam.SettingsDefault.Enabled],
 		}, " • ") + "!"},
 		IsReply: true,
 	}
@@ -72,7 +79,8 @@ func (a *Admin) handleReset(cfg *config.Config, _ *ports.MessageText) *ports.Ans
 }
 
 func (a *Admin) handleSay(_ *config.Config, text *ports.MessageText) *ports.AnswerType {
-	if len(text.Words()) < 3 { // !am say <текст>
+	words := text.Words()
+	if len(words) < 3 { // !am say <текст>
 		return NonParametr
 	}
 
@@ -83,11 +91,12 @@ func (a *Admin) handleSay(_ *config.Config, text *ports.MessageText) *ports.Answ
 }
 
 func (a *Admin) handleSpam(_ *config.Config, text *ports.MessageText) *ports.AnswerType {
-	if len(text.Words()) < 4 { // !am spam <кол-во раз> <текст>
+	words := text.Words()
+	if len(words) < 4 { // !am spam <кол-во раз> <текст>
 		return NonParametr
 	}
 
-	count, err := strconv.Atoi(text.Words()[2])
+	count, err := strconv.Atoi(words[2])
 	if err != nil || count <= 0 {
 		return &ports.AnswerType{
 			Text:    []string{"кол-во повторов не указано или указано неверно!"},

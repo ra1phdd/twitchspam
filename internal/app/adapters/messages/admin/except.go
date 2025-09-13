@@ -5,22 +5,24 @@ import (
 	"github.com/dlclark/regexp2"
 	"strconv"
 	"strings"
+	"twitchspam/internal/app/domain/template"
 	"twitchspam/internal/app/infrastructure/config"
 	"twitchspam/internal/app/ports"
 )
 
 func (a *Admin) handleExcept(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
-	if len(text.Words()) < 3 { // !am ex list/add/set/del
+	words := text.Words()
+	if len(words) < 3 { // !am ex list/add/set/del
 		return NonParametr
 	}
 
 	handlers := map[string]func(cfg *config.Config, text *ports.MessageText) *ports.AnswerType{
 		"list": a.handleExceptList,
-		"set":  a.handleExSet,
+		"set":  a.handleExceptSet,
 		"del":  a.handleExDel,
 	}
 
-	exceptCmd := text.Words()[2]
+	exceptCmd := words[2]
 	if handler, ok := handlers[exceptCmd]; ok {
 		return handler(cfg, text)
 	}
@@ -54,7 +56,7 @@ func (a *Admin) handleExceptList(cfg *config.Config, _ *ports.MessageText) *port
 
 func (a *Admin) handleExceptAdd(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
 	words := text.Words()
-	isRegex, opts := a.template.ParseOptions(&words) // ParseOptions удаляет опции из слайса words
+	opts := a.template.ParseOptions(&words, template.SpamOptions) // ParseOptions удаляет опции из слайса words
 
 	idx := 2 // id параметра, с которого начинаются аргументы команды
 	if words[2] == "add" {
@@ -63,7 +65,7 @@ func (a *Admin) handleExceptAdd(cfg *config.Config, text *ports.MessageText) *po
 
 	// !am ex <кол-во сообщений> <наказания через запятую> <слова/фразы через запятую или regex>
 	// или !am ex add <кол-во сообщений> <наказания через запятую> <слова/фразы через запятую или regex>
-	if len(words) <= idx+2 {
+	if len(words) < idx+3 {
 		return NonParametr
 	}
 
@@ -97,7 +99,7 @@ func (a *Admin) handleExceptAdd(cfg *config.Config, text *ports.MessageText) *po
 		punishments = append(punishments, p)
 	}
 
-	if isRegex {
+	if _, ok := opts["-regex"]; ok {
 		re, err := regexp2.Compile(strings.Join(words[idx+2:], " "), regexp2.None)
 		if err != nil {
 			return &ports.AnswerType{
@@ -106,12 +108,14 @@ func (a *Admin) handleExceptAdd(cfg *config.Config, text *ports.MessageText) *po
 			}
 		}
 
-		cfg.Spam.Exceptions[strings.Join(words[idx+2:], " ")] = &config.SpamExceptionsSettings{
+		except := cfg.Spam.Exceptions[strings.Join(words[idx+2:], " ")]
+		except = &config.SpamExceptionsSettings{
 			MessageLimit: messageLimit,
 			Punishments:  punishments,
 			Regexp:       re,
-			Options:      opts,
+			Options:      a.mergeSpamOptions(except.Options, opts),
 		}
+
 		return nil
 	}
 
@@ -121,20 +125,20 @@ func (a *Admin) handleExceptAdd(cfg *config.Config, text *ports.MessageText) *po
 			continue
 		}
 
-		cfg.Spam.Exceptions[word] = &config.SpamExceptionsSettings{
+		except := cfg.Spam.Exceptions[word]
+		except = &config.SpamExceptionsSettings{
 			MessageLimit: messageLimit,
 			Punishments:  punishments,
-			Options:      opts,
+			Options:      a.mergeSpamOptions(except.Options, opts),
 		}
 	}
 
 	return nil
 }
 
-func (a *Admin) handleExSet(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
-	if len(text.Words()) < 6 { // !am ex set ml/p <параметр 1> <слова/фразы через запятую или regex>
-		return NonParametr
-	}
+func (a *Admin) handleExceptSet(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+	words := text.Words()                                         // !am ex set ml/p <параметр 1> <слова или фразы>
+	opts := a.template.ParseOptions(&words, template.SpamOptions) // ParseOptions удаляет опции из слайса words
 
 	cmds := map[string]func(exWord *config.SpamExceptionsSettings, param string) *ports.AnswerType{
 		"ml": func(exWord *config.SpamExceptionsSettings, param string) *ports.AnswerType {
@@ -148,8 +152,12 @@ func (a *Admin) handleExSet(cfg *config.Config, text *ports.MessageText) *ports.
 		},
 		"p": func(exWord *config.SpamExceptionsSettings, param string) *ports.AnswerType {
 			var punishments []config.Punishment
-			punishmentsArgs := strings.Split(param, ",")
-			for _, pa := range punishmentsArgs {
+			for _, pa := range strings.Split(param, ",") {
+				pa = strings.TrimSpace(pa)
+				if pa == "" {
+					continue
+				}
+
 				p, err := parsePunishment(pa, true)
 				if err != nil {
 					return &ports.AnswerType{
@@ -172,58 +180,47 @@ func (a *Admin) handleExSet(cfg *config.Config, text *ports.MessageText) *ports.
 	}
 
 	var updated, notFound []string
-	if regex, ok := cfg.Spam.Exceptions[text.Tail(5)]; ok {
-		if cmd, cmdOk := cmds[text.Words()[3]]; cmdOk {
-			if out := cmd(regex, text.Words()[4]); out != nil {
+	processWord := func(word string) *ports.AnswerType {
+		exWord, ok := cfg.Spam.Exceptions[word]
+		if !ok {
+			notFound = append(notFound, word)
+			return nil
+		}
+		exWord.Options = a.mergeSpamOptions(exWord.Options, opts)
+
+		if cmd, ok := cmds[words[3]]; ok {
+			if out := cmd(exWord, words[4]); out != nil {
 				return out
 			}
-			updated = append(updated, text.Tail(5))
+			updated = append(updated, word)
 		}
+		return nil
+	}
+
+	if regex, ok := cfg.Spam.Exceptions[text.Tail(5)]; ok {
+		if out := processWord(text.Tail(5)); out != nil {
+			return out
+		}
+		_ = regex
 	} else {
-		for _, word := range strings.Split(text.Tail(5), ",") {
+		for _, word := range strings.Split(words[5], ",") {
 			word = strings.TrimSpace(word)
 			if word == "" {
 				continue
 			}
 
-			exWord, exOk := cfg.Spam.Exceptions[word]
-			if !exOk {
-				notFound = append(notFound, word)
+			if out := processWord(word); out != nil {
+				return out
 			}
-
-			if cmd, cmdOk := cmds[text.Words()[3]]; cmdOk {
-				if out := cmd(exWord, text.Words()[4]); out != nil {
-					return out
-				}
-				updated = append(updated, word)
-			}
-
 		}
 	}
 
-	var msgParts []string
-	if len(updated) > 0 {
-		msgParts = append(msgParts, fmt.Sprintf("изменены: %s", strings.Join(updated, ", ")))
-	}
-	if len(notFound) > 0 {
-		msgParts = append(msgParts, fmt.Sprintf("не найдены: %s", strings.Join(notFound, ", ")))
-	}
-
-	if len(msgParts) == 0 {
-		return &ports.AnswerType{
-			Text:    []string{"исключения не найдены!"},
-			IsReply: true,
-		}
-	}
-
-	return &ports.AnswerType{
-		Text:    []string{strings.Join(msgParts, " • ") + "!"},
-		IsReply: true,
-	}
+	return a.buildResponse(updated, "изменены", notFound, "не найдены", "исключения не указаны")
 }
 
 func (a *Admin) handleExDel(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
-	if len(text.Words()) < 4 { // !am ex del <слова/фразы через запятую или regex>
+	words := text.Words()
+	if len(words) < 4 { // !am ex del <слова/фразы через запятую или regex>
 		return NonParametr
 	}
 
@@ -232,7 +229,7 @@ func (a *Admin) handleExDel(cfg *config.Config, text *ports.MessageText) *ports.
 		delete(cfg.Spam.Exceptions, text.Tail(3))
 		removed = append(removed, text.Tail(3))
 	} else {
-		for _, word := range strings.Split(text.Tail(3), ",") {
+		for _, word := range strings.Split(words[3], ",") {
 			word = strings.TrimSpace(word)
 			if word == "" {
 				continue
@@ -247,27 +244,5 @@ func (a *Admin) handleExDel(cfg *config.Config, text *ports.MessageText) *ports.
 		}
 	}
 
-	var msgParts []string
-	if len(removed) > 0 {
-		msgParts = append(msgParts, fmt.Sprintf("удалены: %s", strings.Join(removed, ", ")))
-	}
-	if len(notFound) > 0 {
-		msgParts = append(msgParts, fmt.Sprintf("не найдены: %s", strings.Join(notFound, ", ")))
-	}
-
-	if len(msgParts) == 0 {
-		return &ports.AnswerType{
-			Text:    []string{"исключения не найдены!"},
-			IsReply: true,
-		}
-	}
-
-	if len(removed) > 0 && len(notFound) == 0 {
-		return nil
-	}
-
-	return &ports.AnswerType{
-		Text:    []string{strings.Join(msgParts, " • ") + "!"},
-		IsReply: true,
-	}
+	return a.buildResponse(removed, "удалены", notFound, "не найдены", "исключения не указаны")
 }

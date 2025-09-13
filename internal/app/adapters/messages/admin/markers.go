@@ -10,7 +10,8 @@ import (
 )
 
 func (a *Admin) handleMarkers(cfg *config.Config, text *ports.MessageText, username string) *ports.AnswerType {
-	if len(text.Words()) < 3 { // !am mark add/clear/list
+	words := text.Words()
+	if len(words) < 3 { // !am mark add/clear/list
 		return NonParametr
 	}
 
@@ -19,7 +20,7 @@ func (a *Admin) handleMarkers(cfg *config.Config, text *ports.MessageText, usern
 		"list":  a.handleMarkersList,
 	}
 
-	markerCmd := text.Words()[2]
+	markerCmd := words[2]
 	if handler, ok := handlers[markerCmd]; ok {
 		return handler(cfg, text, username)
 	}
@@ -33,14 +34,15 @@ func (a *Admin) handleMarkersAdd(cfg *config.Config, text *ports.MessageText, us
 			IsReply: true,
 		}
 	}
+	words := text.Words()
 
 	// !am mark <имя маркера> или !am mark add <имя маркера>
-	if len(text.Words()) < 3 || (text.Words()[2] == "add" && len(text.Words()) < 4) {
+	if len(words) < 3 || (words[2] == "add" && len(words) < 4) {
 		return NonParametr
 	}
 
 	markerName := text.Tail(2)
-	if text.Words()[2] == "add" {
+	if words[2] == "add" {
 		markerName = text.Tail(3)
 	}
 
@@ -66,9 +68,10 @@ func (a *Admin) handleMarkersAdd(cfg *config.Config, text *ports.MessageText, us
 }
 
 func (a *Admin) handleMarkersClear(cfg *config.Config, text *ports.MessageText, username string) *ports.AnswerType {
+	words := text.Words()
 	userKey := username + "_" + a.stream.ChannelID()
 	if userMarkers, ok := cfg.Markers[userKey]; ok {
-		if len(text.Words()) > 3 { // !am mark clear <имя маркера>
+		if len(words) > 3 { // !am mark clear <имя маркера>
 			delete(userMarkers, text.Tail(3))
 			return nil
 		}
@@ -113,7 +116,8 @@ func (a *Admin) handleMarkersList(cfg *config.Config, text *ports.MessageText, u
 		return nil
 	}
 
-	if len(text.Words()) > 3 { // !am mark list <имя маркера>
+	words := text.Words()
+	if len(words) > 3 { // !am mark list <имя маркера>
 		name := text.Tail(3)
 		markers, ok := userMarkers[name]
 		if !ok || len(markers) == 0 {

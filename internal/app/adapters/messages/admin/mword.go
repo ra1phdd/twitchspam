@@ -4,12 +4,14 @@ import (
 	"fmt"
 	"github.com/dlclark/regexp2"
 	"strings"
+	"twitchspam/internal/app/domain/template"
 	"twitchspam/internal/app/infrastructure/config"
 	"twitchspam/internal/app/ports"
 )
 
 func (a *Admin) handleMw(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
-	if len(text.Words()) < 3 { // !am mw add/del/list
+	words := text.Words()
+	if len(words) < 3 { // !am mw add/del/list
 		return NonParametr
 	}
 
@@ -18,17 +20,16 @@ func (a *Admin) handleMw(cfg *config.Config, text *ports.MessageText) *ports.Ans
 		"list": a.handleMwList,
 	}
 
-	mwCmd := text.Words()[2]
+	mwCmd := words[2]
 	if handler, ok := handlers[mwCmd]; ok {
 		return handler(cfg, text)
 	}
-
 	return a.handleMwAdd(cfg, text)
 }
 
 func (a *Admin) handleMwAdd(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
 	words := text.Words()
-	isRegex, opts := a.template.ParseOptions(&words) // ParseOptions удаляет опции из слайса words
+	opts := a.template.ParseOptions(&words, template.SpamOptions) // ParseOptions удаляет опции из слайса words
 
 	idx := 2 // id параметра, с которого начинаются аргументы команды
 	if words[2] == "add" {
@@ -37,7 +38,7 @@ func (a *Admin) handleMwAdd(cfg *config.Config, text *ports.MessageText) *ports.
 
 	// !am mw <наказания через запятую> <слова/фразы через запятую>
 	// или !am mw add <наказания через запятую> <слова/фразы через запятую>
-	if len(words) <= idx+2 {
+	if len(words) < idx+3 {
 		return NonParametr
 	}
 
@@ -58,7 +59,7 @@ func (a *Admin) handleMwAdd(cfg *config.Config, text *ports.MessageText) *ports.
 		punishments = append(punishments, p)
 	}
 
-	if isRegex {
+	if _, ok := opts["-regex"]; ok {
 		re, err := regexp2.Compile(strings.Join(words[idx+1:], " "), regexp2.None)
 		if err != nil {
 			return &ports.AnswerType{
@@ -67,10 +68,11 @@ func (a *Admin) handleMwAdd(cfg *config.Config, text *ports.MessageText) *ports.
 			}
 		}
 
-		cfg.Mword[strings.Join(words[idx+1:], " ")] = &config.Mword{
+		mword := cfg.Mword[strings.Join(words[idx+1:], " ")]
+		mword = &config.Mword{
 			Punishments: punishments,
 			Regexp:      re,
-			Options:     opts,
+			Options:     a.mergeSpamOptions(mword.Options, opts),
 		}
 		return nil
 	}
@@ -81,9 +83,10 @@ func (a *Admin) handleMwAdd(cfg *config.Config, text *ports.MessageText) *ports.
 			continue
 		}
 
-		cfg.Mword[word] = &config.Mword{
+		mword := cfg.Mword[word]
+		mword = &config.Mword{
 			Punishments: punishments,
-			Options:     opts,
+			Options:     a.mergeSpamOptions(mword.Options, opts),
 		}
 	}
 
@@ -91,7 +94,8 @@ func (a *Admin) handleMwAdd(cfg *config.Config, text *ports.MessageText) *ports.
 }
 
 func (a *Admin) handleMwDel(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
-	if len(text.Words()) < 4 { // !am mw del <слова/фразы через запятую или regex>
+	words := text.Words()
+	if len(words) < 4 { // !am mw del <слова/фразы через запятую или regex>
 		return NonParametr
 	}
 
@@ -115,32 +119,7 @@ func (a *Admin) handleMwDel(cfg *config.Config, text *ports.MessageText) *ports.
 		}
 	}
 
-	var msgParts []string
-	if len(removed) > 0 {
-		msgParts = append(msgParts, fmt.Sprintf("удалены: %s", strings.Join(removed, ", ")))
-	}
-	if len(notFound) > 0 {
-		msgParts = append(msgParts, fmt.Sprintf("не найдены: %s", strings.Join(notFound, ", ")))
-	}
-
-	if len(msgParts) == 0 {
-		return &ports.AnswerType{
-			Text:    []string{"мворды не найдены!"},
-			IsReply: true,
-		}
-	}
-
-	if len(removed) > 0 && len(notFound) == 0 {
-		return &ports.AnswerType{
-			Text:    []string{"успешно!"},
-			IsReply: true,
-		}
-	}
-
-	return &ports.AnswerType{
-		Text:    []string{strings.Join(msgParts, " • ") + "!"},
-		IsReply: true,
-	}
+	return a.buildResponse(removed, "удалены", notFound, "не найдены", "мворды не указаны")
 }
 
 func (a *Admin) handleMwList(cfg *config.Config, _ *ports.MessageText) *ports.AnswerType {

@@ -2,7 +2,6 @@ package template
 
 import (
 	"github.com/dlclark/regexp2"
-	"twitchspam/internal/app/infrastructure/config"
 	"twitchspam/internal/app/ports"
 )
 
@@ -44,10 +43,10 @@ func (t *Template) MatchPhrase(words []string, phrase string) bool {
 	return t.regex.matchPhrase(words, phrase)
 }
 
-func (t *Template) ParseOptions(words *[]string) (bool, config.Options) {
-	return t.options.parse(words)
+func (t *Template) ParseOptions(words *[]string, opts map[string]struct{}) map[string]bool {
+	return t.options.parseAll(words, opts)
 }
 
-func (t *Template) MergeOptions(dst, src *config.Options) {
-	t.options.merge(dst, src)
+func (t *Template) ParseOption(words *[]string, opt string) *bool {
+	return t.options.parse(words, opt)
 }

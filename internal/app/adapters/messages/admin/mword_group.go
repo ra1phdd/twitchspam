@@ -5,6 +5,7 @@ import (
 	"github.com/dlclark/regexp2"
 	"slices"
 	"strings"
+	"twitchspam/internal/app/domain/template"
 	"twitchspam/internal/app/infrastructure/config"
 	"twitchspam/internal/app/ports"
 )
@@ -15,7 +16,8 @@ var NotFoundMwordGroup = &ports.AnswerType{
 }
 
 func (a *Admin) handleMwg(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
-	if len(text.Words()) < 3 { // !am mwg list/create/set/...
+	words := text.Words()
+	if len(words) < 3 { // !am mwg list/create/set/...
 		return NonParametr
 	}
 
@@ -29,7 +31,7 @@ func (a *Admin) handleMwg(cfg *config.Config, text *ports.MessageText) *ports.An
 		"off":    a.handleMwgOnOff,
 	}
 
-	mwgCmd := text.Words()[2]
+	mwgCmd := words[2]
 	if handler, ok := handlers[mwgCmd]; ok {
 		return handler(cfg, text)
 	}
@@ -68,13 +70,13 @@ func (a *Admin) handleMwgList(cfg *config.Config, _ *ports.MessageText) *ports.A
 
 func (a *Admin) handleMwgCreate(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
 	words := text.Words()
-	_, opts := a.template.ParseOptions(&words) // ParseOptions удаляет опции из слайса words
+	opts := a.template.ParseOptions(&words, template.SpamOptions) // ParseOptions удаляет опции из слайса words
 
 	if len(words) < 5 { // !am mwg create <название_группы> <наказания через запятую>
 		return NonParametr
 	}
 
-	groupName := text.Words()[3]
+	groupName := words[3]
 	if _, exists := cfg.MwordGroup[groupName]; exists {
 		return &ports.AnswerType{
 			Text:    []string{"мворд группа уже существует!"},
@@ -94,10 +96,11 @@ func (a *Admin) handleMwgCreate(cfg *config.Config, text *ports.MessageText) *po
 		punishments = append(punishments, p)
 	}
 
-	cfg.MwordGroup[groupName] = &config.MwordGroup{
+	mwg := cfg.MwordGroup[groupName]
+	mwg = &config.MwordGroup{
 		Enabled:     true,
 		Punishments: punishments,
-		Options:     opts,
+		Options:     a.mergeSpamOptions(mwg.Options, opts),
 	}
 
 	return nil
@@ -105,7 +108,7 @@ func (a *Admin) handleMwgCreate(cfg *config.Config, text *ports.MessageText) *po
 
 func (a *Admin) handleMwgSet(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
 	words := text.Words()
-	_, opts := a.template.ParseOptions(&words) // ParseOptions удаляет опции из слайса words
+	opts := a.template.ParseOptions(&words, template.SpamOptions) // ParseOptions удаляет опции из слайса words
 
 	if len(words) < 3 { // !am mwg set <название_группы> <наказания через запятую ИЛИ опции>
 		return NonParametr
@@ -115,7 +118,7 @@ func (a *Admin) handleMwgSet(cfg *config.Config, text *ports.MessageText) *ports
 	if !exists {
 		return NotFoundMwordGroup
 	}
-	a.template.MergeOptions(&mwg.Options, &opts)
+	mwg.Options = a.mergeSpamOptions(mwg.Options, opts)
 
 	if len(words) >= 4 {
 		var punishments []config.Punishment
@@ -138,7 +141,7 @@ func (a *Admin) handleMwgSet(cfg *config.Config, text *ports.MessageText) *ports
 
 func (a *Admin) handleMwgAdd(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
 	words := text.Words()
-	isRegex, _ := a.template.ParseOptions(&words) // ParseOptions удаляет опции из слайса words
+	opts := a.template.ParseOptions(&words, template.SpamOptions) // ParseOptions удаляет опции из слайса words
 
 	if len(words) < 5 { // !am mwg add <название_группы> <слова/фразы через запятую>
 		return NonParametr
@@ -150,7 +153,7 @@ func (a *Admin) handleMwgAdd(cfg *config.Config, text *ports.MessageText) *ports
 	}
 
 	joined := strings.Join(words[4:], " ")
-	if isRegex {
+	if _, ok := opts["-regex"]; ok {
 		re, err := regexp2.Compile(joined, regexp2.None)
 		if err != nil {
 			return &ports.AnswerType{
@@ -178,17 +181,18 @@ func (a *Admin) handleMwgAdd(cfg *config.Config, text *ports.MessageText) *ports
 }
 
 func (a *Admin) handleMwgDel(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
-	if len(text.Words()) < 5 { // !am mwg del <название_группы> <слова/фразы через запятую или all>
+	words := text.Words()
+	if len(words) < 5 { // !am mwg del <название_группы> <слова/фразы через запятую или all>
 		return NonParametr
 	}
 
-	group, exists := cfg.MwordGroup[text.Words()[3]]
+	group, exists := cfg.MwordGroup[words[3]]
 	if !exists {
 		return NotFoundMwordGroup
 	}
 
-	if text.Words()[4] == "all" {
-		delete(cfg.MwordGroup, text.Words()[3])
+	if words[4] == "all" {
+		delete(cfg.MwordGroup, words[3])
 		return nil
 	}
 
@@ -203,7 +207,7 @@ func (a *Admin) handleMwgDel(cfg *config.Config, text *ports.MessageText) *ports
 	}
 	group.Regexp = newSlice
 
-	args := text.Words()[4:]
+	args := words[4:]
 	argsSet := make(map[string]struct{}, len(args))
 	for _, a := range args {
 		argsSet[a] = struct{}{}
@@ -219,41 +223,20 @@ func (a *Admin) handleMwgDel(cfg *config.Config, text *ports.MessageText) *ports
 	}
 	group.Words = newWords
 
-	var msgParts []string
-	if len(removed) > 0 {
-		msgParts = append(msgParts, fmt.Sprintf("удалены: %s", strings.Join(removed, ", ")))
-	}
-	if len(notFound) > 0 {
-		msgParts = append(msgParts, fmt.Sprintf("не найдены: %s", strings.Join(notFound, ", ")))
-	}
-
-	if len(msgParts) == 0 {
-		return &ports.AnswerType{
-			Text:    []string{"слова не найдены в мворд группе!"},
-			IsReply: true,
-		}
-	}
-
-	if len(removed) > 0 && len(notFound) == 0 {
-		return nil
-	}
-
-	return &ports.AnswerType{
-		Text:    []string{strings.Join(msgParts, " • ") + "!"},
-		IsReply: true,
-	}
+	return a.buildResponse(removed, "удалены", notFound, "не найдены", "слова в мворд группе не указаны")
 }
 
 func (a *Admin) handleMwgOnOff(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
-	if len(text.Words()) < 4 { // !am mwg on/off <название_группы>
+	words := text.Words()
+	if len(words) < 4 { // !am mwg on/off <название_группы>
 		return NonParametr
 	}
 
-	mwg, exists := cfg.MwordGroup[text.Words()[3]]
+	mwg, exists := cfg.MwordGroup[words[3]]
 	if !exists {
 		return NotFoundMwordGroup
 	}
-	mwg.Enabled = text.Words()[2] == "on"
+	mwg.Enabled = words[2] == "on"
 
 	return nil
 }

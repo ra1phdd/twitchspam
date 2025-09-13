@@ -14,6 +14,7 @@ import (
 	"twitchspam/internal/app/domain/stream"
 	"twitchspam/internal/app/domain/template"
 	"twitchspam/internal/app/infrastructure/config"
+	"twitchspam/internal/app/infrastructure/timers"
 	"twitchspam/internal/app/ports"
 	"twitchspam/pkg/logger"
 )
@@ -71,10 +72,11 @@ func New(log logger.Logger, manager *config.Manager, client *http.Client, modCha
 	}
 
 	fs := file_server.New()
+	timer := timers.NewTimingWheel(100*time.Millisecond, 600)
 
 	t.template = template.New(t.cfg.Aliases, t.cfg.Banwords.Words, t.cfg.Banwords.Regexp, t.stream)
 	t.checker = checker.NewCheck(log, t.cfg, t.stream, t.stats, t.irc, t.template)
-	t.admin = admin.New(log, manager, t.stream, t.api, t.template, fs)
+	t.admin = admin.New(log, manager, t.stream, t.api, t.template, fs, timer)
 	t.user = user.New(log, t.cfg, t.stream, t.stats, t.template, fs)
 
 	go func() {
@@ -94,7 +96,7 @@ func New(log logger.Logger, manager *config.Manager, client *http.Client, modCha
 		}
 	}()
 
-	es := event_sub.New(t.log, t.cfg, t.stream, t.api, t.checker, t.admin, t.user, t.template, t.stats, t.client)
+	es := event_sub.New(t.log, t.cfg, t.stream, t.api, t.checker, t.admin, t.user, t.template, t.stats, timer, t.client)
 	go es.RunEventLoop()
 
 	return t, nil
