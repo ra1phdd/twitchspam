@@ -18,33 +18,31 @@ import (
 )
 
 type EventSub struct {
-	log     logger.Logger
-	cfg     *config.Config
-	stream  ports.StreamPort
-	api     ports.APIPort
-	checker ports.CheckerPort
-	admin   ports.AdminPort
-	user    ports.UserPort
-	aliases ports.AliasesPort
-	bwords  ports.BanwordsPort
-	stats   ports.StatsPort
+	log      logger.Logger
+	cfg      *config.Config
+	stream   ports.StreamPort
+	api      ports.APIPort
+	checker  ports.CheckerPort
+	admin    ports.AdminPort
+	user     ports.UserPort
+	template ports.TemplatePort
+	stats    ports.StatsPort
 
 	client *http.Client
 }
 
-func New(log logger.Logger, cfg *config.Config, stream ports.StreamPort, api ports.APIPort, checker ports.CheckerPort, admin ports.AdminPort, user ports.UserPort, aliases ports.AliasesPort, bwords ports.BanwordsPort, stats ports.StatsPort, client *http.Client) *EventSub {
+func New(log logger.Logger, cfg *config.Config, stream ports.StreamPort, api ports.APIPort, checker ports.CheckerPort, admin ports.AdminPort, user ports.UserPort, template ports.TemplatePort, stats ports.StatsPort, client *http.Client) *EventSub {
 	es := &EventSub{
-		log:     log,
-		cfg:     cfg,
-		stream:  stream,
-		api:     api,
-		checker: checker,
-		admin:   admin,
-		user:    user,
-		aliases: aliases,
-		bwords:  bwords,
-		stats:   stats,
-		client:  client,
+		log:      log,
+		cfg:      cfg,
+		stream:   stream,
+		api:      api,
+		checker:  checker,
+		admin:    admin,
+		user:     user,
+		template: template,
+		stats:    stats,
+		client:   client,
 	}
 
 	return es
@@ -164,9 +162,7 @@ func (es *EventSub) handleMessage(cancel context.CancelFunc, msgBytes []byte) {
 			es.stream.SetIslive(false)
 			es.stats.SetEndTime(time.Now())
 
-			if err := es.api.SendChatMessage(es.stats.GetStats()); err != nil {
-				es.log.Error("Failed to send message on chat", err)
-			}
+			es.api.SendChatMessages(es.stats.GetStats())
 		case "channel.update":
 			var upd ChannelUpdateEvent
 			if err := json.Unmarshal(envelope.Event, &upd); err != nil {

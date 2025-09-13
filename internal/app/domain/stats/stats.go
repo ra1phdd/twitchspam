@@ -4,8 +4,10 @@ import (
 	"fmt"
 	"math"
 	"sort"
+	"strings"
 	"sync"
 	"time"
+	"twitchspam/internal/app/ports"
 )
 
 type Stats struct {
@@ -90,7 +92,7 @@ func (s *Stats) AddMessage(username string) {
 		return
 	}
 
-	s.countMessages[username]++
+	s.countMessages[strings.ToLower(username)]++
 }
 
 func (s *Stats) AddDeleted(username string) {
@@ -101,7 +103,7 @@ func (s *Stats) AddDeleted(username string) {
 		return
 	}
 
-	s.countDeletes[username]++
+	s.countDeletes[strings.ToLower(username)]++
 }
 
 func (s *Stats) AddTimeout(username string) {
@@ -112,7 +114,7 @@ func (s *Stats) AddTimeout(username string) {
 		return
 	}
 
-	s.countTimeouts[username]++
+	s.countTimeouts[strings.ToLower(username)]++
 }
 
 func (s *Stats) AddBan(username string) {
@@ -123,15 +125,18 @@ func (s *Stats) AddBan(username string) {
 		return
 	}
 
-	s.countBans[username]++
+	s.countBans[strings.ToLower(username)]++
 }
 
-func (s *Stats) GetStats() string {
+func (s *Stats) GetStats() *ports.AnswerType {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	if s.startTime.IsZero() {
-		return "нет данных за последний стрим"
+		return &ports.AnswerType{
+			Text:    []string{"нет данных за последний стрим!"},
+			IsReply: false,
+		}
 	}
 
 	var countBans, countTimeouts, countDeletes, countMessages int
@@ -188,15 +193,21 @@ func (s *Stats) GetStats() string {
 	}
 	msg += "• посмотреть свою стату - !stats"
 
-	return msg
+	return &ports.AnswerType{
+		Text:    []string{msg},
+		IsReply: false,
+	}
 }
 
-func (s *Stats) GetUserStats(username string) string {
+func (s *Stats) GetUserStats(username string) *ports.AnswerType {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if s.startTime.IsZero() {
-		return "нет данных за последний стрим"
+	if s.startTime.IsZero() || len(s.countMessages) == 0 {
+		return &ports.AnswerType{
+			Text:    []string{"нет данных за последний стрим!"},
+			IsReply: false,
+		}
 	}
 
 	type kv struct {
@@ -212,6 +223,7 @@ func (s *Stats) GetUserStats(username string) string {
 	sort.Slice(pairs, func(i, j int) bool {
 		return pairs[i].Value > pairs[j].Value
 	})
+	username = strings.ToLower(strings.TrimPrefix(username, "@"))
 
 	position := -1
 	for i, p := range pairs {
@@ -230,5 +242,72 @@ func (s *Stats) GetUserStats(username string) string {
 		msg += fmt.Sprintf(" • кол-во банов: %d • кол-во мутов: %d • кол-во удаленных сообщений: %d",
 			s.countBans[username], s.countTimeouts[username], s.countDeletes[username])
 	}
-	return msg
+
+	return &ports.AnswerType{
+		Text:    []string{msg},
+		IsReply: false,
+	}
+}
+
+func (s *Stats) GetTopStats(count int) *ports.AnswerType {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.startTime.IsZero() || len(s.countMessages) == 0 {
+		return &ports.AnswerType{
+			Text:    []string{"нет данных за последний стрим!"},
+			IsReply: false,
+		}
+	}
+
+	switch {
+	case count < 0:
+		return &ports.AnswerType{
+			Text:    []string{"не может быть меньше 1 записи!"},
+			IsReply: false,
+		}
+	case count == 0:
+		count = 10
+	case count > 100:
+		return &ports.AnswerType{
+			Text:    []string{"максимум 100 записей!"},
+			IsReply: false,
+		}
+	}
+
+	pairs := make([]struct {
+		Key string
+		Val int
+	}, 0, len(s.countMessages))
+
+	for k, v := range s.countMessages {
+		pairs = append(pairs, struct {
+			Key string
+			Val int
+		}{k, v})
+	}
+
+	sort.Slice(pairs, func(i, j int) bool {
+		return pairs[i].Val > pairs[j].Val
+	})
+
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("топ-%d чаттеров по кол-ву сообщений за стрим:", count))
+
+	sep := ", "
+	if count > 5 {
+		sep = "\n"
+	}
+
+	for i := 0; i < count && i < len(pairs); i++ {
+		if i > 0 {
+			sb.WriteString(sep)
+		}
+		sb.WriteString(fmt.Sprintf("%s (%d)", pairs[i].Key, pairs[i].Val))
+	}
+
+	return &ports.AnswerType{
+		Text:    []string{sb.String()},
+		IsReply: false,
+	}
 }

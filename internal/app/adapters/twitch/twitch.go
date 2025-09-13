@@ -3,34 +3,32 @@ package twitch
 import (
 	"net/http"
 	"time"
+	"twitchspam/internal/app/adapters/file_server"
 	"twitchspam/internal/app/adapters/messages/admin"
 	"twitchspam/internal/app/adapters/messages/checker"
 	"twitchspam/internal/app/adapters/messages/user"
 	"twitchspam/internal/app/adapters/twitch/api"
 	"twitchspam/internal/app/adapters/twitch/event_sub"
 	"twitchspam/internal/app/adapters/twitch/irc"
-	"twitchspam/internal/app/domain/aliases"
-	"twitchspam/internal/app/domain/banwords"
-	"twitchspam/internal/app/domain/regex"
 	"twitchspam/internal/app/domain/stats"
 	"twitchspam/internal/app/domain/stream"
+	"twitchspam/internal/app/domain/template"
 	"twitchspam/internal/app/infrastructure/config"
 	"twitchspam/internal/app/ports"
 	"twitchspam/pkg/logger"
 )
 
 type Twitch struct {
-	log     logger.Logger
-	cfg     *config.Config
-	stream  ports.StreamPort
-	api     ports.APIPort
-	checker ports.CheckerPort
-	admin   ports.AdminPort
-	user    ports.UserPort
-	aliases ports.AliasesPort
-	bwords  ports.BanwordsPort
-	stats   ports.StatsPort
-	irc     ports.IRCPort
+	log      logger.Logger
+	cfg      *config.Config
+	stream   ports.StreamPort
+	api      ports.APIPort
+	checker  ports.CheckerPort
+	admin    ports.AdminPort
+	user     ports.UserPort
+	template ports.TemplatePort
+	stats    ports.StatsPort
+	irc      ports.IRCPort
 
 	client *http.Client
 }
@@ -72,12 +70,12 @@ func New(log logger.Logger, manager *config.Manager, client *http.Client, modCha
 		return nil, err
 	}
 
-	r := regex.New()
-	t.aliases = aliases.New(t.cfg.Aliases, t.stream)
-	t.bwords = banwords.New(t.cfg.Banwords.Words, t.cfg.Banwords.Regexp)
-	t.checker = checker.NewCheck(log, t.cfg, t.stream, t.stats, t.bwords, r, t.irc)
-	t.admin = admin.New(log, manager, t.stream, r, t.api, t.aliases)
-	t.user = user.New(log, t.cfg, t.stream, t.stats, r, t.aliases)
+	fs := file_server.New()
+
+	t.template = template.New(t.cfg.Aliases, t.cfg.Banwords.Words, t.cfg.Banwords.Regexp, t.stream)
+	t.checker = checker.NewCheck(log, t.cfg, t.stream, t.stats, t.irc, t.template)
+	t.admin = admin.New(log, manager, t.stream, t.api, t.template, fs)
+	t.user = user.New(log, t.cfg, t.stream, t.stats, t.template, fs)
 
 	go func() {
 		ticker := time.NewTicker(30 * time.Second)
@@ -96,7 +94,7 @@ func New(log logger.Logger, manager *config.Manager, client *http.Client, modCha
 		}
 	}()
 
-	es := event_sub.New(t.log, t.cfg, t.stream, t.api, t.checker, t.admin, t.user, t.aliases, t.bwords, t.stats, t.client)
+	es := event_sub.New(t.log, t.cfg, t.stream, t.api, t.checker, t.admin, t.user, t.template, t.stats, t.client)
 	go es.RunEventLoop()
 
 	return t, nil

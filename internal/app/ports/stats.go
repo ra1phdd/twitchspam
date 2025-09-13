@@ -12,6 +12,7 @@ type StatsPort interface {
 	AddDeleted(username string)
 	AddBan(username string)
 	AddTimeout(username string)
-	GetStats() string
-	GetUserStats(username string) string
+	GetStats() *AnswerType
+	GetUserStats(username string) *AnswerType
+	GetTopStats(count int) *AnswerType
 }

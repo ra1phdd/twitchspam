@@ -13,6 +13,7 @@ func (es *EventSub) checkAutomod(am AutomodHoldEvent) {
 		return
 	}
 	text := strings.ToLower(domain.NormalizeText(am.Message.Text))
+	words := strings.Split(text, " ")
 
 	if action := es.checker.CheckBanwords(text, am.Message.Text); action != nil {
 		time.Sleep(time.Duration(es.cfg.Spam.DelayAutomod) * time.Second)
@@ -23,7 +24,7 @@ func (es *EventSub) checkAutomod(am AutomodHoldEvent) {
 		es.api.BanUser(am.UserID, action.Reason)
 	}
 
-	action := es.checker.CheckMwords(text, am.UserName)
+	action := es.checker.CheckMwords(text, am.UserName, words)
 	if action == nil {
 		return
 	}

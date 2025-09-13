@@ -8,8 +8,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"twitchspam/internal/app/adapters/file_server"
-	"twitchspam/internal/app/domain/regex"
 	"twitchspam/internal/app/infrastructure/config"
 	"twitchspam/internal/app/ports"
 	"twitchspam/pkg/logger"
@@ -31,24 +29,22 @@ var (
 )
 
 type Admin struct {
-	log     logger.Logger
-	manager *config.Manager
-	stream  ports.StreamPort
-	regexp  ports.RegexPort
-	fs      ports.FileServerPort
-	api     ports.APIPort
-	aliases ports.AliasesPort
+	log      logger.Logger
+	manager  *config.Manager
+	stream   ports.StreamPort
+	fs       ports.FileServerPort
+	api      ports.APIPort
+	template ports.TemplatePort
 }
 
-func New(log logger.Logger, manager *config.Manager, stream ports.StreamPort, regexp *regex.Regex, api ports.APIPort, aliases ports.AliasesPort) *Admin {
+func New(log logger.Logger, manager *config.Manager, stream ports.StreamPort, api ports.APIPort, template ports.TemplatePort, fs ports.FileServerPort) *Admin {
 	return &Admin{
-		log:     log,
-		manager: manager,
-		stream:  stream,
-		regexp:  regexp,
-		fs:      file_server.New(),
-		api:     api,
-		aliases: aliases,
+		log:      log,
+		manager:  manager,
+		stream:   stream,
+		fs:       fs,
+		api:      api,
+		template: template,
 	}
 }
 
@@ -59,59 +55,67 @@ func (a *Admin) FindMessages(msg *ports.ChatMessage) *ports.AnswerType {
 		return nil
 	}
 
-	parts := msg.Message.Text.Words()
-	if len(parts) < 2 {
+	if len(msg.Message.Text.Words()) < 2 {
 		return NotFoundCmd
 	}
 
-	cmd, args := parts[1], parts[2:]
+	cmd := msg.Message.Text.Words()[1]
 	if cmd == "ping" {
 		return a.handlePing()
 	}
 
-	handlers := map[string]func(cfg *config.Config, cmd string, args []string) *ports.AnswerType{
-		"on":     a.handleOnOff,
-		"off":    a.handleOnOff,
-		"info":   a.handleStatus,
+	handlers := map[string]func(cfg *config.Config, text *ports.MessageText) *ports.AnswerType{
+		"on": func(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+			return a.handleOnOff(cfg, true)
+		},
+		"off": func(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+			return a.handleOnOff(cfg, false)
+		},
+		"status": a.handleStatus,
 		"say":    a.handleSay,
 		"spam":   a.handleSpam,
 		"as":     a.handleAntiSpam,
-		"online": a.handleMode,
-		"always": a.handleMode,
-		"sim": func(cfg *config.Config, cmd string, args []string) *ports.AnswerType {
-			return a.handleSim(cfg, cmd, args, "default")
+		"online": func(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+			return a.handleMode(cfg, "online")
 		},
-		"msg": func(cfg *config.Config, cmd string, args []string) *ports.AnswerType {
-			return a.handleMsg(cfg, cmd, args, "default")
+		"always": func(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+			return a.handleMode(cfg, "always")
+		},
+		"sim": func(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+			return a.handleSim(cfg, text, "default")
+		},
+		"msg": func(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+			return a.handleMsg(cfg, text, "default")
 		},
 		"time": a.handleTime,
-		"p": func(cfg *config.Config, cmd string, args []string) *ports.AnswerType {
-			return a.handlePunishments(cfg, cmd, args, "default")
+		"p": func(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+			return a.handlePunishments(cfg, text, "default")
 		},
-		"rp": func(cfg *config.Config, cmd string, args []string) *ports.AnswerType {
-			return a.handleDurationResetPunishments(cfg, cmd, args, "default")
+		"rp": func(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+			return a.handleDurationResetPunishments(cfg, text, "default")
 		},
-		"mwlen": func(cfg *config.Config, cmd string, args []string) *ports.AnswerType {
-			return a.handleMaxLen(cfg, cmd, args, "default")
+		"mwlen": func(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+			return a.handleMaxLen(cfg, text, "default")
 		},
-		"mwp": func(cfg *config.Config, cmd string, args []string) *ports.AnswerType {
-			return a.handleMaxPunishment(cfg, cmd, args, "default")
+		"mwp": func(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+			return a.handleMaxPunishment(cfg, text, "default")
 		},
-		"min_gap": func(cfg *config.Config, cmd string, args []string) *ports.AnswerType {
-			return a.handleMinGap(cfg, cmd, args, "default")
+		"min_gap": func(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+			return a.handleMinGap(cfg, text, "default")
 		},
 		"da":    a.handleDelayAutomod,
 		"reset": a.handleReset,
 		"add":   a.handleAdd,
 		"del":   a.handleDel,
 		"vip":   a.handleVip,
+		"emote": a.handleEmote,
 		"game":  a.handleCategory,
 		"mwg":   a.handleMwg,
 		"mw":    a.handleMw,
-		"ex":    a.handleEx,
+		"ex":    a.handleExcept,
 		"alias": a.handleAliases,
-		"mark": func(cfg *config.Config, cmd string, args []string) *ports.AnswerType {
-			return a.handleMarkers(cfg, cmd, args, msg.Chatter.Username)
+		"mark": func(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+			return a.handleMarkers(cfg, text, msg.Chatter.Username)
 		},
 		"cmd": a.handleCommand,
 	}
@@ -124,7 +128,7 @@ func (a *Admin) FindMessages(msg *ports.ChatMessage) *ports.AnswerType {
 
 	var result *ports.AnswerType
 	if err := a.manager.Update(func(cfg *config.Config) {
-		result = handler(cfg, cmd, args)
+		result = handler(cfg, &msg.Message.Text)
 	}); err != nil {
 		a.log.Error("Failed update config", err, slog.String("msg", msg.Message.Text.Original))
 		return UnknownError
@@ -139,11 +143,8 @@ func (a *Admin) FindMessages(msg *ports.ChatMessage) *ports.AnswerType {
 	}
 }
 
-func parseIntArg(args []string, min, max int) (int, bool) {
-	if len(args) == 0 {
-		return 0, false
-	}
-	val, err := strconv.Atoi(args[0])
+func parseIntArg(valStr string, min, max int) (int, bool) {
+	val, err := strconv.Atoi(valStr)
 	if err != nil {
 		return 0, false
 	}
@@ -153,11 +154,8 @@ func parseIntArg(args []string, min, max int) (int, bool) {
 	return val, true
 }
 
-func parseFloatArg(args []string, min, max float64) (float64, bool) {
-	if len(args) == 0 {
-		return 0, false
-	}
-	val, err := strconv.ParseFloat(args[0], 64)
+func parseFloatArg(valStr string, min, max float64) (float64, bool) {
+	val, err := strconv.ParseFloat(valStr, 64)
 	if err != nil || val < min || val > max {
 		return 0, false
 	}

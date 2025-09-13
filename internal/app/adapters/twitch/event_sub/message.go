@@ -1,7 +1,6 @@
 package event_sub
 
 import (
-	"fmt"
 	"log/slog"
 	"strings"
 	"twitchspam/internal/app/adapters/messages/checker"
@@ -13,25 +12,13 @@ func (es *EventSub) checkMessage(msgEvent ChatMessageEvent) {
 		es.stats.AddMessage(msg.Chatter.Username)
 	}
 
-	sendMessages := func(messages []string, isReply bool, username string) {
-		for _, message := range messages {
-			text := message
-			if isReply {
-				text = fmt.Sprintf("@%s, %s", username, message)
-			}
-
-			if err := es.api.SendChatMessage(text); err != nil {
-				es.log.Error("Failed to send message on chat", err)
-			}
-		}
-	}
-
 	if !strings.HasPrefix(msg.Message.Text.Original, "!am alias") {
-		msg.Message.Text.Original = es.aliases.ReplaceOne(msg.Message.Text.Original)
+		msg.Message.Text.Original = es.template.ReplaceAlias(msg.Message.Text.Original)
 	}
 
 	if adminAction := es.admin.FindMessages(msg); adminAction != nil {
-		sendMessages(adminAction.Text, adminAction.IsReply, msg.Chatter.Username)
+		adminAction.ReplyUsername = msg.Chatter.Username
+		es.api.SendChatMessages(adminAction)
 		return
 	}
 
@@ -58,7 +45,8 @@ func (es *EventSub) checkMessage(msgEvent ChatMessageEvent) {
 			username = userAction.ReplyUsername
 		}
 
-		sendMessages(userAction.Text, userAction.IsReply, username)
+		userAction.ReplyUsername = username
+		es.api.SendChatMessages(userAction)
 		return
 	}
 }

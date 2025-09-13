@@ -3,6 +3,7 @@ package user
 import (
 	"golang.org/x/time/rate"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 	"twitchspam/internal/app/infrastructure/config"
@@ -15,20 +16,20 @@ type User struct {
 	cfg          *config.Config
 	stream       ports.StreamPort
 	stats        ports.StatsPort
-	regexp       ports.RegexPort
-	aliases      ports.AliasesPort
+	template     ports.TemplatePort
+	fs           ports.FileServerPort
 	limiterGame  *rate.Limiter
 	usersLimiter map[string]*rate.Limiter
 }
 
-func New(log logger.Logger, cfg *config.Config, stream ports.StreamPort, stats ports.StatsPort, regexp ports.RegexPort, aliases ports.AliasesPort) *User {
+func New(log logger.Logger, cfg *config.Config, stream ports.StreamPort, stats ports.StatsPort, template ports.TemplatePort, fs ports.FileServerPort) *User {
 	return &User{
 		log:          log,
 		cfg:          cfg,
 		stream:       stream,
 		stats:        stats,
-		regexp:       regexp,
-		aliases:      aliases,
+		template:     template,
+		fs:           fs,
 		limiterGame:  rate.NewLimiter(rate.Every(30*time.Second), 1),
 		usersLimiter: make(map[string]*rate.Limiter),
 	}
@@ -39,7 +40,7 @@ func (u *User) FindMessages(msg *ports.ChatMessage) *ports.AnswerType {
 		u.usersLimiter[msg.Chatter.Username] = rate.NewLimiter(rate.Every(time.Minute), 3)
 	}
 
-	if action := u.handleStats(msg, msg.Message.Text.WordsLower()); action != nil {
+	if action := u.handleStats(msg); action != nil {
 		return action
 	}
 
@@ -47,11 +48,11 @@ func (u *User) FindMessages(msg *ports.ChatMessage) *ports.AnswerType {
 		return nil
 	}
 
-	if action := u.handleLinks(msg, msg.Message.Text.WordsLower()); action != nil {
+	if action := u.handleCommands(msg); action != nil {
 		return action
 	}
 
-	if action := u.handleAnswers(msg.Message.Text.Lower()); action != nil {
+	if action := u.handleAnswers(msg); action != nil {
 		return action
 	}
 
@@ -62,29 +63,34 @@ func (u *User) FindMessages(msg *ports.ChatMessage) *ports.AnswerType {
 	return nil
 }
 
-func (u *User) handleStats(msg *ports.ChatMessage, words []string) *ports.AnswerType {
+func (u *User) handleStats(msg *ports.ChatMessage) *ports.AnswerType {
 	if !strings.HasPrefix(msg.Message.Text.Original, "!stats") || !u.usersLimiter[msg.Chatter.Username].Allow() {
 		return nil
 	}
 
 	target := msg.Chatter.Username
-	if len(words) > 1 && words[1] != "all" {
-		target = words[1]
-	}
+	words := msg.Message.Text.WordsLower()
 
-	if len(words) > 1 && words[1] == "all" {
-		return &ports.AnswerType{
-			Text:    []string{u.stats.GetStats()},
-			IsReply: false,
+	if len(words) > 1 {
+		switch words[1] {
+		case "all":
+			return u.stats.GetStats()
+		case "top":
+			count := 0
+			if len(words) > 2 {
+				count, _ = strconv.Atoi(words[2])
+			}
+			return u.stats.GetTopStats(count)
+		default:
+			target = words[1]
 		}
 	}
-	return &ports.AnswerType{
-		Text:    []string{u.stats.GetUserStats(target)},
-		IsReply: true,
-	}
+
+	return u.stats.GetUserStats(target)
 }
 
-func (u *User) handleLinks(msg *ports.ChatMessage, words []string) *ports.AnswerType {
+func (u *User) handleCommands(msg *ports.ChatMessage) *ports.AnswerType {
+	words := msg.Message.Text.WordsLower()
 	var text, replyUsername string
 	for _, word := range words {
 		if len(word) == 0 {
@@ -96,8 +102,9 @@ func (u *User) handleLinks(msg *ports.ChatMessage, words []string) *ports.Answer
 			continue
 		}
 
-		if link, ok := u.cfg.Links[word]; ok && text == "" {
-			text = u.aliases.ReplacePlaceholders(link.Text, words)
+		if link, ok := u.cfg.Links[word]; ok {
+			text = u.template.ReplacePlaceholders(link.Text, words)
+			break
 		}
 	}
 
@@ -116,8 +123,8 @@ func (u *User) handleLinks(msg *ports.ChatMessage, words []string) *ports.Answer
 	}
 }
 
-func (u *User) handleAnswers(text string) *ports.AnswerType {
-	words := u.regexp.SplitWordsBySpace(text)
+func (u *User) handleAnswers(msg *ports.ChatMessage) *ports.AnswerType {
+	words := msg.Message.Text.WordsLower()
 	for _, answer := range u.cfg.Answers {
 		if !answer.Enabled {
 			continue
@@ -128,9 +135,14 @@ func (u *User) handleAnswers(text string) *ports.AnswerType {
 				continue
 			}
 
-			if u.regexp.MatchPhrase(words, phrase) {
+			if u.template.MatchPhrase(words, phrase) {
+				text := u.template.ReplacePlaceholders(answer.Text, words)
+				if text == "" {
+					return nil
+				}
+
 				return &ports.AnswerType{
-					Text:    []string{u.aliases.ReplacePlaceholders(answer.Text, words)},
+					Text:    []string{text},
 					IsReply: true,
 				}
 			}
@@ -141,9 +153,14 @@ func (u *User) handleAnswers(text string) *ports.AnswerType {
 				continue
 			}
 
-			if isMatch, _ := re.MatchString(text); isMatch {
+			if isMatch, _ := re.MatchString(msg.Message.Text.Lower()); isMatch {
+				text := u.template.ReplacePlaceholders(answer.Text, words)
+				if text == "" {
+					return nil
+				}
+
 				return &ports.AnswerType{
-					Text:    []string{u.aliases.ReplacePlaceholders(answer.Text, words)},
+					Text:    []string{text},
 					IsReply: true,
 				}
 			}

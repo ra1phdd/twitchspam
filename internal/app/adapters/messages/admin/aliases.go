@@ -7,46 +7,46 @@ import (
 	"twitchspam/internal/app/ports"
 )
 
-func (a *Admin) handleAliases(cfg *config.Config, _ string, args []string) *ports.AnswerType {
-	if len(args) < 1 {
+func (a *Admin) handleAliases(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+	if len(text.Words()) < 3 { // !am alias add/del/list
 		return NonParametr
 	}
-	aliasCmd, aliasArgs := args[0], args[1:]
 
-	handlers := map[string]func(cfg *config.Config, cmd string, args []string) *ports.AnswerType{
+	handlers := map[string]func(cfg *config.Config, text *ports.MessageText) *ports.AnswerType{
 		"add":  a.handleAliasesAdd,
 		"del":  a.handleAliasesDel,
 		"list": a.handleAliasesList,
 	}
 
+	aliasCmd := text.Words()[2]
 	if handler, ok := handlers[aliasCmd]; ok {
-		return handler(cfg, aliasCmd, aliasArgs)
+		return handler(cfg, text)
 	}
 	return NotFoundCmd
 }
 
-func (a *Admin) handleAliasesAdd(cfg *config.Config, _ string, args []string) *ports.AnswerType {
-	if len(args) < 3 {
+func (a *Admin) handleAliasesAdd(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+	if len(text.Words()) < 6 { // !am alias add <алиас> from <оригинальная команда>
 		return NonParametr
 	}
 
 	var fromIndex = -1
-	for i, arg := range args {
+	for i, arg := range text.Words() {
 		if arg == "from" {
 			fromIndex = i
 			break
 		}
 	}
 
-	if fromIndex == -1 || fromIndex == 0 || fromIndex == len(args)-1 {
+	if fromIndex == -1 || fromIndex == 0 || fromIndex == len(text.Words())-1 {
 		return &ports.AnswerType{
 			Text:    []string{"некорректный синтаксис!"},
 			IsReply: true,
 		}
 	}
 
-	alias := strings.Join(args[:fromIndex], " ")
-	original := strings.Join(args[fromIndex+1:], " ")
+	alias := strings.Join(text.Words()[3:fromIndex], " ")
+	original := strings.Join(text.Words()[fromIndex+1:], " ")
 
 	if !strings.HasPrefix(alias, "!") {
 		alias = "!" + alias
@@ -57,39 +57,39 @@ func (a *Admin) handleAliasesAdd(cfg *config.Config, _ string, args []string) *p
 	}
 
 	cfg.Aliases[alias] = original
-	a.aliases.Update(cfg.Aliases)
+	a.template.UpdateAliases(cfg.Aliases)
 	return &ports.AnswerType{
 		Text:    []string{fmt.Sprintf("алиас `%s` добавлен для команды `%s`!", alias, original)},
 		IsReply: true,
 	}
 }
 
-func (a *Admin) handleAliasesDel(cfg *config.Config, _ string, args []string) *ports.AnswerType {
-	if len(args) < 1 {
+func (a *Admin) handleAliasesDel(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+	if len(text.Words()) < 4 { // !am alias del <алиас>
 		return NonParametr
 	}
 
-	alias := strings.Join(args, " ")
+	alias := strings.Join(text.Words()[3:], " ")
 	if !strings.HasPrefix(alias, "!") {
 		alias = "!" + alias
 	}
 
-	if _, ok := cfg.Aliases[alias]; ok {
-		delete(cfg.Aliases, alias)
-		a.aliases.Update(cfg.Aliases)
+	if _, ok := cfg.Aliases[alias]; !ok {
 		return &ports.AnswerType{
-			Text:    []string{fmt.Sprintf("алиас `%s` удален!", alias)},
+			Text:    []string{"алиас не найден!"},
 			IsReply: true,
 		}
 	}
 
+	delete(cfg.Aliases, alias)
+	a.template.UpdateAliases(cfg.Aliases)
 	return &ports.AnswerType{
-		Text:    []string{"алиас не найден!"},
+		Text:    []string{fmt.Sprintf("алиас `%s` удален!", alias)},
 		IsReply: true,
 	}
 }
 
-func (a *Admin) handleAliasesList(cfg *config.Config, _ string, _ []string) *ports.AnswerType {
+func (a *Admin) handleAliasesList(cfg *config.Config, _ *ports.MessageText) *ports.AnswerType {
 	if len(cfg.Aliases) == 0 {
 		return &ports.AnswerType{
 			Text:    []string{"алиасы не найдены!"},

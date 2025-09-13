@@ -10,7 +10,8 @@ import (
 type APIPort interface {
 	GetChannelID(username string) (string, error)
 	GetLiveStream() (*Stream, error)
-	GetUrlVOD(streams []config.Markers) (map[string]string, error)
+	GetUrlVOD(streams []*config.Markers) (map[string]string, error)
+	SendChatMessages(msgs *AnswerType)
 	SendChatMessage(message string) error
 	DeleteChatMessage(messageID string) error
 	TimeoutUser(userID string, duration int, reason string)
@@ -102,8 +103,36 @@ func (m *MessageText) LowerNorm() string {
 
 func (m *MessageText) Words() []string {
 	if m.words == nil {
-		w := strings.Fields(m.Original)
-		m.words = &w
+		var (
+			words []string
+			buf   strings.Builder
+			prev  rune
+		)
+
+		for i, r := range m.Original {
+			if r == ' ' {
+				// если пробел стоит ПОСЛЕ запятой или ПЕРЕД запятой — это часть слова
+				if prev == ',' || (i+1 < len(m.Original) && m.Original[i+1] == ',') {
+					buf.WriteRune(r)
+					prev = r
+					continue
+				}
+
+				if buf.Len() > 0 {
+					words = append(words, buf.String())
+					buf.Reset()
+				}
+			} else {
+				buf.WriteRune(r)
+			}
+			prev = r
+		}
+
+		if buf.Len() > 0 {
+			words = append(words, buf.String())
+		}
+
+		m.words = &words
 	}
 	return *m.words
 }
@@ -136,4 +165,17 @@ func (m *MessageText) WordsLowerNorm() []string {
 		m.wordsLowerNorm = &wln
 	}
 	return *m.wordsLowerNorm
+}
+
+func (m *MessageText) Tail(n int) string {
+	words := m.Words()
+	if n >= len(words) {
+		return ""
+	}
+
+	idx := strings.Index(m.Original, words[n])
+	if idx == -1 {
+		return ""
+	}
+	return strings.TrimSpace(m.Original[idx:])
 }

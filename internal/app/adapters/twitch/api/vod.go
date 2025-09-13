@@ -6,7 +6,7 @@ import (
 	"twitchspam/internal/app/infrastructure/config"
 )
 
-func (t *Twitch) GetUrlVOD(streams []config.Markers) (map[string]string, error) {
+func (t *Twitch) GetUrlVOD(streams []*config.Markers) (map[string]string, error) {
 	remaining := len(streams)
 	vods := make(map[string]string, remaining)
 

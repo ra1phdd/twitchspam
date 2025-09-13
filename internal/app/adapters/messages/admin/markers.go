@@ -9,24 +9,24 @@ import (
 	"twitchspam/internal/app/ports"
 )
 
-func (a *Admin) handleMarkers(cfg *config.Config, _ string, args []string, username string) *ports.AnswerType {
-	if len(args) < 1 {
+func (a *Admin) handleMarkers(cfg *config.Config, text *ports.MessageText, username string) *ports.AnswerType {
+	if len(text.Words()) < 3 { // !am mark add/clear/list
 		return NonParametr
 	}
-	markerCmd, markerArgs := args[0], args[1:]
 
-	handlers := map[string]func(cfg *config.Config, cmd string, args []string, username string) *ports.AnswerType{
+	handlers := map[string]func(cfg *config.Config, text *ports.MessageText, username string) *ports.AnswerType{
 		"clear": a.handleMarkersClear,
 		"list":  a.handleMarkersList,
 	}
 
+	markerCmd := text.Words()[2]
 	if handler, ok := handlers[markerCmd]; ok {
-		return handler(cfg, markerCmd, markerArgs, username)
+		return handler(cfg, text, username)
 	}
-	return a.handleMarkersAdd(cfg, markerCmd, markerArgs, username)
+	return a.handleMarkersAdd(cfg, text, username)
 }
 
-func (a *Admin) handleMarkersAdd(cfg *config.Config, markerCmd string, args []string, username string) *ports.AnswerType {
+func (a *Admin) handleMarkersAdd(cfg *config.Config, text *ports.MessageText, username string) *ports.AnswerType {
 	if !a.stream.IsLive() {
 		return &ports.AnswerType{
 			Text:    []string{"стрим выключен!"},
@@ -34,20 +34,19 @@ func (a *Admin) handleMarkersAdd(cfg *config.Config, markerCmd string, args []st
 		}
 	}
 
-	if markerCmd == "add" && len(args) < 1 {
+	// !am mark <имя маркера> или !am mark add <имя маркера>
+	if len(text.Words()) < 3 || (text.Words()[2] == "add" && len(text.Words()) < 4) {
 		return NonParametr
 	}
 
-	markerName := markerCmd
-	//markerArgs := args
-	if markerCmd == "add" {
-		markerName = args[0]
-		//markerArgs = args[1:]
+	markerName := text.Tail(2)
+	if text.Words()[2] == "add" {
+		markerName = text.Tail(3)
 	}
 
 	userKey := username + "_" + a.stream.ChannelID()
 	if _, ok := cfg.Markers[userKey]; !ok {
-		cfg.Markers[userKey] = make(map[string][]config.Markers)
+		cfg.Markers[userKey] = make(map[string][]*config.Markers)
 	}
 
 	live, err := a.api.GetLiveStream()
@@ -56,7 +55,7 @@ func (a *Admin) handleMarkersAdd(cfg *config.Config, markerCmd string, args []st
 		return UnknownError
 	}
 
-	marker := config.Markers{
+	marker := &config.Markers{
 		StreamID:  live.ID,
 		CreatedAt: time.Now(),
 		Timecode:  time.Since(live.StartedAt),
@@ -66,19 +65,20 @@ func (a *Admin) handleMarkersAdd(cfg *config.Config, markerCmd string, args []st
 	return nil
 }
 
-func (a *Admin) handleMarkersClear(cfg *config.Config, _ string, args []string, username string) *ports.AnswerType {
+func (a *Admin) handleMarkersClear(cfg *config.Config, text *ports.MessageText, username string) *ports.AnswerType {
 	userKey := username + "_" + a.stream.ChannelID()
 	if userMarkers, ok := cfg.Markers[userKey]; ok {
-		if len(args) < 1 {
-			delete(cfg.Markers, userKey)
-		} else {
-			delete(userMarkers, args[0])
+		if len(text.Words()) > 3 { // !am mark clear <имя маркера>
+			delete(userMarkers, text.Tail(3))
+			return nil
 		}
+
+		delete(cfg.Markers, userKey) // !am mark clear
 	}
 	return nil
 }
 
-func (a *Admin) handleMarkersList(cfg *config.Config, _ string, args []string, username string) *ports.AnswerType {
+func (a *Admin) handleMarkersList(cfg *config.Config, text *ports.MessageText, username string) *ports.AnswerType {
 	userMarkers, ok := cfg.Markers[username+"_"+a.stream.ChannelID()]
 	if !ok || len(userMarkers) == 0 {
 		return &ports.AnswerType{
@@ -87,7 +87,7 @@ func (a *Admin) handleMarkersList(cfg *config.Config, _ string, args []string, u
 		}
 	}
 
-	formatMarker := func(m config.Markers, vods map[string]string) string {
+	formatMarker := func(m *config.Markers, vods map[string]string) string {
 		timecode := fmt.Sprintf("%02dh%02dm%02ds",
 			int(m.Timecode.Hours()),
 			int(m.Timecode.Minutes())%60,
@@ -97,48 +97,47 @@ func (a *Admin) handleMarkersList(cfg *config.Config, _ string, args []string, u
 		if vod, ok := vods[m.StreamID]; ok {
 			return fmt.Sprintf("%s - %s?t=%s", m.CreatedAt.Format("02.01"), vod, timecode)
 		}
-		return fmt.Sprintf("%s - вод не найден (stream_id %s, таймкод %s)", m.CreatedAt.Format("02.01"), m.StreamID, timecode)
+		return fmt.Sprintf("%s - вод не найден (id стрима %s, таймкод %s)", m.CreatedAt.Format("02.01"), m.StreamID, timecode)
 	}
 
 	var parts []string
-	if len(args) < 1 {
-		for name, markers := range userMarkers {
-			parts = append(parts, name+":")
+	processMarkers := func(name string, markers []*config.Markers) error {
+		vods, err := a.api.GetUrlVOD(markers)
+		if err != nil {
+			return err
+		}
+		parts = append(parts, name+":")
+		for _, m := range markers {
+			parts = append(parts, formatMarker(m, vods))
+		}
+		return nil
+	}
+
+	if len(text.Words()) > 3 { // !am mark list <имя маркера>
+		name := text.Tail(3)
+		markers, ok := userMarkers[name]
+		if !ok || len(markers) == 0 {
+			return &ports.AnswerType{Text: []string{"маркеры не найдены!"}, IsReply: true}
+		}
+		if len(markers) == 1 {
 			vods, err := a.api.GetUrlVOD(markers)
 			if err != nil {
 				return UnknownError
 			}
-
-			for _, m := range markers {
-				parts = append(parts, formatMarker(m, vods))
-			}
-			parts = append(parts, "\n")
-		}
-	} else {
-		markerName := args[0]
-		markers, ok := userMarkers[markerName]
-		if !ok || len(markers) == 0 {
-			return &ports.AnswerType{
-				Text:    []string{"маркеры не найдены!"},
-				IsReply: true,
-			}
-		}
-
-		vods, err := a.api.GetUrlVOD(markers)
-		if err != nil {
-			return UnknownError
-		}
-
-		if len(markers) == 1 {
 			return &ports.AnswerType{
 				Text:    []string{formatMarker(markers[0], vods)},
 				IsReply: true,
 			}
 		}
-
-		parts = append(parts, markerName+":")
-		for _, m := range markers {
-			parts = append(parts, formatMarker(m, vods))
+		if err := processMarkers(name, markers); err != nil {
+			return UnknownError
+		}
+	} else { // !am mark list
+		for name, markers := range userMarkers {
+			if err := processMarkers(name, markers); err != nil {
+				return UnknownError
+			}
+			parts = append(parts, "")
 		}
 	}
 

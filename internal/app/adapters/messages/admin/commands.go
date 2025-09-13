@@ -7,34 +7,31 @@ import (
 	"twitchspam/internal/app/ports"
 )
 
-func (a *Admin) handleCommand(cfg *config.Config, _ string, args []string) *ports.AnswerType {
-	if len(args) < 1 {
+func (a *Admin) handleCommand(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+	if len(text.Words()) < 3 { // !am cmd add/del/list
 		return NonParametr
 	}
-	linkCmd, linkArgs := args[0], args[1:]
 
-	handlers := map[string]func(cfg *config.Config, args []string) *ports.AnswerType{
+	handlers := map[string]func(cfg *config.Config, text *ports.MessageText) *ports.AnswerType{
 		"add":  a.handleCommandAdd,
 		"del":  a.handleCommandDel,
 		"list": a.handleCommandList,
 	}
 
+	linkCmd := text.Words()[2]
 	if handler, ok := handlers[linkCmd]; ok {
-		return handler(cfg, linkArgs)
+		return handler(cfg, text)
 	}
 	return NotFoundCmd
 }
 
-func (a *Admin) handleCommandAdd(cfg *config.Config, args []string) *ports.AnswerType {
-	if len(args) < 2 {
+func (a *Admin) handleCommandAdd(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+	if len(text.Words()) < 5 { // !am cmd add <команда> <текст>
 		return NonParametr
 	}
 
-	key := args[0]
-	text := strings.Join(args[1:], " ")
-
-	cfg.Links[key] = config.Links{
-		Text: text,
+	cfg.Links[text.Words()[3]] = &config.Links{
+		Text: text.Tail(4),
 	}
 
 	return &ports.AnswerType{
@@ -43,14 +40,13 @@ func (a *Admin) handleCommandAdd(cfg *config.Config, args []string) *ports.Answe
 	}
 }
 
-func (a *Admin) handleCommandDel(cfg *config.Config, args []string) *ports.AnswerType {
-	if len(args) < 1 {
+func (a *Admin) handleCommandDel(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+	if len(text.Words()) != 4 { // !am cmd del <команды через запятую>
 		return NonParametr
 	}
 
 	var removed, notFound []string
-	keys := strings.Split(args[0], ",")
-	for _, key := range keys {
+	for _, key := range strings.Split(text.Tail(3), ",") {
 		key = strings.TrimSpace(key)
 		if _, ok := cfg.Links[key]; !ok {
 			notFound = append(notFound, key)
@@ -75,7 +71,10 @@ func (a *Admin) handleCommandDel(cfg *config.Config, args []string) *ports.Answe
 	}
 
 	if len(msgParts) == 0 {
-		return nil
+		return &ports.AnswerType{
+			Text:    []string{"пользователи не указаны!"},
+			IsReply: true,
+		}
 	}
 
 	return &ports.AnswerType{
@@ -84,7 +83,7 @@ func (a *Admin) handleCommandDel(cfg *config.Config, args []string) *ports.Answe
 	}
 }
 
-func (a *Admin) handleCommandList(cfg *config.Config, _ []string) *ports.AnswerType {
+func (a *Admin) handleCommandList(cfg *config.Config, _ *ports.MessageText) *ports.AnswerType {
 	if len(cfg.Links) == 0 {
 		return &ports.AnswerType{
 			Text:    []string{"команды не найдены!"},

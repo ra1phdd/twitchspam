@@ -2,6 +2,7 @@ package admin
 
 import (
 	"fmt"
+	"github.com/dlclark/regexp2"
 	"slices"
 	"strings"
 	"twitchspam/internal/app/infrastructure/config"
@@ -13,13 +14,12 @@ var NotFoundMwordGroup = &ports.AnswerType{
 	IsReply: true,
 }
 
-func (a *Admin) handleMwg(cfg *config.Config, _ string, args []string) *ports.AnswerType {
-	if len(args) < 1 {
+func (a *Admin) handleMwg(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+	if len(text.Words()) < 3 { // !am mwg list/create/set/...
 		return NonParametr
 	}
-	mwgCmd, mwgArgs := args[0], args[1:]
 
-	handlers := map[string]func(cfg *config.Config, cmd string, args []string) *ports.AnswerType{
+	handlers := map[string]func(cfg *config.Config, text *ports.MessageText) *ports.AnswerType{
 		"list":   a.handleMwgList,
 		"create": a.handleMwgCreate,
 		"set":    a.handleMwgSet,
@@ -29,13 +29,14 @@ func (a *Admin) handleMwg(cfg *config.Config, _ string, args []string) *ports.An
 		"off":    a.handleMwgOnOff,
 	}
 
+	mwgCmd := text.Words()[2]
 	if handler, ok := handlers[mwgCmd]; ok {
-		return handler(cfg, mwgCmd, mwgArgs)
+		return handler(cfg, text)
 	}
 	return NotFoundCmd
 }
 
-func (a *Admin) handleMwgList(cfg *config.Config, _ string, _ []string) *ports.AnswerType {
+func (a *Admin) handleMwgList(cfg *config.Config, _ *ports.MessageText) *ports.AnswerType {
 	if len(cfg.MwordGroup) == 0 {
 		return &ports.AnswerType{
 			Text:    []string{"мворд группы не найдены!"},
@@ -65,14 +66,15 @@ func (a *Admin) handleMwgList(cfg *config.Config, _ string, _ []string) *ports.A
 	}
 }
 
-func (a *Admin) handleMwgCreate(cfg *config.Config, _ string, args []string) *ports.AnswerType {
-	if len(args) < 2 {
+func (a *Admin) handleMwgCreate(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+	words := text.Words()
+	_, opts := a.template.ParseOptions(&words) // ParseOptions удаляет опции из слайса words
+
+	if len(words) < 5 { // !am mwg create <название_группы> <наказания через запятую>
 		return NonParametr
 	}
 
-	groupName := args[0]
-	punishment := args[1]
-
+	groupName := text.Words()[3]
 	if _, exists := cfg.MwordGroup[groupName]; exists {
 		return &ports.AnswerType{
 			Text:    []string{"мворд группа уже существует!"},
@@ -81,8 +83,7 @@ func (a *Admin) handleMwgCreate(cfg *config.Config, _ string, args []string) *po
 	}
 
 	var punishments []config.Punishment
-	punishmentsArgs := strings.Split(punishment, ",")
-	for _, pa := range punishmentsArgs {
+	for _, pa := range strings.Split(text.Tail(4), ",") {
 		p, err := parsePunishment(pa, false)
 		if err != nil {
 			return &ports.AnswerType{
@@ -93,124 +94,166 @@ func (a *Admin) handleMwgCreate(cfg *config.Config, _ string, args []string) *po
 		punishments = append(punishments, p)
 	}
 
-	cfg.MwordGroup[groupName] = config.MwordGroup{
-		Punishments: punishments,
+	cfg.MwordGroup[groupName] = &config.MwordGroup{
 		Enabled:     true,
+		Punishments: punishments,
+		Options:     opts,
 	}
 
 	return nil
 }
 
-func (a *Admin) handleMwgSet(cfg *config.Config, _ string, args []string) *ports.AnswerType {
-	if len(args) < 2 {
+func (a *Admin) handleMwgSet(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+	words := text.Words()
+	_, opts := a.template.ParseOptions(&words) // ParseOptions удаляет опции из слайса words
+
+	if len(words) < 3 { // !am mwg set <название_группы> <наказания через запятую ИЛИ опции>
 		return NonParametr
 	}
 
-	groupName := args[0]
-	punishment := args[1]
-
-	mwg, exists := cfg.MwordGroup[groupName]
+	mwg, exists := cfg.MwordGroup[words[3]]
 	if !exists {
 		return NotFoundMwordGroup
 	}
+	a.template.MergeOptions(&mwg.Options, &opts)
 
-	var punishments []config.Punishment
-	punishmentsArgs := strings.Split(punishment, ",")
-	for _, pa := range punishmentsArgs {
-		p, err := parsePunishment(pa, false)
-		if err != nil {
-			return &ports.AnswerType{
-				Text:    []string{fmt.Sprintf("не удалось распарсить наказания (%s)!", pa)},
-				IsReply: true,
+	if len(words) >= 4 {
+		var punishments []config.Punishment
+		punishmentsArgs := strings.Split(strings.Join(words[4:], " "), ",")
+		for _, pa := range punishmentsArgs {
+			p, err := parsePunishment(pa, false)
+			if err != nil {
+				return &ports.AnswerType{
+					Text:    []string{fmt.Sprintf("не удалось распарсить наказания (%s)!", pa)},
+					IsReply: true,
+				}
 			}
+			punishments = append(punishments, p)
 		}
-		punishments = append(punishments, p)
+		mwg.Punishments = punishments
 	}
-	mwg.Punishments = punishments
 
 	return nil
 }
 
-func (a *Admin) handleMwgAdd(cfg *config.Config, _ string, args []string) *ports.AnswerType {
-	if len(args) < 2 {
+func (a *Admin) handleMwgAdd(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+	words := text.Words()
+	isRegex, _ := a.template.ParseOptions(&words) // ParseOptions удаляет опции из слайса words
+
+	if len(words) < 5 { // !am mwg add <название_группы> <слова/фразы через запятую>
 		return NonParametr
 	}
 
-	groupName := args[0]
-	group, exists := cfg.MwordGroup[groupName]
+	group, exists := cfg.MwordGroup[words[3]]
 	if !exists {
 		return NotFoundMwordGroup
 	}
 
-	words := a.regexp.SplitWords(strings.Join(args[1:], " "))
-	for _, word := range words {
-		trimmed := strings.TrimSpace(word)
-		if trimmed == "" {
-			continue
-		}
-
-		if re, err := a.regexp.Parse(trimmed); err != nil {
+	joined := strings.Join(words[4:], " ")
+	if isRegex {
+		re, err := regexp2.Compile(joined, regexp2.None)
+		if err != nil {
 			return &ports.AnswerType{
 				Text:    []string{"неверное регулярное выражение!"},
 				IsReply: true,
 			}
-		} else if re != nil {
-			if !regexExists(group.Regexp, re) {
-				group.Regexp = append(group.Regexp, re)
-			}
+		}
+
+		group.Regexp = append(group.Regexp, re)
+		return nil
+	}
+
+	for _, word := range strings.Split(joined, ",") {
+		word = strings.TrimSpace(word)
+		if word == "" {
 			continue
 		}
 
-		if !slices.Contains(group.Words, trimmed) {
-			group.Words = append(group.Words, trimmed)
+		if !slices.Contains(group.Words, word) {
+			group.Words = append(group.Words, word)
 		}
 	}
 
 	return nil
 }
 
-func (a *Admin) handleMwgDel(cfg *config.Config, _ string, args []string) *ports.AnswerType {
-	if len(args) < 2 {
+func (a *Admin) handleMwgDel(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+	if len(text.Words()) < 5 { // !am mwg del <название_группы> <слова/фразы через запятую или all>
 		return NonParametr
 	}
 
-	groupName := args[0]
-	target := strings.Join(args[1:], " ")
-
-	group, exists := cfg.MwordGroup[groupName]
+	group, exists := cfg.MwordGroup[text.Words()[3]]
 	if !exists {
 		return NotFoundMwordGroup
 	}
 
-	if target == "all" {
-		delete(cfg.MwordGroup, groupName)
+	if text.Words()[4] == "all" {
+		delete(cfg.MwordGroup, text.Words()[3])
 		return nil
 	}
 
-	wordsToRemove := a.regexp.SplitWords(target)
-	var newWords []string
+	var removed, notFound []string
+	newSlice := group.Regexp[:0]
+	for _, r := range group.Regexp {
+		if r.String() != text.Tail(4) {
+			newSlice = append(newSlice, r)
+		} else {
+			removed = append(removed, text.Tail(4))
+		}
+	}
+	group.Regexp = newSlice
 
-	for _, existingWord := range group.Words {
-		if !slices.Contains(wordsToRemove, existingWord) {
-			newWords = append(newWords, existingWord)
+	args := text.Words()[4:]
+	argsSet := make(map[string]struct{}, len(args))
+	for _, a := range args {
+		argsSet[a] = struct{}{}
+	}
+
+	newWords := group.Words[:0]
+	for _, w := range group.Words {
+		if _, ok := argsSet[w]; ok {
+			removed = append(removed, w)
+		} else {
+			newWords = append(newWords, w)
 		}
 	}
 	group.Words = newWords
 
-	return nil
+	var msgParts []string
+	if len(removed) > 0 {
+		msgParts = append(msgParts, fmt.Sprintf("удалены: %s", strings.Join(removed, ", ")))
+	}
+	if len(notFound) > 0 {
+		msgParts = append(msgParts, fmt.Sprintf("не найдены: %s", strings.Join(notFound, ", ")))
+	}
+
+	if len(msgParts) == 0 {
+		return &ports.AnswerType{
+			Text:    []string{"слова не найдены в мворд группе!"},
+			IsReply: true,
+		}
+	}
+
+	if len(removed) > 0 && len(notFound) == 0 {
+		return nil
+	}
+
+	return &ports.AnswerType{
+		Text:    []string{strings.Join(msgParts, " • ") + "!"},
+		IsReply: true,
+	}
 }
 
-func (a *Admin) handleMwgOnOff(cfg *config.Config, cmd string, args []string) *ports.AnswerType {
-	if len(args) < 1 {
+func (a *Admin) handleMwgOnOff(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+	if len(text.Words()) < 4 { // !am mwg on/off <название_группы>
 		return NonParametr
 	}
-	groupName := args[0]
 
-	mwg, exists := cfg.MwordGroup[groupName]
+	mwg, exists := cfg.MwordGroup[text.Words()[3]]
 	if !exists {
 		return NotFoundMwordGroup
 	}
-	mwg.Enabled = cmd == "on"
+	mwg.Enabled = text.Words()[2] == "on"
 
 	return nil
 }

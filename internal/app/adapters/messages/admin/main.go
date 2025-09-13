@@ -28,12 +28,16 @@ func (a *Admin) handlePing() *ports.AnswerType {
 	}
 }
 
-func (a *Admin) handleOnOff(cfg *config.Config, cmd string, _ []string) *ports.AnswerType {
-	cfg.Enabled = cmd == "on"
+func (a *Admin) handleOnOff(cfg *config.Config, enabled bool) *ports.AnswerType {
+	cfg.Enabled = enabled
 	return nil
 }
 
-func (a *Admin) handleCategory(_ *config.Config, _ string, args []string) *ports.AnswerType {
+func (a *Admin) handleCategory(_ *config.Config, text *ports.MessageText) *ports.AnswerType {
+	if len(text.Words()) < 3 { // !am game <игра>
+		return NonParametr
+	}
+
 	if !a.stream.IsLive() {
 		return &ports.AnswerType{
 			Text:    []string{"стрим выключен!"},
@@ -41,71 +45,68 @@ func (a *Admin) handleCategory(_ *config.Config, _ string, args []string) *ports
 		}
 	}
 
-	a.stream.SetCategory(strings.Join(args, " "))
+	if a.stream.Category() != "Games + Demos" {
+		return &ports.AnswerType{
+			Text:    []string{"работает только при категории Games + Demos!"},
+			IsReply: true,
+		}
+	}
+
+	a.stream.SetCategory(text.Tail(2))
 	return nil
 }
 
-func (a *Admin) handleStatus(cfg *config.Config, _ string, _ []string) *ports.AnswerType {
-	var parts []string
-	if cfg.Enabled {
-		parts = append(parts, "бот включён")
-	} else {
-		parts = append(parts, "бот выключен")
-	}
-
-	if cfg.Spam.SettingsDefault.Enabled {
-		parts = append(parts, "антиспам включён")
-	} else {
-		parts = append(parts, "антиспам выключен")
-	}
-
+func (a *Admin) handleStatus(cfg *config.Config, _ *ports.MessageText) *ports.AnswerType {
 	return &ports.AnswerType{
-		Text:    []string{strings.Join(parts, " • ") + "!"},
+		Text: []string{strings.Join([]string{
+			map[bool]string{true: "бот включён", false: "бот выключен"}[cfg.Enabled],
+			map[bool]string{true: "антиспам включён", false: "антиспам выключен"}[cfg.Spam.SettingsDefault.Enabled],
+		}, " • ") + "!"},
 		IsReply: true,
 	}
 }
 
-func (a *Admin) handleReset(cfg *config.Config, _ string, _ []string) *ports.AnswerType {
+func (a *Admin) handleReset(cfg *config.Config, _ *ports.MessageText) *ports.AnswerType {
 	cfg.Spam = a.manager.GetDefault().Spam
 	return nil
 }
 
-func (a *Admin) handleSay(_ *config.Config, _ string, args []string) *ports.AnswerType {
-	if len(args) == 0 {
-		return &ports.AnswerType{
-			Text:    []string{"не указан текст сообщения!"},
-			IsReply: true,
-		}
+func (a *Admin) handleSay(_ *config.Config, text *ports.MessageText) *ports.AnswerType {
+	if len(text.Words()) < 3 { // !am say <текст>
+		return NonParametr
 	}
-	text := strings.Join(args, " ")
 
 	return &ports.AnswerType{
-		Text:    []string{text},
+		Text:    []string{text.Tail(2)},
 		IsReply: false,
 	}
 }
 
-func (a *Admin) handleSpam(_ *config.Config, _ string, args []string) *ports.AnswerType {
-	if len(args) < 2 {
+func (a *Admin) handleSpam(_ *config.Config, text *ports.MessageText) *ports.AnswerType {
+	if len(text.Words()) < 4 { // !am spam <кол-во раз> <текст>
 		return NonParametr
 	}
 
-	count := args[0]
-	countInt, err := strconv.Atoi(count)
-	if err != nil {
+	count, err := strconv.Atoi(text.Words()[2])
+	if err != nil || count <= 0 {
 		return &ports.AnswerType{
 			Text:    []string{"кол-во повторов не указано или указано неверно!"},
 			IsReply: true,
 		}
 	}
 
-	var text []string
-	for i := 0; i < countInt; i++ {
-		text = append(text, strings.Join(args[1:], " "))
+	if count > 100 {
+		count = 100
+	}
+
+	msg := text.Tail(3)
+	answers := make([]string, count)
+	for i := range answers {
+		answers[i] = msg
 	}
 
 	return &ports.AnswerType{
-		Text:    text,
+		Text:    answers,
 		IsReply: false,
 	}
 }

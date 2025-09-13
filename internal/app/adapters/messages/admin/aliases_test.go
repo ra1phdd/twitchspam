@@ -100,10 +100,10 @@ func TestAdmin_handleAliasesAdd(t *testing.T) {
 				data: make(map[string]string),
 			}
 			a := &Admin{
-				aliases: mockPort,
+				template: mockPort,
 			}
 
-			resp := a.handleAliasesAdd(cfg, "", tt.args)
+			resp := a.handleAliasesAdd(cfg, tt.args)
 			assert.Equal(t, tt.wantText, resp.Text[0], "Сообщение ответа некорректное")
 			assert.Equal(t, tt.wantInCfg, cfg.Aliases, "cfg.Aliases не соответствует ожидаемому")
 			assert.Equal(t, tt.wantInCfg, mockPort.data, "mockPort.data не соответствует ожидаемому")
@@ -178,7 +178,7 @@ func TestAdmin_handleAliasesDel(t *testing.T) {
 				data: make(map[string]string),
 			}
 			a := &Admin{
-				aliases: mockPort,
+				template: mockPort,
 			}
 
 			resp := a.handleAliasesDel(cfg, "", tt.args.args)

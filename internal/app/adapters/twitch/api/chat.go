@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/url"
+	"twitchspam/internal/app/ports"
 )
 
 func (t *Twitch) GetChannelID(username string) (string, error) {
@@ -17,6 +18,19 @@ func (t *Twitch) GetChannelID(username string) (string, error) {
 		return "", fmt.Errorf("user %s not found", username)
 	}
 	return userResp.Data[0].ID, nil
+}
+
+func (t *Twitch) SendChatMessages(msgs *ports.AnswerType) {
+	for _, message := range msgs.Text {
+		text := message
+		if msgs.IsReply {
+			text = fmt.Sprintf("@%s, %s", msgs.ReplyUsername, message)
+		}
+
+		if err := t.SendChatMessage(text); err != nil {
+			t.log.Error("Failed to send message on chat", err)
+		}
+	}
 }
 
 func (t *Twitch) SendChatMessage(message string) error {

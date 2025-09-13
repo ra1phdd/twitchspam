@@ -5,8 +5,12 @@ import (
 	"twitchspam/internal/app/ports"
 )
 
-func (a *Admin) handleDelayAutomod(cfg *config.Config, _ string, args []string) *ports.AnswerType {
-	if val, ok := parseIntArg(args, 0, 10); ok {
+func (a *Admin) handleDelayAutomod(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+	if len(text.Words()) != 3 { // !am da <значение>
+		return NonParametr
+	}
+
+	if val, ok := parseIntArg(text.Words()[2], 0, 10); ok {
 		cfg.Spam.DelayAutomod = val
 		return nil
 	}

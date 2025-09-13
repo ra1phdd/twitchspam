@@ -5,6 +5,7 @@ go 1.23.0
 toolchain go1.24.6
 
 require (
+	github.com/RussellLuo/timingwheel v0.0.0-20220218152713-54845bda3108
 	github.com/dlclark/regexp2 v1.11.5
 	github.com/gorilla/websocket v1.5.3
 	github.com/samber/slog-multi v1.4.1
