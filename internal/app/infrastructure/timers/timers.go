@@ -7,6 +7,7 @@ import (
 
 type Timer struct {
 	ID       string
+	Rounds   int
 	Interval time.Duration
 	Task     func(map[string]any)
 	Args     map[string]any
@@ -50,6 +51,10 @@ func (tw *TimingWheel) start() {
 		currentSlot := tw.slots[tw.currentPos]
 
 		for id, timer := range currentSlot.timers {
+			if timer.Rounds > 0 {
+				timer.Rounds--
+				continue
+			}
 			go timer.Task(timer.Args)
 
 			if timer.Repeat {
@@ -78,7 +83,11 @@ func (tw *TimingWheel) AddTimer(id string, interval time.Duration, repeat bool, 
 	}
 
 	pos := (tw.currentPos + int(interval/tw.tickDuration)) % tw.slotsCount
+	rounds := int(interval/tw.tickDuration) / tw.slotsCount
+
+	t.Rounds = rounds
 	tw.slots[pos].timers[id] = t
+
 }
 
 func (tw *TimingWheel) RemoveTimer(id string) {
