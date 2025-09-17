@@ -3,8 +3,6 @@ package admin
 import (
 	"fmt"
 	"log/slog"
-	"math"
-	"strconv"
 	"strings"
 	"time"
 	"twitchspam/internal/app/infrastructure/config"
@@ -35,10 +33,18 @@ type Admin struct {
 	api      ports.APIPort
 	template ports.TemplatePort
 	timers   ports.TimersPort
+
+	root ports.Command
+}
+
+type CompositeCommand struct {
+	subcommands map[string]ports.Command
+	defaultCmd  ports.Command
+	cursor      int
 }
 
 func New(log logger.Logger, manager *config.Manager, stream ports.StreamPort, api ports.APIPort, template ports.TemplatePort, fs ports.FileServerPort, timers ports.TimersPort) *Admin {
-	return &Admin{
+	a := &Admin{
 		log:      log,
 		manager:  manager,
 		stream:   stream,
@@ -47,9 +53,145 @@ func New(log logger.Logger, manager *config.Manager, stream ports.StreamPort, ap
 		template: template,
 		timers:   timers,
 	}
+	a.root = a.buildCommandTree()
+
+	return a
 }
 
 var startApp = time.Now()
+
+func (a *Admin) buildCommandTree() ports.Command {
+	timer := &AddTimer{
+		Timers: a.timers,
+		Stream: a.stream,
+		Api:    a.api,
+	}
+
+	return &CompositeCommand{
+		subcommands: map[string]ports.Command{
+			"ping":   &Ping{},
+			"on":     &OnOff{enabled: true},
+			"off":    &OnOff{enabled: false},
+			"status": &Status{},
+			"say":    &Say{},
+			"spam":   &Spam{},
+			"reset":  &Reset{manager: a.manager},
+			"game":   &Category{stream: a.stream},
+			"alias": &CompositeCommand{
+				subcommands: map[string]ports.Command{
+					"add":  &AddAlias{template: a.template},
+					"del":  &DelAlias{template: a.template},
+					"list": &ListAlias{fs: a.fs},
+				},
+				cursor: 2,
+			},
+			"as": &CompositeCommand{
+				subcommands: map[string]ports.Command{
+					"on":   &OnOffAntispam{enabled: true, typeSpam: "default"},
+					"off":  &OnOffAntispam{enabled: false, typeSpam: "default"},
+					"info": &InfoAntispam{template: a.template, fs: a.fs},
+				},
+				cursor: 2,
+			},
+			"online": &ModeAntispam{mode: "online"},
+			"always": &ModeAntispam{mode: "always"},
+			"time":   &TimeAntispam{template: a.template},
+			"add":    &AddAntispam{},
+			"del":    &DelAntispam{},
+			"sim":    &SimAntispam{template: a.template, typeSpam: "default"},
+			"msg":    &MsgAntispam{template: a.template, typeSpam: "default"},
+			"p":      &PunishmentsAntispam{template: a.template, typeSpam: "default"},
+			"rp":     &ResetPunishmentsAntispam{template: a.template, typeSpam: "default"},
+			"mwlen":  &MaxLenAntispam{template: a.template, typeSpam: "default"},
+			"mwp":    &MaxPunishmentAntispam{template: a.template, typeSpam: "default"},
+			"mg":     &MinGapAntispam{template: a.template, typeSpam: "default"},
+			"vip": &CompositeCommand{
+				subcommands: map[string]ports.Command{
+					"on":    &OnOffAntispam{enabled: true, typeSpam: "vip"},
+					"off":   &OnOffAntispam{enabled: false, typeSpam: "vip"},
+					"sim":   &SimAntispam{template: a.template, typeSpam: "vip"},
+					"msg":   &MsgAntispam{template: a.template, typeSpam: "vip"},
+					"p":     &PunishmentsAntispam{template: a.template, typeSpam: "vip"},
+					"rp":    &ResetPunishmentsAntispam{template: a.template, typeSpam: "vip"},
+					"mwlen": &MaxLenAntispam{template: a.template, typeSpam: "vip"},
+					"mwp":   &MaxPunishmentAntispam{template: a.template, typeSpam: "vip"},
+					"mg":    &MinGapAntispam{template: a.template, typeSpam: "vip"},
+				},
+				cursor: 2,
+			},
+			"emote": &CompositeCommand{
+				subcommands: map[string]ports.Command{
+					"on":    &OnOffAntispam{enabled: true, typeSpam: "emote"},
+					"off":   &OnOffAntispam{enabled: false, typeSpam: "emote"},
+					"msg":   &MsgAntispam{template: a.template, typeSpam: "emote"},
+					"p":     &PunishmentsAntispam{template: a.template, typeSpam: "emote"},
+					"rp":    &ResetPunishmentsAntispam{template: a.template, typeSpam: "emote"},
+					"melen": &MaxLenAntispam{template: a.template, typeSpam: "emote"},
+					"mep":   &MaxPunishmentAntispam{template: a.template, typeSpam: "emote"},
+				},
+				cursor: 2,
+			},
+			"da": &DelayAutomod{template: a.template},
+			"cmd": &CompositeCommand{
+				subcommands: map[string]ports.Command{
+					"add":  &AddCommand{},
+					"del":  &DelCommand{},
+					"list": &ListCommand{fs: a.fs},
+					"timer": &CompositeCommand{
+						subcommands: map[string]ports.Command{
+							"on":  &OnOffCommandTimer{template: a.template, timers: a.timers, t: timer},
+							"off": &OnOffCommandTimer{template: a.template, timers: a.timers, t: timer},
+							"set": &SetCommandTimer{template: a.template, timers: a.timers, t: timer},
+							"del": &DelCommandTimer{template: a.template, timers: a.timers},
+						},
+						defaultCmd: &AddCommandTimer{template: a.template, t: timer},
+						cursor:     3,
+					},
+				},
+				cursor: 2,
+			},
+			"ex": &CompositeCommand{
+				subcommands: map[string]ports.Command{
+					"set":  &SetExcept{template: a.template},
+					"del":  &DelExcept{},
+					"list": &ListExcept{template: a.template, fs: a.fs},
+				},
+				defaultCmd: &AddExcept{template: a.template},
+				cursor:     2,
+			},
+			"mark": &CompositeCommand{
+				subcommands: map[string]ports.Command{
+					"clear": &ClearMarker{stream: a.stream, username: ""},
+					"list":  &ListMarker{stream: a.stream, api: a.api, fs: a.fs, username: ""},
+				},
+				defaultCmd: &AddMarker{log: a.log, stream: a.stream, api: a.api, username: ""},
+				cursor:     2,
+			},
+			"mw": &CompositeCommand{
+				subcommands: map[string]ports.Command{
+					"del":  &DelMword{template: a.template},
+					"list": &ListMword{template: a.template, fs: a.fs},
+				},
+				defaultCmd: &AddMword{template: a.template},
+				cursor:     2,
+			},
+			"mwg": &CompositeCommand{
+				subcommands: map[string]ports.Command{
+					"on":     &OnOffMwordGroup{template: a.template},
+					"off":    &OnOffMwordGroup{template: a.template},
+					"create": &CreateMwordGroup{template: a.template},
+					"set":    &SetMwordGroup{template: a.template},
+					"add":    &AddMwordGroup{template: a.template},
+					"del":    &DelMwordGroup{template: a.template},
+					"list":   &ListMwordGroup{template: a.template, fs: a.fs},
+				},
+				cursor: 2,
+			},
+			"timers": &ListTimers{fs: a.fs},
+		},
+		cursor: 1,
+	}
+}
 
 func (a *Admin) FindMessages(msg *ports.ChatMessage) *ports.AnswerType {
 	if !(msg.Chatter.IsBroadcaster || msg.Chatter.IsMod) || !strings.HasPrefix(msg.Message.Text.Original, "!am") {
@@ -61,77 +203,15 @@ func (a *Admin) FindMessages(msg *ports.ChatMessage) *ports.AnswerType {
 		return NotFoundCmd
 	}
 
-	cmd := words[1]
-	if cmd == "ping" {
-		return a.handlePing()
-	}
-
-	handlers := map[string]func(cfg *config.Config, text *ports.MessageText) *ports.AnswerType{
-		"on": func(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
-			return a.handleOnOff(cfg, true)
-		},
-		"off": func(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
-			return a.handleOnOff(cfg, false)
-		},
-		"status": a.handleStatus,
-		"say":    a.handleSay,
-		"spam":   a.handleSpam,
-		"as":     a.handleAntiSpam,
-		"online": func(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
-			return a.handleMode(cfg, "online")
-		},
-		"always": func(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
-			return a.handleMode(cfg, "always")
-		},
-		"sim": func(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
-			return a.handleSim(cfg, text, "default")
-		},
-		"msg": func(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
-			return a.handleMsg(cfg, text, "default")
-		},
-		"time": a.handleTime,
-		"p": func(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
-			return a.handlePunishments(cfg, text, "default")
-		},
-		"rp": func(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
-			return a.handleDurationResetPunishments(cfg, text, "default")
-		},
-		"mwlen": func(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
-			return a.handleMaxLen(cfg, text, "default")
-		},
-		"mwp": func(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
-			return a.handleMaxPunishment(cfg, text, "default")
-		},
-		"min_gap": func(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
-			return a.handleMinGap(cfg, text, "default")
-		},
-		"da":    a.handleDelayAutomod,
-		"reset": a.handleReset,
-		"add":   a.handleAdd,
-		"del":   a.handleDel,
-		"vip":   a.handleVip,
-		"emote": a.handleEmote,
-		"game":  a.handleCategory,
-		"mwg":   a.handleMwg,
-		"mw":    a.handleMw,
-		"ex":    a.handleExcept,
-		"alias": a.handleAliases,
-		"mark": func(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
-			return a.handleMarkers(cfg, text, msg.Chatter.Username)
-		},
-		"cmd":    a.handleCommand,
-		"timers": a.handleTimersList,
-	}
-
-	handler, ok := handlers[cmd]
-	if !ok {
-		a.log.Info("cmd", slog.String("cmd", cmd))
-		return NotFoundCmd
-	}
+	// дикий костыль, не смотреть - есть шанс лишиться зрения
+	markCmd := a.root.(*CompositeCommand).subcommands["mark"].(*CompositeCommand)
+	markCmd.defaultCmd.(*AddMarker).username = msg.Chatter.Username
+	markCmd.subcommands["clear"].(*ClearMarker).username = msg.Chatter.Username
+	markCmd.subcommands["list"].(*ListMarker).username = msg.Chatter.Username
 
 	var result *ports.AnswerType
 	if err := a.manager.Update(func(cfg *config.Config) {
-		result = handler(cfg, &msg.Message.Text)
+		result = a.root.Execute(cfg, &msg.Message.Text)
 	}); err != nil {
 		a.log.Error("Failed update config", err, slog.String("msg", msg.Message.Text.Original))
 		return UnknownError
@@ -146,71 +226,27 @@ func (a *Admin) FindMessages(msg *ports.ChatMessage) *ports.AnswerType {
 	}
 }
 
-func parseIntArg(valStr string, min, max int) (int, bool) {
-	val, err := strconv.Atoi(valStr)
-	if err != nil {
-		return 0, false
+func (c *CompositeCommand) Execute(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+	words := text.Words()
+	if c.cursor >= len(words) {
+		if c.defaultCmd != nil {
+			return c.defaultCmd.Execute(cfg, text)
+		}
+		return NotFoundCmd
 	}
-	if (min != -1 && val < min) || (max != -1 && val > max) {
-		return 0, false
+
+	cmdName := words[c.cursor]
+	if cmd, ok := c.subcommands[cmdName]; ok {
+		return cmd.Execute(cfg, text)
 	}
-	return val, true
+
+	if c.defaultCmd != nil {
+		return c.defaultCmd.Execute(cfg, text)
+	}
+	return NotFoundCmd
 }
 
-func parseFloatArg(valStr string, min, max float64) (float64, bool) {
-	val, err := strconv.ParseFloat(valStr, 64)
-	if err != nil || val < min || val > max {
-		return 0, false
-	}
-
-	return math.Round(val*100) / 100, true
-}
-
-func parsePunishment(punishment string, allowInherit bool) (config.Punishment, error) {
-	punishment = strings.TrimSpace(punishment)
-	if punishment == "-" {
-		return config.Punishment{Action: "delete"}, nil
-	}
-
-	if allowInherit && punishment == "*" {
-		return config.Punishment{Action: "inherit"}, nil
-	}
-
-	if punishment == "0" {
-		return config.Punishment{Action: "ban"}, nil
-	}
-
-	duration, err := strconv.Atoi(punishment)
-	if err != nil || duration < 1 || duration > 1209600 {
-		return config.Punishment{}, fmt.Errorf("invalid timeout value")
-	}
-
-	return config.Punishment{Action: "timeout", Duration: duration}, nil
-}
-
-func formatPunishments(punishments []config.Punishment) []string {
-	result := make([]string, 0, len(punishments))
-	for _, p := range punishments {
-		result = append(result, formatPunishment(p))
-	}
-	return result
-}
-
-func formatPunishment(punishment config.Punishment) string {
-	var result string
-	switch punishment.Action {
-	case "delete":
-		result = "удаление сообщения"
-	case "timeout":
-		result = fmt.Sprintf("таймаут (%d)", punishment.Duration)
-	case "ban":
-		result = "бан"
-	}
-
-	return result
-}
-
-func (a *Admin) mergeSpamOptions(dst *config.SpamOptions, src map[string]bool) *config.SpamOptions {
+func mergeSpamOptions(dst *config.SpamOptions, src map[string]bool) *config.SpamOptions {
 	if dst == nil {
 		dst = &config.SpamOptions{}
 	}
@@ -262,7 +298,7 @@ func (a *Admin) mergeSpamOptions(dst *config.SpamOptions, src map[string]bool) *
 	return dst
 }
 
-func (a *Admin) mergeTimerOptions(dst *config.TimerOptions, src map[string]bool) *config.TimerOptions {
+func mergeTimerOptions(dst *config.TimerOptions, src map[string]bool) *config.TimerOptions {
 	if dst == nil {
 		dst = &config.TimerOptions{}
 	}
@@ -286,7 +322,7 @@ func (a *Admin) mergeTimerOptions(dst *config.TimerOptions, src map[string]bool)
 	return dst
 }
 
-func (a *Admin) buildResponse(arg1 []string, nameArg1 string, arg2 []string, nameArg2, err string) *ports.AnswerType {
+func buildResponse(arg1 []string, nameArg1 string, arg2 []string, nameArg2, err string) *ports.AnswerType {
 	var msgParts []string
 	if len(arg1) > 0 {
 		msgParts = append(msgParts, fmt.Sprintf("%s: %s", nameArg1, strings.Join(arg1, ", ")))

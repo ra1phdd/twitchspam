@@ -7,26 +7,15 @@ import (
 	"twitchspam/internal/app/ports"
 )
 
-func (a *Admin) handleAliases(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
-	words := text.Words()
-	if len(words) < 3 { // !am alias add/del/list
-		return NonParametr
-	}
-
-	handlers := map[string]func(cfg *config.Config, text *ports.MessageText) *ports.AnswerType{
-		"add":  a.handleAliasesAdd,
-		"del":  a.handleAliasesDel,
-		"list": a.handleAliasesList,
-	}
-
-	aliasCmd := words[2]
-	if handler, ok := handlers[aliasCmd]; ok {
-		return handler(cfg, text)
-	}
-	return NotFoundCmd
+type AddAlias struct {
+	template ports.TemplatePort
 }
 
-func (a *Admin) handleAliasesAdd(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+func (a *AddAlias) Execute(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+	return a.handleAliasesAdd(cfg, text)
+}
+
+func (a *AddAlias) handleAliasesAdd(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
 	words := text.Words()
 	if len(words) < 6 { // !am alias add <алиас> from <оригинальная команда>
 		return NonParametr
@@ -66,7 +55,15 @@ func (a *Admin) handleAliasesAdd(cfg *config.Config, text *ports.MessageText) *p
 	}
 }
 
-func (a *Admin) handleAliasesDel(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+type DelAlias struct {
+	template ports.TemplatePort
+}
+
+func (a *DelAlias) Execute(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+	return a.handleAliasesDel(cfg, text)
+}
+
+func (a *DelAlias) handleAliasesDel(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
 	words := text.Words()
 	if len(words) < 4 { // !am alias del <алиас>
 		return NonParametr
@@ -92,7 +89,15 @@ func (a *Admin) handleAliasesDel(cfg *config.Config, text *ports.MessageText) *p
 	}
 }
 
-func (a *Admin) handleAliasesList(cfg *config.Config, _ *ports.MessageText) *ports.AnswerType {
+type ListAlias struct {
+	fs ports.FileServerPort
+}
+
+func (a *ListAlias) Execute(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+	return a.handleAliasesList(cfg, text)
+}
+
+func (a *ListAlias) handleAliasesList(cfg *config.Config, _ *ports.MessageText) *ports.AnswerType {
 	if len(cfg.Aliases) == 0 {
 		return &ports.AnswerType{
 			Text:    []string{"алиасы не найдены!"},

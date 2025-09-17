@@ -33,12 +33,28 @@ func New(log logger.Logger, cfg *config.Config, ttl time.Duration, modChannel st
 		chans: make(map[string]chan bool),
 		ttl:   ttl,
 	}
+
+	go i.runIRC(modChannel)
 	go i.cleanupLoop()
 
+	return i, nil
+}
+
+func (i *IRC) runIRC(modChannel string) {
+	for {
+		err := i.connectAndListen(modChannel)
+		if err != nil {
+			i.log.Warn("IRC connection lost, retrying...", slog.String("error", err.Error()))
+			time.Sleep(5 * time.Second)
+		}
+	}
+}
+
+func (i *IRC) connectAndListen(modChannel string) error {
 	conn, err := tls.Dial("tcp", "irc.chat.twitch.tv:443", &tls.Config{MinVersion: tls.VersionTLS12})
 	if err != nil {
 		i.log.Error("Failed to connect to IRC chat Twitch", err)
-		return nil, err
+		return err
 	}
 
 	i.conn = conn
@@ -51,21 +67,17 @@ func New(log logger.Logger, cfg *config.Config, ttl time.Duration, modChannel st
 	i.write("CAP REQ :twitch.tv/commands")
 
 	i.join(modChannel)
-	i.isListen.Do(func() {
-		go i.listen()
-	})
-
-	return i, nil
+	return i.listen()
 }
 
-func (i *IRC) listen() {
+func (i *IRC) listen() error {
 	i.log.Info("Listening on IRC chat Twitch")
 
 	for {
 		line, err := i.reader.ReadString('\n')
 		if err != nil {
 			i.log.Error("Failed to read line on Twitch", err)
-			return
+			return err
 		}
 		line = strings.TrimSpace(line)
 
@@ -77,9 +89,9 @@ func (i *IRC) listen() {
 
 		switch {
 		case strings.Contains(line, "Login authentication failed"):
-			i.log.Fatal("Login authentication to IRC failed", nil, slog.String("line", line))
+			i.log.Error("Login authentication to IRC failed", nil, slog.String("line", line))
 		case strings.Contains(line, "Improperly formatted auth"):
-			i.log.Fatal("Improperly formatted auth to IRC", nil, slog.String("line", line))
+			i.log.Error("Improperly formatted auth to IRC", nil, slog.String("line", line))
 		case strings.Contains(line, "Your message was not sent because you are sending messages too quickly"):
 			i.log.Error("Rate limit to IRC exceeded", nil, slog.String("line", line))
 		case strings.Contains(line, "PRIVMSG"):

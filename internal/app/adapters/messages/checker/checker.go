@@ -1,7 +1,6 @@
 package checker
 
 import (
-	"fmt"
 	"runtime"
 	"strings"
 	"time"
@@ -80,7 +79,7 @@ func (c *Checker) Check(msg *ports.ChatMessage) *ports.CheckerAction {
 		return action
 	}
 
-	if action := c.CheckBanwords(msg.Message.Text.LowerNorm(), msg.Message.Text.Original); action != nil {
+	if action := c.CheckBanwords(msg.Message.Text.LowerNorm(), msg.Message.Text.Words()); action != nil {
 		return action
 	}
 
@@ -117,8 +116,8 @@ func (c *Checker) checkBypass(msg *ports.ChatMessage) *ports.CheckerAction {
 	return nil
 }
 
-func (c *Checker) CheckBanwords(text, textOriginal string) *ports.CheckerAction {
-	if !c.template.CheckOnBanwords(text, textOriginal) {
+func (c *Checker) CheckBanwords(textLower string, wordsOriginal []string) *ports.CheckerAction {
+	if !c.template.CheckOnBanwords(textLower, wordsOriginal) {
 		return nil
 	}
 
@@ -146,57 +145,17 @@ func (c *Checker) CheckAds(text string, username string) *ports.CheckerAction {
 }
 
 func (c *Checker) CheckMwords(text, username string, words []string) *ports.CheckerAction {
-	makeAction := func(punishments []config.Punishment, reason string, countPunishments int) *ports.CheckerAction {
-		action, dur := domain.GetPunishment(punishments, countPunishments)
-		return &ports.CheckerAction{
-			Type:     action,
-			Reason:   fmt.Sprintf("мворд (%s)", reason),
-			Duration: dur,
-		}
+	found, punishments, _ := c.template.MatchMwords(text, words)
+	if !found {
+		return nil
 	}
 
-	for _, group := range c.cfg.MwordGroup {
-		if !group.Enabled {
-			continue
-		}
-
-		for _, phrase := range group.Words {
-			if phrase == "" {
-				continue
-			}
-
-			if c.template.MatchPhrase(words, phrase) {
-				return makeAction(group.Punishments, phrase, c.timeouts.mwordGroup.Len(username))
-			}
-		}
-
-		for _, re := range group.Regexp {
-			if re == nil {
-				continue
-			}
-
-			if isMatch, _ := re.MatchString(text); isMatch {
-				return makeAction(group.Punishments, "регулярное выражение", c.timeouts.mwordGroup.Len(username))
-			}
-		}
+	action, dur := domain.GetPunishment(punishments, c.timeouts.mwordGroup.Len(username))
+	return &ports.CheckerAction{
+		Type:     action,
+		Reason:   "мворд",
+		Duration: dur,
 	}
-
-	for phrase, mw := range c.cfg.Mword {
-		if phrase == "" {
-			continue
-		}
-
-		if mw.Regexp != nil {
-			if isMatch, _ := mw.Regexp.MatchString(text); isMatch {
-				return makeAction(mw.Punishments, "регулярное выражение", c.timeouts.mword.Len(username))
-			}
-		}
-
-		if c.template.MatchPhrase(words, strings.ToLower(phrase)) {
-			return makeAction(mw.Punishments, phrase, c.timeouts.mword.Len(username))
-		}
-	}
-	return nil
 }
 
 func (c *Checker) checkSpam(msg *ports.ChatMessage) *ports.CheckerAction {
@@ -274,29 +233,35 @@ func (c *Checker) handleWordLength(words []string, settings config.SpamSettings)
 }
 
 func (c *Checker) handleEmotes(msg *ports.ChatMessage, countSpam int) *ports.CheckerAction {
-	if !c.cfg.Spam.SettingsEmotes.Enabled && (c.sevenTV.IsOnlyEmotes(msg.Message.Text.Original) || msg.Message.EmoteOnly) {
+	emoteOnly := c.sevenTV.IsOnlyEmotes(msg.Message.Text.Original) || msg.Message.EmoteOnly
+
+	if !c.cfg.Spam.SettingsEmotes.Enabled && emoteOnly {
 		return &ports.CheckerAction{Type: None}
 	}
 
-	if !c.sevenTV.IsOnlyEmotes(msg.Message.Text.Original) || !msg.Message.EmoteOnly {
+	if !emoteOnly {
 		return nil
 	}
-	words := msg.Message.Text.WordsLowerNorm()
 
 	if action := c.handleEmotesExceptions(msg, countSpam); action != nil {
 		return action
 	}
 
-	if countSpam <= c.cfg.Spam.SettingsEmotes.MessageLimit-1 {
-		return &ports.CheckerAction{Type: None}
+	maxLen := c.cfg.Spam.SettingsEmotes.MaxEmotesLength
+	if maxLen > 0 {
+		emoteCount := max(len(msg.Message.Emotes), c.sevenTV.CountEmotes(msg.Message.Text.Words()))
+		if emoteCount >= maxLen {
+			p := c.cfg.Spam.SettingsEmotes.MaxEmotesPunishment
+			return &ports.CheckerAction{
+				Type:     p.Action,
+				Reason:   "превышено максимальное кол-во эмоутов в сообщении",
+				Duration: time.Duration(p.Duration) * time.Second,
+			}
+		}
 	}
 
-	if c.cfg.Spam.SettingsEmotes.MaxEmotesLength > 0 && c.sevenTV.CountEmotes(words) >= c.cfg.Spam.SettingsEmotes.MaxEmotesLength {
-		return &ports.CheckerAction{
-			Type:     c.cfg.Spam.SettingsEmotes.MaxEmotesPunishment.Action,
-			Reason:   "превышено максимальное кол-во эмоутов в сообщении",
-			Duration: time.Duration(c.cfg.Spam.SettingsEmotes.MaxEmotesPunishment.Duration) * time.Second,
-		}
+	if countSpam <= c.cfg.Spam.SettingsEmotes.MessageLimit-1 {
+		return &ports.CheckerAction{Type: None}
 	}
 
 	action, dur := domain.GetPunishment(c.cfg.Spam.SettingsEmotes.Punishments, c.timeouts.emote.Len(msg.Chatter.Username))

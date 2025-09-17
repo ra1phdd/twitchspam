@@ -20,16 +20,15 @@ import (
 )
 
 type Twitch struct {
-	log      logger.Logger
-	cfg      *config.Config
-	stream   ports.StreamPort
-	api      ports.APIPort
-	checker  ports.CheckerPort
-	admin    ports.AdminPort
-	user     ports.UserPort
-	template ports.TemplatePort
-	stats    ports.StatsPort
-	irc      ports.IRCPort
+	log         logger.Logger
+	cfg         *config.Config
+	stream      ports.StreamPort
+	api         ports.APIPort
+	checker     ports.CheckerPort
+	admin, user ports.CommandPort
+	template    ports.TemplatePort
+	stats       ports.StatsPort
+	irc         ports.IRCPort
 
 	client *http.Client
 }
@@ -71,10 +70,10 @@ func New(log logger.Logger, manager *config.Manager, client *http.Client, modCha
 		return nil, err
 	}
 
-	fs := file_server.New()
+	fs := file_server.New(client)
 	timer := timers.NewTimingWheel(100*time.Millisecond, 600)
 
-	t.template = template.New(t.cfg.Aliases, t.cfg.Banwords.Words, t.cfg.Banwords.Regexp, t.stream)
+	t.template = template.New(log, t.cfg.Aliases, t.cfg.Banwords.Words, t.cfg.Banwords.Regexp, t.cfg.MwordGroup, t.cfg.Mword, t.stream)
 	t.checker = checker.NewCheck(log, t.cfg, t.stream, t.stats, t.irc, t.template)
 	t.admin = admin.New(log, manager, t.stream, t.api, t.template, fs, timer)
 	t.user = user.New(log, t.cfg, t.stream, t.stats, t.template, fs)
@@ -92,6 +91,7 @@ func New(log logger.Logger, manager *config.Manager, client *http.Client, modCha
 				t.stream.SetIslive(true)
 				t.stream.SetStreamID(live.ID)
 				t.stats.SetOnline(live.ViewerCount)
+				t.stats.SetEndTime(time.Now())
 			}
 		}
 	}()

@@ -7,7 +7,15 @@ import (
 	"twitchspam/internal/app/ports"
 )
 
-func (a *Admin) handleTimersList(cfg *config.Config, _ *ports.MessageText) *ports.AnswerType {
+type ListTimers struct {
+	fs ports.FileServerPort
+}
+
+func (t *ListTimers) Execute(cfg *config.Config, _ *ports.MessageText) *ports.AnswerType {
+	return t.handleTimersList(cfg)
+}
+
+func (t *ListTimers) handleTimersList(cfg *config.Config) *ports.AnswerType {
 	if len(cfg.Commands) == 0 {
 		return &ports.AnswerType{
 			Text:    []string{"таймеры не найдены!"},
@@ -35,12 +43,12 @@ func (a *Admin) handleTimersList(cfg *config.Config, _ *ports.MessageText) *port
 		}
 	}
 
-	key, err := a.fs.UploadToHaste(msg)
+	key, err := t.fs.UploadToHaste(msg)
 	if err != nil {
 		return UnknownError
 	}
 	return &ports.AnswerType{
-		Text:    []string{a.fs.GetURL(key)},
+		Text:    []string{t.fs.GetURL(key)},
 		IsReply: true,
 	}
 }

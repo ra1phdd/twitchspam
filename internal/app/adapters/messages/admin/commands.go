@@ -7,27 +7,13 @@ import (
 	"twitchspam/internal/app/ports"
 )
 
-func (a *Admin) handleCommand(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
-	words := text.Words()
-	if len(words) < 3 { // !am cmd add/del/list
-		return NonParametr
-	}
+type AddCommand struct{}
 
-	handlers := map[string]func(cfg *config.Config, text *ports.MessageText) *ports.AnswerType{
-		"add":   a.handleCommandAdd,
-		"del":   a.handleCommandDel,
-		"list":  a.handleCommandList,
-		"timer": a.handleCommandTimers,
-	}
-
-	linkCmd := words[2]
-	if handler, ok := handlers[linkCmd]; ok {
-		return handler(cfg, text)
-	}
-	return NotFoundCmd
+func (c *AddCommand) Execute(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+	return c.handleCommandAdd(cfg, text)
 }
 
-func (a *Admin) handleCommandAdd(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+func (c *AddCommand) handleCommandAdd(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
 	words := text.Words()
 	if len(words) < 5 { // !am cmd add <команда> <текст>
 		return NonParametr
@@ -48,7 +34,13 @@ func (a *Admin) handleCommandAdd(cfg *config.Config, text *ports.MessageText) *p
 	}
 }
 
-func (a *Admin) handleCommandDel(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+type DelCommand struct{}
+
+func (c *DelCommand) Execute(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+	return c.handleCommandDel(cfg, text)
+}
+
+func (c *DelCommand) handleCommandDel(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
 	words := text.Words()
 	if len(words) < 4 { // !am cmd del <команды через запятую>
 		return NonParametr
@@ -79,10 +71,18 @@ func (a *Admin) handleCommandDel(cfg *config.Config, text *ports.MessageText) *p
 		removed = append(removed, cmd)
 	}
 
-	return a.buildResponse(removed, "удалены", notFound, "не найдены", "команды не указаны")
+	return buildResponse(removed, "удалены", notFound, "не найдены", "команды не указаны")
 }
 
-func (a *Admin) handleCommandList(cfg *config.Config, _ *ports.MessageText) *ports.AnswerType {
+type ListCommand struct {
+	fs ports.FileServerPort
+}
+
+func (c *ListCommand) Execute(cfg *config.Config, _ *ports.MessageText) *ports.AnswerType {
+	return c.handleCommandList(cfg)
+}
+
+func (c *ListCommand) handleCommandList(cfg *config.Config) *ports.AnswerType {
 	if len(cfg.Commands) == 0 {
 		return &ports.AnswerType{
 			Text:    []string{"команды не найдены!"},
@@ -96,12 +96,12 @@ func (a *Admin) handleCommandList(cfg *config.Config, _ *ports.MessageText) *por
 	}
 	msg := "команды: \n" + strings.Join(parts, "\n")
 
-	key, err := a.fs.UploadToHaste(msg)
+	key, err := c.fs.UploadToHaste(msg)
 	if err != nil {
 		return UnknownError
 	}
 	return &ports.AnswerType{
-		Text:    []string{a.fs.GetURL(key)},
+		Text:    []string{c.fs.GetURL(key)},
 		IsReply: true,
 	}
 }

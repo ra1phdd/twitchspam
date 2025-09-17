@@ -5,23 +5,19 @@ import (
 	"twitchspam/internal/app/infrastructure/config"
 )
 
-type AdminPort interface {
-	FindMessages(msg *ChatMessage) *AnswerType
-}
-
-type AdminCommand interface {
-	Execute(cfg *config.Config, cmd string, args []string) *AnswerType
-}
-
-type UserPort interface {
-	FindMessages(msg *ChatMessage) *AnswerType
-}
-
 type CheckerPort interface {
 	Check(msg *ChatMessage) *CheckerAction
-	CheckBanwords(text, textOriginal string) *CheckerAction
+	CheckBanwords(textLower string, wordsOriginal []string) *CheckerAction
 	CheckAds(text string, username string) *CheckerAction
 	CheckMwords(text, username string, words []string) *CheckerAction
+}
+
+type CommandPort interface {
+	FindMessages(msg *ChatMessage) *AnswerType
+}
+
+type Command interface {
+	Execute(cfg *config.Config, text *MessageText) *AnswerType
 }
 
 type AnswerType struct {

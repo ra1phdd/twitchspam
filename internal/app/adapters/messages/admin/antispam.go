@@ -7,30 +7,16 @@ import (
 	"twitchspam/internal/app/ports"
 )
 
-func (a *Admin) handleAntiSpam(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
-	words := text.Words()
-	if len(words) < 3 { // !am as on/off/info
-		return NonParametr
-	}
-
-	handlers := map[string]func(cfg *config.Config, text *ports.MessageText) *ports.AnswerType{
-		"on": func(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
-			return a.handleAntiSpamOnOff(cfg, true, "default")
-		},
-		"off": func(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
-			return a.handleAntiSpamOnOff(cfg, false, "default")
-		},
-		"info": a.handleAntiSpamInfo,
-	}
-
-	antispamCmd := words[2]
-	if handler, ok := handlers[antispamCmd]; ok {
-		return handler(cfg, text)
-	}
-	return nil
+type OnOffAntispam struct {
+	enabled  bool
+	typeSpam string
 }
 
-func (a *Admin) handleAntiSpamOnOff(cfg *config.Config, enabled bool, typeSpam string) *ports.AnswerType {
+func (a *OnOffAntispam) Execute(cfg *config.Config, _ *ports.MessageText) *ports.AnswerType {
+	return a.handleAntiSpamOnOff(cfg, a.enabled, a.typeSpam)
+}
+
+func (a *OnOffAntispam) handleAntiSpamOnOff(cfg *config.Config, enabled bool, typeSpam string) *ports.AnswerType {
 	targetMap := map[string]*bool{
 		"vip":     &cfg.Spam.SettingsVIP.Enabled,
 		"emote":   &cfg.Spam.SettingsEmotes.Enabled,
@@ -43,7 +29,16 @@ func (a *Admin) handleAntiSpamOnOff(cfg *config.Config, enabled bool, typeSpam s
 	return nil
 }
 
-func (a *Admin) handleAntiSpamInfo(cfg *config.Config, _ *ports.MessageText) *ports.AnswerType {
+type InfoAntispam struct {
+	template ports.TemplatePort
+	fs       ports.FileServerPort
+}
+
+func (a *InfoAntispam) Execute(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+	return a.handleAntiSpamInfo(cfg, text)
+}
+
+func (a *InfoAntispam) handleAntiSpamInfo(cfg *config.Config, _ *ports.MessageText) *ports.AnswerType {
 	whitelistUsers := "не найдены"
 	if len(cfg.Spam.WhitelistUsers) > 0 {
 		var sb strings.Builder
@@ -62,7 +57,7 @@ func (a *Admin) handleAntiSpamInfo(cfg *config.Config, _ *ports.MessageText) *po
 	if len(cfg.Spam.Exceptions) > 0 {
 		var sb strings.Builder
 		for word, ex := range cfg.Spam.Exceptions {
-			sb.WriteString(fmt.Sprintf("    - %s (message_limit: %d, punishments: %s)\n", word, ex.MessageLimit, strings.Join(formatPunishments(ex.Punishments), ", ")))
+			sb.WriteString(fmt.Sprintf("  - %s (лимит сообщений: %d, наказания: %s)\n", word, ex.MessageLimit, strings.Join(a.template.FormatPunishments(ex.Punishments), ", ")))
 		}
 		exceptions = sb.String()
 	}
@@ -75,27 +70,27 @@ func (a *Admin) handleAntiSpamInfo(cfg *config.Config, _ *ports.MessageText) *po
 		"- включен: " + fmt.Sprint(cfg.Spam.SettingsDefault.Enabled),
 		"- порог схожести сообщений: " + fmt.Sprint(cfg.Spam.SettingsDefault.SimilarityThreshold),
 		"- кол-во похожих сообщений: " + fmt.Sprint(cfg.Spam.SettingsDefault.MessageLimit),
-		"- наказания: " + strings.Join(formatPunishments(cfg.Spam.SettingsDefault.Punishments), ", "),
+		"- наказания: " + strings.Join(a.template.FormatPunishments(cfg.Spam.SettingsDefault.Punishments), ", "),
 		"- время сброса счётчика наказаний: " + fmt.Sprint(cfg.Spam.SettingsDefault.DurationResetPunishments),
 		"- ограничение максимальной длины слова: " + fmt.Sprint(cfg.Spam.SettingsDefault.MaxWordLength),
-		"- наказание за превышение длины слова: " + formatPunishment(cfg.Spam.SettingsDefault.MaxWordPunishment),
+		"- наказание за превышение длины слова: " + a.template.FormatPunishment(cfg.Spam.SettingsDefault.MaxWordPunishment),
 		"- минимальное количество разных сообщений между спамом: " + fmt.Sprint(cfg.Spam.SettingsDefault.MinGapMessages),
 		"\nвиперы:",
 		"- включен: " + fmt.Sprint(cfg.Spam.SettingsVIP.Enabled),
 		"- порог схожести сообщений: " + fmt.Sprint(cfg.Spam.SettingsVIP.SimilarityThreshold),
 		"- кол-во похожих сообщений: " + fmt.Sprint(cfg.Spam.SettingsVIP.MessageLimit),
-		"- наказания: " + strings.Join(formatPunishments(cfg.Spam.SettingsVIP.Punishments), ", "),
+		"- наказания: " + strings.Join(a.template.FormatPunishments(cfg.Spam.SettingsVIP.Punishments), ", "),
 		"- время сброса счётчика наказаний: " + fmt.Sprint(cfg.Spam.SettingsVIP.DurationResetPunishments),
 		"- ограничение максимальной длины слова: " + fmt.Sprint(cfg.Spam.SettingsVIP.MaxWordLength),
-		"- наказание за превышение длины слова: " + formatPunishment(cfg.Spam.SettingsVIP.MaxWordPunishment),
+		"- наказание за превышение длины слова: " + a.template.FormatPunishment(cfg.Spam.SettingsVIP.MaxWordPunishment),
 		"- минимальное количество разных сообщений между спамом: " + fmt.Sprint(cfg.Spam.SettingsVIP.MinGapMessages),
 		"\nэмоуты:",
 		"- включен: " + fmt.Sprint(cfg.Spam.SettingsEmotes.Enabled),
 		"- кол-во похожих сообщений: " + fmt.Sprint(cfg.Spam.SettingsEmotes.MessageLimit),
-		"- наказания: " + strings.Join(formatPunishments(cfg.Spam.SettingsEmotes.Punishments), ", "),
+		"- наказания: " + strings.Join(a.template.FormatPunishments(cfg.Spam.SettingsEmotes.Punishments), ", "),
 		"- время сброса счётчика наказаний: " + fmt.Sprint(cfg.Spam.SettingsEmotes.DurationResetPunishments),
 		"- ограничение количества эмоутов в сообщении: " + fmt.Sprint(cfg.Spam.SettingsEmotes.MaxEmotesLength),
-		"- наказание за превышение количества эмоутов в сообщении: " + formatPunishment(cfg.Spam.SettingsEmotes.MaxEmotesPunishment),
+		"- наказание за превышение количества эмоутов в сообщении: " + a.template.FormatPunishment(cfg.Spam.SettingsEmotes.MaxEmotesPunishment),
 		"\nисключения:",
 		exceptions,
 	}
@@ -112,12 +107,29 @@ func (a *Admin) handleAntiSpamInfo(cfg *config.Config, _ *ports.MessageText) *po
 	}
 }
 
-func (a *Admin) handleMode(cfg *config.Config, mode string) *ports.AnswerType {
+type ModeAntispam struct {
+	mode string
+}
+
+func (a *ModeAntispam) Execute(cfg *config.Config, _ *ports.MessageText) *ports.AnswerType {
+	return a.handleAntispamMode(cfg, a.mode)
+}
+
+func (a *ModeAntispam) handleAntispamMode(cfg *config.Config, mode string) *ports.AnswerType {
 	cfg.Spam.Mode = mode
 	return nil
 }
 
-func (a *Admin) handleSim(cfg *config.Config, text *ports.MessageText, typeSpam string) *ports.AnswerType {
+type SimAntispam struct {
+	template ports.TemplatePort
+	typeSpam string
+}
+
+func (a *SimAntispam) Execute(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+	return a.handleSim(cfg, text, a.typeSpam)
+}
+
+func (a *SimAntispam) handleSim(cfg *config.Config, text *ports.MessageText, typeSpam string) *ports.AnswerType {
 	words := text.Words()
 	target, idx := &cfg.Spam.SettingsDefault.SimilarityThreshold, 2
 	if typeSpam == "vip" {
@@ -128,7 +140,7 @@ func (a *Admin) handleSim(cfg *config.Config, text *ports.MessageText, typeSpam 
 		return NonParametr
 	}
 
-	if val, ok := parseFloatArg(words[idx], 0.1, 1); ok {
+	if val, ok := a.template.ParseFloatArg(words[idx], 0.1, 1); ok {
 		*target = val
 		return nil
 	}
@@ -139,7 +151,16 @@ func (a *Admin) handleSim(cfg *config.Config, text *ports.MessageText, typeSpam 
 	}
 }
 
-func (a *Admin) handleMsg(cfg *config.Config, text *ports.MessageText, typeSpam string) *ports.AnswerType {
+type MsgAntispam struct {
+	template ports.TemplatePort
+	typeSpam string
+}
+
+func (a *MsgAntispam) Execute(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+	return a.handleMsg(cfg, text, a.typeSpam)
+}
+
+func (a *MsgAntispam) handleMsg(cfg *config.Config, text *ports.MessageText, typeSpam string) *ports.AnswerType {
 	words := text.Words()
 	target, idx := &cfg.Spam.SettingsDefault.MessageLimit, 2
 	if typeSpam == "vip" {
@@ -152,7 +173,7 @@ func (a *Admin) handleMsg(cfg *config.Config, text *ports.MessageText, typeSpam 
 		return NonParametr
 	}
 
-	if val, ok := parseIntArg(words[idx], 2, 15); ok {
+	if val, ok := a.template.ParseIntArg(words[idx], 2, 15); ok {
 		*target = val
 		return nil
 	}
@@ -163,7 +184,16 @@ func (a *Admin) handleMsg(cfg *config.Config, text *ports.MessageText, typeSpam 
 	}
 }
 
-func (a *Admin) handlePunishments(cfg *config.Config, text *ports.MessageText, typeSpam string) *ports.AnswerType {
+type PunishmentsAntispam struct {
+	template ports.TemplatePort
+	typeSpam string
+}
+
+func (a *PunishmentsAntispam) Execute(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+	return a.handlePunishments(cfg, text, a.typeSpam)
+}
+
+func (a *PunishmentsAntispam) handlePunishments(cfg *config.Config, text *ports.MessageText, typeSpam string) *ports.AnswerType {
 	words := text.Words()
 	target, idx := &cfg.Spam.SettingsDefault.Punishments, 2
 	if typeSpam == "vip" {
@@ -188,7 +218,7 @@ func (a *Admin) handlePunishments(cfg *config.Config, text *ports.MessageText, t
 		}
 
 		allowInherit := typeSpam != "default"
-		p, err := parsePunishment(str, allowInherit)
+		p, err := a.template.ParsePunishment(str, allowInherit)
 		if err != nil {
 			return &ports.AnswerType{
 				Text:    []string{fmt.Sprintf("не удалось распарсить наказание (%s)!", str)},
@@ -218,7 +248,16 @@ func (a *Admin) handlePunishments(cfg *config.Config, text *ports.MessageText, t
 	return nil
 }
 
-func (a *Admin) handleDurationResetPunishments(cfg *config.Config, text *ports.MessageText, typeSpam string) *ports.AnswerType {
+type ResetPunishmentsAntispam struct {
+	template ports.TemplatePort
+	typeSpam string
+}
+
+func (a *ResetPunishmentsAntispam) Execute(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+	return a.handleDurationResetPunishments(cfg, text, a.typeSpam)
+}
+
+func (a *ResetPunishmentsAntispam) handleDurationResetPunishments(cfg *config.Config, text *ports.MessageText, typeSpam string) *ports.AnswerType {
 	words := text.Words()
 	target, idx := &cfg.Spam.SettingsDefault.DurationResetPunishments, 2
 	if typeSpam == "vip" {
@@ -231,7 +270,7 @@ func (a *Admin) handleDurationResetPunishments(cfg *config.Config, text *ports.M
 		return NonParametr
 	}
 
-	if val, ok := parseIntArg(words[idx], 1, 86400); ok {
+	if val, ok := a.template.ParseIntArg(words[idx], 1, 86400); ok {
 		*target = val
 		return nil
 	}
@@ -242,7 +281,16 @@ func (a *Admin) handleDurationResetPunishments(cfg *config.Config, text *ports.M
 	}
 }
 
-func (a *Admin) handleMaxLen(cfg *config.Config, text *ports.MessageText, typeSpam string) *ports.AnswerType {
+type MaxLenAntispam struct {
+	template ports.TemplatePort
+	typeSpam string
+}
+
+func (a *MaxLenAntispam) Execute(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+	return a.handleMaxLen(cfg, text, a.typeSpam)
+}
+
+func (a *MaxLenAntispam) handleMaxLen(cfg *config.Config, text *ports.MessageText, typeSpam string) *ports.AnswerType {
 	words := text.Words()
 	params := map[string]struct {
 		target *int
@@ -260,7 +308,7 @@ func (a *Admin) handleMaxLen(cfg *config.Config, text *ports.MessageText, typeSp
 			return NonParametr
 		}
 
-		if val, ok := parseIntArg(words[param.idx], 0, param.max); ok {
+		if val, ok := a.template.ParseIntArg(words[param.idx], 0, param.max); ok {
 			*param.target = val
 			return nil
 		}
@@ -274,7 +322,16 @@ func (a *Admin) handleMaxLen(cfg *config.Config, text *ports.MessageText, typeSp
 	return nil
 }
 
-func (a *Admin) handleMaxPunishment(cfg *config.Config, text *ports.MessageText, typeSpam string) *ports.AnswerType {
+type MaxPunishmentAntispam struct {
+	template ports.TemplatePort
+	typeSpam string
+}
+
+func (a *MaxPunishmentAntispam) Execute(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+	return a.handleMaxPunishment(cfg, text, a.typeSpam)
+}
+
+func (a *MaxPunishmentAntispam) handleMaxPunishment(cfg *config.Config, text *ports.MessageText, typeSpam string) *ports.AnswerType {
 	words := text.Words()
 	target, idx := &cfg.Spam.SettingsDefault.MaxWordPunishment, 2
 	if typeSpam == "vip" {
@@ -287,7 +344,7 @@ func (a *Admin) handleMaxPunishment(cfg *config.Config, text *ports.MessageText,
 		return NonParametr
 	}
 
-	p, err := parsePunishment(words[idx], true)
+	p, err := a.template.ParsePunishment(words[idx], true)
 	if err != nil {
 		return &ports.AnswerType{
 			Text:    []string{fmt.Sprintf("не удалось распарсить наказание (%s)!", words[2])},
@@ -310,7 +367,16 @@ func (a *Admin) handleMaxPunishment(cfg *config.Config, text *ports.MessageText,
 	return nil
 }
 
-func (a *Admin) handleMinGap(cfg *config.Config, text *ports.MessageText, typeSpam string) *ports.AnswerType {
+type MinGapAntispam struct {
+	template ports.TemplatePort
+	typeSpam string
+}
+
+func (a *MinGapAntispam) Execute(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+	return a.handleMinGap(cfg, text, a.typeSpam)
+}
+
+func (a *MinGapAntispam) handleMinGap(cfg *config.Config, text *ports.MessageText, typeSpam string) *ports.AnswerType {
 	words := text.Words()
 	target, idx := &cfg.Spam.SettingsDefault.MinGapMessages, 2
 	if typeSpam == "vip" {
@@ -321,7 +387,7 @@ func (a *Admin) handleMinGap(cfg *config.Config, text *ports.MessageText, typeSp
 		return NonParametr
 	}
 
-	if val, ok := parseIntArg(words[idx], 0, 15); ok {
+	if val, ok := a.template.ParseIntArg(words[idx], 0, 15); ok {
 		*target = val
 		return nil
 	}
@@ -332,13 +398,21 @@ func (a *Admin) handleMinGap(cfg *config.Config, text *ports.MessageText, typeSp
 	}
 }
 
-func (a *Admin) handleTime(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+type TimeAntispam struct {
+	template ports.TemplatePort
+}
+
+func (a *TimeAntispam) Execute(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+	return a.handleTime(cfg, text)
+}
+
+func (a *TimeAntispam) handleTime(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
 	words := text.Words()
 	if len(words) < 3 { // !am time <значение>
 		return NonParametr
 	}
 
-	if val, ok := parseIntArg(words[2], 1, 300); ok {
+	if val, ok := a.template.ParseIntArg(words[2], 1, 300); ok {
 		cfg.Spam.CheckWindowSeconds = val
 		return nil
 	}
@@ -349,7 +423,13 @@ func (a *Admin) handleTime(cfg *config.Config, text *ports.MessageText) *ports.A
 	}
 }
 
-func (a *Admin) handleAdd(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+type AddAntispam struct{}
+
+func (a *AddAntispam) Execute(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+	return a.handleAdd(cfg, text)
+}
+
+func (a *AddAntispam) handleAdd(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
 	words := text.Words()
 	if len(words) < 3 { // !am add <пользователи через запятую>
 		return NonParametr
@@ -370,10 +450,16 @@ func (a *Admin) handleAdd(cfg *config.Config, text *ports.MessageText) *ports.An
 		}
 	}
 
-	return a.buildResponse(added, "добавлены в список", alreadyExists, "уже есть в списке", "пользователи не указаны")
+	return buildResponse(added, "добавлены в список", alreadyExists, "уже есть в списке", "пользователи не указаны")
 }
 
-func (a *Admin) handleDel(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+type DelAntispam struct{}
+
+func (a *DelAntispam) Execute(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+	return a.handleDel(cfg, text)
+}
+
+func (a *DelAntispam) handleDel(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
 	words := text.Words()
 	if len(words) < 3 { // !am del <пользователи через запятую>
 		return NonParametr
@@ -394,85 +480,5 @@ func (a *Admin) handleDel(cfg *config.Config, text *ports.MessageText) *ports.An
 		}
 	}
 
-	return a.buildResponse(removed, "удалены из списока", notFound, "не найдены", "пользователи не указаны")
-}
-
-func (a *Admin) handleVip(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
-	words := text.Words()
-	if len(words) < 3 { // !am vip on/off/sim/...
-		return NonParametr
-	}
-
-	handlers := map[string]func(cfg *config.Config, text *ports.MessageText) *ports.AnswerType{
-		"on": func(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
-			return a.handleAntiSpamOnOff(cfg, true, "vip")
-		},
-		"off": func(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
-			return a.handleAntiSpamOnOff(cfg, false, "vip")
-		},
-		"sim": func(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
-			return a.handleSim(cfg, text, "vip")
-		},
-		"msg": func(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
-			return a.handleMsg(cfg, text, "vip")
-		},
-		"p": func(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
-			return a.handlePunishments(cfg, text, "vip")
-		},
-		"rp": func(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
-			return a.handleDurationResetPunishments(cfg, text, "vip")
-		},
-		"mwlen": func(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
-			return a.handleMaxLen(cfg, text, "vip")
-		},
-		"mwp": func(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
-			return a.handleMaxPunishment(cfg, text, "vip")
-		},
-		"min_gap": func(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
-			return a.handleMinGap(cfg, text, "vip")
-		},
-	}
-
-	vipCmd := words[2]
-	if handler, ok := handlers[vipCmd]; ok {
-		return handler(cfg, text)
-	}
-	return NotFoundCmd
-}
-
-func (a *Admin) handleEmote(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
-	words := text.Words()
-	if len(words) < 3 { // !am emote on/off/sim/...
-		return NonParametr
-	}
-
-	handlers := map[string]func(cfg *config.Config, text *ports.MessageText) *ports.AnswerType{
-		"on": func(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
-			return a.handleAntiSpamOnOff(cfg, true, "emote")
-		},
-		"off": func(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
-			return a.handleAntiSpamOnOff(cfg, false, "emote")
-		},
-		"msg": func(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
-			return a.handleMsg(cfg, text, "emote")
-		},
-		"p": func(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
-			return a.handlePunishments(cfg, text, "emote")
-		},
-		"rp": func(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
-			return a.handleDurationResetPunishments(cfg, text, "emote")
-		},
-		"melen": func(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
-			return a.handleMaxLen(cfg, text, "emote")
-		},
-		"mep": func(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
-			return a.handleMaxPunishment(cfg, text, "emote")
-		},
-	}
-
-	emoteCmd := words[2]
-	if handler, ok := handlers[emoteCmd]; ok {
-		return handler(cfg, text)
-	}
-	return NotFoundCmd
+	return buildResponse(removed, "удалены из списока", notFound, "не найдены", "пользователи не указаны")
 }

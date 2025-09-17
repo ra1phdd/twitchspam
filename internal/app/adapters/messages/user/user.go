@@ -40,12 +40,12 @@ func (u *User) FindMessages(msg *ports.ChatMessage) *ports.AnswerType {
 		u.usersLimiter[msg.Chatter.Username] = rate.NewLimiter(rate.Every(time.Minute), 3)
 	}
 
-	if action := u.handleStats(msg); action != nil {
-		return action
-	}
-
 	if !u.cfg.Enabled {
 		return nil
+	}
+
+	if action := u.handleStats(msg); action != nil {
+		return action
 	}
 
 	if action := u.handleCommands(msg); action != nil {

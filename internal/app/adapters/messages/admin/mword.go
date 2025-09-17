@@ -9,27 +9,17 @@ import (
 	"twitchspam/internal/app/ports"
 )
 
-func (a *Admin) handleMw(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
-	words := text.Words()
-	if len(words) < 3 { // !am mw add/del/list
-		return NonParametr
-	}
-
-	handlers := map[string]func(cfg *config.Config, text *ports.MessageText) *ports.AnswerType{
-		"del":  a.handleMwDel,
-		"list": a.handleMwList,
-	}
-
-	mwCmd := words[2]
-	if handler, ok := handlers[mwCmd]; ok {
-		return handler(cfg, text)
-	}
-	return a.handleMwAdd(cfg, text)
+type AddMword struct {
+	template ports.TemplatePort
 }
 
-func (a *Admin) handleMwAdd(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+func (m *AddMword) Execute(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+	return m.handleMwAdd(cfg, text)
+}
+
+func (m *AddMword) handleMwAdd(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
 	words := text.Words()
-	opts := a.template.ParseOptions(&words, template.SpamOptions) // ParseOptions удаляет опции из слайса words
+	opts := m.template.ParseOptions(&words, template.SpamOptions) // ParseOptions удаляет опции из слайса words
 
 	idx := 2 // id параметра, с которого начинаются аргументы команды
 	if words[2] == "add" {
@@ -49,7 +39,7 @@ func (a *Admin) handleMwAdd(cfg *config.Config, text *ports.MessageText) *ports.
 			continue
 		}
 
-		p, err := parsePunishment(pa, false)
+		p, err := m.template.ParsePunishment(pa, false)
 		if err != nil {
 			return &ports.AnswerType{
 				Text:    []string{fmt.Sprintf("не удалось распарсить наказания (%s)!", pa)},
@@ -72,8 +62,9 @@ func (a *Admin) handleMwAdd(cfg *config.Config, text *ports.MessageText) *ports.
 		mword = &config.Mword{
 			Punishments: punishments,
 			Regexp:      re,
-			Options:     a.mergeSpamOptions(mword.Options, opts),
+			Options:     mergeSpamOptions(mword.Options, opts),
 		}
+		m.template.UpdateMwords(cfg.MwordGroup, cfg.Mword)
 		return nil
 	}
 
@@ -86,14 +77,23 @@ func (a *Admin) handleMwAdd(cfg *config.Config, text *ports.MessageText) *ports.
 		mword := cfg.Mword[word]
 		mword = &config.Mword{
 			Punishments: punishments,
-			Options:     a.mergeSpamOptions(mword.Options, opts),
+			Options:     mergeSpamOptions(mword.Options, opts),
 		}
 	}
 
+	m.template.UpdateMwords(cfg.MwordGroup, cfg.Mword)
 	return nil
 }
 
-func (a *Admin) handleMwDel(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+type DelMword struct {
+	template ports.TemplatePort
+}
+
+func (m *DelMword) Execute(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+	return m.handleMwDel(cfg, text)
+}
+
+func (m *DelMword) handleMwDel(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
 	words := text.Words()
 	if len(words) < 4 { // !am mw del <слова/фразы через запятую или regex>
 		return NonParametr
@@ -119,10 +119,20 @@ func (a *Admin) handleMwDel(cfg *config.Config, text *ports.MessageText) *ports.
 		}
 	}
 
-	return a.buildResponse(removed, "удалены", notFound, "не найдены", "мворды не указаны")
+	m.template.UpdateMwords(cfg.MwordGroup, cfg.Mword)
+	return buildResponse(removed, "удалены", notFound, "не найдены", "мворды не указаны")
 }
 
-func (a *Admin) handleMwList(cfg *config.Config, _ *ports.MessageText) *ports.AnswerType {
+type ListMword struct {
+	template ports.TemplatePort
+	fs       ports.FileServerPort
+}
+
+func (m *ListMword) Execute(cfg *config.Config, _ *ports.MessageText) *ports.AnswerType {
+	return m.handleMwList(cfg)
+}
+
+func (m *ListMword) handleMwList(cfg *config.Config) *ports.AnswerType {
 	if len(cfg.Mword) == 0 {
 		return &ports.AnswerType{
 			Text:    []string{"мворды не найдены!"},
@@ -132,16 +142,16 @@ func (a *Admin) handleMwList(cfg *config.Config, _ *ports.MessageText) *ports.An
 
 	var parts []string
 	for word, mw := range cfg.Mword {
-		parts = append(parts, fmt.Sprintf("- %s (наказания: %s)", word, formatPunishments(mw.Punishments)))
+		parts = append(parts, fmt.Sprintf("- %s (наказания: %s)", word, m.template.FormatPunishments(mw.Punishments)))
 	}
 	msg := "мворды: \n" + strings.Join(parts, "\n")
 
-	key, err := a.fs.UploadToHaste(msg)
+	key, err := m.fs.UploadToHaste(msg)
 	if err != nil {
 		return UnknownError
 	}
 	return &ports.AnswerType{
-		Text:    []string{a.fs.GetURL(key)},
+		Text:    []string{m.fs.GetURL(key)},
 		IsReply: true,
 	}
 }

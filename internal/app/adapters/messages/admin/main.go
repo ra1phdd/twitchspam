@@ -11,7 +11,13 @@ import (
 	"twitchspam/internal/app/ports"
 )
 
-func (a *Admin) handlePing() *ports.AnswerType {
+type Ping struct{}
+
+func (p *Ping) Execute(_ *config.Config, _ *ports.MessageText) *ports.AnswerType {
+	return p.handlePing()
+}
+
+func (p *Ping) handlePing() *ports.AnswerType {
 	uptime := time.Since(startApp)
 
 	var m runtime.MemStats
@@ -28,36 +34,58 @@ func (a *Admin) handlePing() *ports.AnswerType {
 	}
 }
 
-func (a *Admin) handleOnOff(cfg *config.Config, enabled bool) *ports.AnswerType {
+type OnOff struct {
+	enabled bool
+}
+
+func (o *OnOff) Execute(cfg *config.Config, _ *ports.MessageText) *ports.AnswerType {
+	return o.handleOnOff(cfg, o.enabled)
+}
+
+func (o *OnOff) handleOnOff(cfg *config.Config, enabled bool) *ports.AnswerType {
 	cfg.Enabled = enabled
 	return nil
 }
 
-func (a *Admin) handleCategory(_ *config.Config, text *ports.MessageText) *ports.AnswerType {
+type Category struct {
+	stream ports.StreamPort
+}
+
+func (c *Category) Execute(_ *config.Config, text *ports.MessageText) *ports.AnswerType {
+	return c.handleCategory(text)
+}
+
+func (c *Category) handleCategory(text *ports.MessageText) *ports.AnswerType {
 	words := text.Words()
 	if len(words) < 3 { // !am game <игра>
 		return NonParametr
 	}
 
-	if !a.stream.IsLive() {
+	if !c.stream.IsLive() {
 		return &ports.AnswerType{
 			Text:    []string{"стрим выключен!"},
 			IsReply: true,
 		}
 	}
 
-	if a.stream.Category() != "Games + Demos" {
+	if c.stream.Category() != "Games + Demos" {
 		return &ports.AnswerType{
 			Text:    []string{"работает только при категории Games + Demos!"},
 			IsReply: true,
 		}
 	}
 
-	a.stream.SetCategory(text.Tail(2))
+	c.stream.SetCategory(text.Tail(2))
 	return nil
 }
 
-func (a *Admin) handleStatus(cfg *config.Config, _ *ports.MessageText) *ports.AnswerType {
+type Status struct{}
+
+func (s *Status) Execute(cfg *config.Config, _ *ports.MessageText) *ports.AnswerType {
+	return s.handleStatus(cfg)
+}
+
+func (s *Status) handleStatus(cfg *config.Config) *ports.AnswerType {
 	if !cfg.Enabled {
 		return &ports.AnswerType{
 			Text:    []string{"бот выключен!"},
@@ -73,12 +101,26 @@ func (a *Admin) handleStatus(cfg *config.Config, _ *ports.MessageText) *ports.An
 	}
 }
 
-func (a *Admin) handleReset(cfg *config.Config, _ *ports.MessageText) *ports.AnswerType {
-	cfg.Spam = a.manager.GetDefault().Spam
+type Reset struct {
+	manager *config.Manager
+}
+
+func (r *Reset) Execute(cfg *config.Config, _ *ports.MessageText) *ports.AnswerType {
+	return r.handleReset(cfg)
+}
+
+func (r *Reset) handleReset(cfg *config.Config) *ports.AnswerType {
+	cfg.Spam = r.manager.GetDefault().Spam
 	return nil
 }
 
-func (a *Admin) handleSay(_ *config.Config, text *ports.MessageText) *ports.AnswerType {
+type Say struct{}
+
+func (s *Say) Execute(_ *config.Config, text *ports.MessageText) *ports.AnswerType {
+	return s.handleSay(text)
+}
+
+func (s *Say) handleSay(text *ports.MessageText) *ports.AnswerType {
 	words := text.Words()
 	if len(words) < 3 { // !am say <текст>
 		return NonParametr
@@ -90,7 +132,13 @@ func (a *Admin) handleSay(_ *config.Config, text *ports.MessageText) *ports.Answ
 	}
 }
 
-func (a *Admin) handleSpam(_ *config.Config, text *ports.MessageText) *ports.AnswerType {
+type Spam struct{}
+
+func (s *Spam) Execute(_ *config.Config, text *ports.MessageText) *ports.AnswerType {
+	return s.handleSpam(text)
+}
+
+func (a *Spam) handleSpam(text *ports.MessageText) *ports.AnswerType {
 	words := text.Words()
 	if len(words) < 4 { // !am spam <кол-во раз> <текст>
 		return NonParametr

@@ -9,10 +9,12 @@ import (
 	"strings"
 )
 
-type FileServer struct{}
+type FileServer struct {
+	client *http.Client
+}
 
-func New() *FileServer {
-	return &FileServer{}
+func New(client *http.Client) *FileServer {
+	return &FileServer{client: client}
 }
 
 func (fs *FileServer) UploadToHaste(text string) (string, error) {
@@ -26,7 +28,7 @@ func (fs *FileServer) UploadToHaste(text string) (string, error) {
 	req.Header.Set("Content-Type", "text/plain; charset=utf-8")
 	req.Header.Set("Accept", "application/json")
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := fs.client.Do(req)
 	if err != nil {
 		return "", err
 	}
@@ -44,6 +46,7 @@ func (fs *FileServer) UploadToHaste(text string) (string, error) {
 	if err := dec.Decode(&out); err != nil {
 		return "", err
 	}
+
 	if out.Key == "" {
 		return "", errors.New("empty key in response")
 	}

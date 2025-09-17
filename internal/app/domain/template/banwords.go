@@ -3,39 +3,60 @@ package template
 import (
 	"github.com/dlclark/regexp2"
 	"strings"
+	"twitchspam/internal/app/infrastructure/trie"
+	"twitchspam/internal/app/ports"
+	"twitchspam/pkg/logger"
 )
 
 type BanwordsTemplate struct {
-	words map[string]struct{}
-	re    []*regexp2.Regexp
+	trie ports.TriePort[bool]
+	re   *regexp2.Regexp
 }
 
-func NewBanwords(banWords []string, banRegexps []*regexp2.Regexp) *BanwordsTemplate {
-	bt := &BanwordsTemplate{
-		words: make(map[string]struct{}, len(banWords)),
-		re:    banRegexps,
-	}
-
-	for _, bword := range banWords {
-		bt.words[strings.TrimSpace(bword)] = struct{}{}
-	}
-
-	return bt
-}
-
-func (bt *BanwordsTemplate) checkMessage(text, textOriginal string) bool {
-	for _, re := range bt.re {
-		if isMatch, _ := re.MatchString(text); isMatch {
-			return true
+func NewBanwords(log logger.Logger, banWords []string, banRegexps []*regexp2.Regexp) *BanwordsTemplate {
+	m := make(map[string]bool, len(banWords))
+	for _, w := range banWords {
+		w = strings.TrimSpace(w)
+		if w != "" {
+			m[w] = true
 		}
 	}
 
-	words := strings.Fields(textOriginal)
-	for _, word := range words {
-		if _, ok := bt.words[word]; ok {
-			return true
-		}
+	patterns := make([]string, len(banRegexps))
+	for i, r := range banRegexps {
+		patterns[i] = r.String()
+	}
+	combinedPattern := "(?i)(" + strings.Join(patterns, "|") + ")"
+	re, err := regexp2.Compile(combinedPattern, regexp2.IgnoreCase)
+	if err != nil {
+		log.Error("Failed to compile regexp on banwords", err)
 	}
 
+	return &BanwordsTemplate{
+		trie: trie.NewTrie(m),
+		re:   re,
+	}
+}
+
+func (bt *BanwordsTemplate) checkMessage(textLower string, wordsOriginal []string) bool {
+	if isMatch, _ := bt.re.MatchString(textLower); isMatch {
+		return true
+	}
+
+	for i := 0; i < len(wordsOriginal); i++ {
+		cur := bt.trie.Root()
+		j := i
+		for j < len(wordsOriginal) {
+			next, ok := cur.Children()[wordsOriginal[j]]
+			if !ok {
+				break
+			}
+			cur = next
+			j++
+			if cur.Value() != nil {
+				return true
+			}
+		}
+	}
 	return false
 }

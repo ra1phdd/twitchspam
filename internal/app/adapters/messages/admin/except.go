@@ -10,53 +10,17 @@ import (
 	"twitchspam/internal/app/ports"
 )
 
-func (a *Admin) handleExcept(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
-	words := text.Words()
-	if len(words) < 3 { // !am ex list/add/set/del
-		return NonParametr
-	}
-
-	handlers := map[string]func(cfg *config.Config, text *ports.MessageText) *ports.AnswerType{
-		"list": a.handleExceptList,
-		"set":  a.handleExceptSet,
-		"del":  a.handleExDel,
-	}
-
-	exceptCmd := words[2]
-	if handler, ok := handlers[exceptCmd]; ok {
-		return handler(cfg, text)
-	}
-	return a.handleExceptAdd(cfg, text)
+type AddExcept struct {
+	template ports.TemplatePort
 }
 
-func (a *Admin) handleExceptList(cfg *config.Config, _ *ports.MessageText) *ports.AnswerType {
-	if len(cfg.Spam.Exceptions) == 0 {
-		return &ports.AnswerType{
-			Text:    []string{"исключений не найдено!"},
-			IsReply: true,
-		}
-	}
-
-	var parts []string
-	for word, ex := range cfg.Spam.Exceptions {
-		parts = append(parts, fmt.Sprintf("- %s (лимит сообщений: %d, наказания: %s)", word, ex.MessageLimit, strings.Join(formatPunishments(ex.Punishments), ", ")))
-	}
-	msg := "исключения: \n" + strings.Join(parts, "\n")
-
-	key, err := a.fs.UploadToHaste(msg)
-	if err != nil {
-		return UnknownError
-	}
-
-	return &ports.AnswerType{
-		Text:    []string{a.fs.GetURL(key)},
-		IsReply: true,
-	}
+func (e *AddExcept) Execute(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+	return e.handleExceptAdd(cfg, text)
 }
 
-func (a *Admin) handleExceptAdd(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+func (e *AddExcept) handleExceptAdd(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
 	words := text.Words()
-	opts := a.template.ParseOptions(&words, template.SpamOptions) // ParseOptions удаляет опции из слайса words
+	opts := e.template.ParseOptions(&words, template.SpamOptions) // ParseOptions удаляет опции из слайса words
 
 	idx := 2 // id параметра, с которого начинаются аргументы команды
 	if words[2] == "add" {
@@ -84,7 +48,7 @@ func (a *Admin) handleExceptAdd(cfg *config.Config, text *ports.MessageText) *po
 			continue
 		}
 
-		p, err := parsePunishment(pa, true)
+		p, err := e.template.ParsePunishment(pa, true)
 		if err != nil {
 			return &ports.AnswerType{
 				Text:    []string{fmt.Sprintf("не удалось распарсить наказания (%s)!", pa)},
@@ -113,7 +77,7 @@ func (a *Admin) handleExceptAdd(cfg *config.Config, text *ports.MessageText) *po
 			MessageLimit: messageLimit,
 			Punishments:  punishments,
 			Regexp:       re,
-			Options:      a.mergeSpamOptions(except.Options, opts),
+			Options:      mergeSpamOptions(except.Options, opts),
 		}
 
 		return nil
@@ -129,16 +93,24 @@ func (a *Admin) handleExceptAdd(cfg *config.Config, text *ports.MessageText) *po
 		except = &config.SpamExceptionsSettings{
 			MessageLimit: messageLimit,
 			Punishments:  punishments,
-			Options:      a.mergeSpamOptions(except.Options, opts),
+			Options:      mergeSpamOptions(except.Options, opts),
 		}
 	}
 
 	return nil
 }
 
-func (a *Admin) handleExceptSet(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+type SetExcept struct {
+	template ports.TemplatePort
+}
+
+func (e *SetExcept) Execute(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+	return e.handleExceptSet(cfg, text)
+}
+
+func (e *SetExcept) handleExceptSet(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
 	words := text.Words()                                         // !am ex set ml/p <параметр 1> <слова или фразы>
-	opts := a.template.ParseOptions(&words, template.SpamOptions) // ParseOptions удаляет опции из слайса words
+	opts := e.template.ParseOptions(&words, template.SpamOptions) // ParseOptions удаляет опции из слайса words
 
 	cmds := map[string]func(exWord *config.SpamExceptionsSettings, param string) *ports.AnswerType{
 		"ml": func(exWord *config.SpamExceptionsSettings, param string) *ports.AnswerType {
@@ -158,7 +130,7 @@ func (a *Admin) handleExceptSet(cfg *config.Config, text *ports.MessageText) *po
 					continue
 				}
 
-				p, err := parsePunishment(pa, true)
+				p, err := e.template.ParsePunishment(pa, true)
 				if err != nil {
 					return &ports.AnswerType{
 						Text:    []string{fmt.Sprintf("не удалось распарсить наказания (%s)!", pa)},
@@ -186,7 +158,7 @@ func (a *Admin) handleExceptSet(cfg *config.Config, text *ports.MessageText) *po
 			notFound = append(notFound, word)
 			return nil
 		}
-		exWord.Options = a.mergeSpamOptions(exWord.Options, opts)
+		exWord.Options = mergeSpamOptions(exWord.Options, opts)
 
 		if cmd, ok := cmds[words[3]]; ok {
 			if out := cmd(exWord, words[4]); out != nil {
@@ -215,10 +187,16 @@ func (a *Admin) handleExceptSet(cfg *config.Config, text *ports.MessageText) *po
 		}
 	}
 
-	return a.buildResponse(updated, "изменены", notFound, "не найдены", "исключения не указаны")
+	return buildResponse(updated, "изменены", notFound, "не найдены", "исключения не указаны")
 }
 
-func (a *Admin) handleExDel(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+type DelExcept struct{}
+
+func (e *DelExcept) Execute(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+	return e.handleExceptDel(cfg, text)
+}
+
+func (e *DelExcept) handleExceptDel(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
 	words := text.Words()
 	if len(words) < 4 { // !am ex del <слова/фразы через запятую или regex>
 		return NonParametr
@@ -244,5 +222,39 @@ func (a *Admin) handleExDel(cfg *config.Config, text *ports.MessageText) *ports.
 		}
 	}
 
-	return a.buildResponse(removed, "удалены", notFound, "не найдены", "исключения не указаны")
+	return buildResponse(removed, "удалены", notFound, "не найдены", "исключения не указаны")
+}
+
+type ListExcept struct {
+	template ports.TemplatePort
+	fs       ports.FileServerPort
+}
+
+func (e *ListExcept) Execute(cfg *config.Config, _ *ports.MessageText) *ports.AnswerType {
+	return e.handleExceptList(cfg)
+}
+
+func (e *ListExcept) handleExceptList(cfg *config.Config) *ports.AnswerType {
+	if len(cfg.Spam.Exceptions) == 0 {
+		return &ports.AnswerType{
+			Text:    []string{"исключений не найдено!"},
+			IsReply: true,
+		}
+	}
+
+	var parts []string
+	for word, ex := range cfg.Spam.Exceptions {
+		parts = append(parts, fmt.Sprintf("- %s (лимит сообщений: %d, наказания: %s)", word, ex.MessageLimit, strings.Join(e.template.FormatPunishments(ex.Punishments), ", ")))
+	}
+	msg := "исключения: \n" + strings.Join(parts, "\n")
+
+	key, err := e.fs.UploadToHaste(msg)
+	if err != nil {
+		return UnknownError
+	}
+
+	return &ports.AnswerType{
+		Text:    []string{e.fs.GetURL(key)},
+		IsReply: true,
+	}
 }

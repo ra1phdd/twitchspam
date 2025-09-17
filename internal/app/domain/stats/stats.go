@@ -13,9 +13,10 @@ import (
 type Stats struct {
 	mu sync.Mutex
 
-	startTime time.Time
-	endTime   time.Time
-	online    struct {
+	startTime       time.Time
+	startStreamTime time.Time
+	endStreamTime   time.Time
+	online          struct {
 		maxViewers int
 		sumViewers int64
 		count      int
@@ -34,31 +35,30 @@ func (s *Stats) SetStartTime(t time.Time) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	*s = Stats{
-		startTime: t,
-		endTime:   t,
-		online: struct {
-			maxViewers int
-			sumViewers int64
-			count      int
-		}{maxViewers: 0, sumViewers: 0, count: 0},
-		countMessages: make(map[string]int),
-		countDeletes:  make(map[string]int),
-		countTimeouts: make(map[string]int),
-		countBans:     make(map[string]int),
-	}
+	s.startTime = time.Now()
+	s.startStreamTime = t
+	s.endStreamTime = t
+	s.online = struct {
+		maxViewers int
+		sumViewers int64
+		count      int
+	}{}
+	s.countMessages = make(map[string]int)
+	s.countDeletes = make(map[string]int)
+	s.countTimeouts = make(map[string]int)
+	s.countBans = make(map[string]int)
 }
 
 func (s *Stats) GetStartTime() time.Time {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	return s.startTime
+	return s.startStreamTime
 }
 
 func (s *Stats) SetEndTime(t time.Time) {
 	s.mu.Lock()
-	s.endTime = t
+	s.endStreamTime = t
 	s.mu.Unlock()
 }
 
@@ -66,7 +66,7 @@ func (s *Stats) GetEndTime() time.Time {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	return s.endTime
+	return s.endStreamTime
 }
 
 func (s *Stats) SetOnline(viewers int) {
@@ -132,15 +132,15 @@ func (s *Stats) GetStats() *ports.AnswerType {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if s.startTime.IsZero() {
+	if s.startStreamTime.IsZero() {
 		return &ports.AnswerType{
 			Text:    []string{"нет данных за последний стрим!"},
 			IsReply: false,
 		}
 	}
 
-	var countBans, countTimeouts, countDeletes, countMessages int
 	combined := make(map[string]int)
+	var countBans, countTimeouts, countDeletes, countMessages int
 	for _, v := range s.countMessages {
 		countMessages += v
 	}
@@ -177,8 +177,8 @@ func (s *Stats) GetStats() *ports.AnswerType {
 	}
 
 	msg := fmt.Sprintf("длительность стрима: %s • средний онлайн: %.0f • максимальный онлайн: %d • всего сообщений: %d • кол-во чаттеров: %d • скорость сообщений: %.1f/сек • кол-во банов: %d • кол-во мутов: %d • кол-во удаленных сообщений: %d • топ 3 модератора за стрим: ",
-		s.endTime.Sub(s.startTime).Round(time.Second).String(), math.Round(avgViewers), s.online.maxViewers,
-		countMessages, len(s.countMessages), float64(countMessages)/s.endTime.Sub(s.startTime).Seconds(), countBans, countTimeouts, countDeletes)
+		s.endStreamTime.Sub(s.startStreamTime).Round(time.Second).String(), math.Round(avgViewers), s.online.maxViewers,
+		countMessages, len(s.countMessages), float64(countMessages)/s.endStreamTime.Sub(s.startStreamTime).Seconds(), countBans, countTimeouts, countDeletes)
 
 	top := 3
 	if len(list) < 3 {
@@ -191,7 +191,13 @@ func (s *Stats) GetStats() *ports.AnswerType {
 		}
 		msg += fmt.Sprintf("%s (%d)", list[i].key, list[i].value)
 	}
-	msg += "• посмотреть свою стату - !stats"
+
+	diff := s.startTime.Sub(s.startStreamTime)
+	if diff >= 5*time.Minute {
+		msg += fmt.Sprintf(" (статистика велась с %s) ", s.startTime.Format("15:04:05"))
+	}
+
+	msg += " • посмотреть свою стату - !stats"
 
 	return &ports.AnswerType{
 		Text:    []string{msg},
@@ -203,7 +209,7 @@ func (s *Stats) GetUserStats(username string) *ports.AnswerType {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if s.startTime.IsZero() || len(s.countMessages) == 0 {
+	if s.startStreamTime.IsZero() || len(s.countMessages) == 0 {
 		return &ports.AnswerType{
 			Text:    []string{"нет данных за последний стрим!"},
 			IsReply: false,
@@ -223,7 +229,9 @@ func (s *Stats) GetUserStats(username string) *ports.AnswerType {
 	sort.Slice(pairs, func(i, j int) bool {
 		return pairs[i].Value > pairs[j].Value
 	})
-	username = strings.ToLower(strings.TrimPrefix(username, "@"))
+
+	username = strings.TrimPrefix(username, "@")
+	usernameLower := strings.ToLower(username)
 
 	position := -1
 	for i, p := range pairs {
@@ -233,14 +241,14 @@ func (s *Stats) GetUserStats(username string) *ports.AnswerType {
 		}
 	}
 
-	msg := fmt.Sprintf("кол-во сообщений за стрим: %d", s.countMessages[username])
+	msg := fmt.Sprintf("статистика %s - кол-во сообщений за стрим: %d", username, s.countMessages[usernameLower])
 	if position != -1 {
 		msg += fmt.Sprintf(" (топ-%d чаттер)", position)
 	}
 
-	if s.countBans[username] > 0 || s.countTimeouts[username] > 0 || s.countDeletes[username] > 0 {
+	if s.countBans[usernameLower] > 0 || s.countTimeouts[usernameLower] > 0 || s.countDeletes[usernameLower] > 0 {
 		msg += fmt.Sprintf(" • кол-во банов: %d • кол-во мутов: %d • кол-во удаленных сообщений: %d",
-			s.countBans[username], s.countTimeouts[username], s.countDeletes[username])
+			s.countBans[usernameLower], s.countTimeouts[usernameLower], s.countDeletes[usernameLower])
 	}
 
 	return &ports.AnswerType{
@@ -253,7 +261,7 @@ func (s *Stats) GetTopStats(count int) *ports.AnswerType {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if s.startTime.IsZero() || len(s.countMessages) == 0 {
+	if s.startStreamTime.IsZero() || len(s.countMessages) == 0 {
 		return &ports.AnswerType{
 			Text:    []string{"нет данных за последний стрим!"},
 			IsReply: false,

@@ -2,41 +2,22 @@ package template
 
 import (
 	"strings"
+	"twitchspam/internal/app/infrastructure/trie"
+	"twitchspam/internal/app/ports"
 )
 
-type node struct {
-	children map[string]*node // дочерние узлы для каждого слова
-	alias    string           // строка замены, если путь до узла совпал с ключом
-}
-
 type AliasesTemplate struct {
-	root *node
+	trie ports.TriePort[string]
 }
 
 func NewAliases(m map[string]string) *AliasesTemplate {
-	at := &AliasesTemplate{}
-	at.root = at.buildTree(m)
-
-	return at
-}
-
-func (at *AliasesTemplate) buildTree(m map[string]string) *node {
-	root := &node{children: make(map[string]*node)}
-	for k, v := range m {
-		cur := root
-		for _, w := range strings.Fields(k) {
-			if cur.children[w] == nil {
-				cur.children[w] = &node{children: make(map[string]*node)}
-			}
-			cur = cur.children[w]
-		}
-		cur.alias = v
+	return &AliasesTemplate{
+		trie: trie.NewTrie(m),
 	}
-	return root
 }
 
 func (at *AliasesTemplate) update(newAliases map[string]string) {
-	at.root = at.buildTree(newAliases)
+	at.trie.Update(newAliases)
 }
 
 func (at *AliasesTemplate) replace(text string) string {
@@ -45,11 +26,11 @@ func (at *AliasesTemplate) replace(text string) string {
 
 	parts := strings.Fields(text)
 	for i := 0; i < len(parts); i++ {
-		cur := at.root
+		cur := at.trie.Root()
 		j := i
 
 		for j < len(parts) {
-			next, ok := cur.children[parts[j]]
+			next, ok := cur.Children()[parts[j]]
 			if !ok {
 				break
 			}
@@ -57,8 +38,8 @@ func (at *AliasesTemplate) replace(text string) string {
 			cur = next
 			j++
 
-			if cur.alias != "" {
-				bestAlias = cur.alias
+			if cur.Value() != nil && *cur.Value() != "" {
+				bestAlias = *cur.Value()
 				bestStart = i
 				bestEnd = j
 			}

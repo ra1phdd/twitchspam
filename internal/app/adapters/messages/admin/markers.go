@@ -7,28 +7,26 @@ import (
 	"time"
 	"twitchspam/internal/app/infrastructure/config"
 	"twitchspam/internal/app/ports"
+	"twitchspam/pkg/logger"
 )
 
-func (a *Admin) handleMarkers(cfg *config.Config, text *ports.MessageText, username string) *ports.AnswerType {
-	words := text.Words()
-	if len(words) < 3 { // !am mark add/clear/list
-		return NonParametr
-	}
-
-	handlers := map[string]func(cfg *config.Config, text *ports.MessageText, username string) *ports.AnswerType{
-		"clear": a.handleMarkersClear,
-		"list":  a.handleMarkersList,
-	}
-
-	markerCmd := words[2]
-	if handler, ok := handlers[markerCmd]; ok {
-		return handler(cfg, text, username)
-	}
-	return a.handleMarkersAdd(cfg, text, username)
+type AddMarker struct {
+	log      logger.Logger
+	stream   ports.StreamPort
+	api      ports.APIPort
+	username string
 }
 
-func (a *Admin) handleMarkersAdd(cfg *config.Config, text *ports.MessageText, username string) *ports.AnswerType {
-	if !a.stream.IsLive() {
+func (m *AddMarker) Execute(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+	return m.handleMarkersAdd(cfg, text, m.username)
+}
+
+func (m *AddMarker) SetUsername(username string) {
+	m.username = username
+}
+
+func (m *AddMarker) handleMarkersAdd(cfg *config.Config, text *ports.MessageText, username string) *ports.AnswerType {
+	if !m.stream.IsLive() {
 		return &ports.AnswerType{
 			Text:    []string{"стрим выключен!"},
 			IsReply: true,
@@ -46,14 +44,14 @@ func (a *Admin) handleMarkersAdd(cfg *config.Config, text *ports.MessageText, us
 		markerName = text.Tail(3)
 	}
 
-	userKey := username + "_" + a.stream.ChannelID()
+	userKey := username + "_" + m.stream.ChannelID()
 	if _, ok := cfg.Markers[userKey]; !ok {
 		cfg.Markers[userKey] = make(map[string][]*config.Markers)
 	}
 
-	live, err := a.api.GetLiveStream()
+	live, err := m.api.GetLiveStream()
 	if err != nil {
-		a.log.Error("Failed to get live stream", err, slog.String("channelID", a.stream.ChannelID()))
+		m.log.Error("Failed to get live stream", err, slog.String("channelID", m.stream.ChannelID()))
 		return UnknownError
 	}
 
@@ -67,9 +65,22 @@ func (a *Admin) handleMarkersAdd(cfg *config.Config, text *ports.MessageText, us
 	return nil
 }
 
-func (a *Admin) handleMarkersClear(cfg *config.Config, text *ports.MessageText, username string) *ports.AnswerType {
+type ClearMarker struct {
+	stream   ports.StreamPort
+	username string
+}
+
+func (m *ClearMarker) Execute(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+	return m.handleMarkersClear(cfg, text, m.username)
+}
+
+func (m *ClearMarker) SetUsername(username string) {
+	m.username = username
+}
+
+func (m *ClearMarker) handleMarkersClear(cfg *config.Config, text *ports.MessageText, username string) *ports.AnswerType {
 	words := text.Words()
-	userKey := username + "_" + a.stream.ChannelID()
+	userKey := username + "_" + m.stream.ChannelID()
 	if userMarkers, ok := cfg.Markers[userKey]; ok {
 		if len(words) > 3 { // !am mark clear <имя маркера>
 			delete(userMarkers, text.Tail(3))
@@ -81,8 +92,23 @@ func (a *Admin) handleMarkersClear(cfg *config.Config, text *ports.MessageText, 
 	return nil
 }
 
-func (a *Admin) handleMarkersList(cfg *config.Config, text *ports.MessageText, username string) *ports.AnswerType {
-	userMarkers, ok := cfg.Markers[username+"_"+a.stream.ChannelID()]
+type ListMarker struct {
+	stream   ports.StreamPort
+	api      ports.APIPort
+	fs       ports.FileServerPort
+	username string
+}
+
+func (m *ListMarker) Execute(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+	return m.handleMarkersList(cfg, text, m.username)
+}
+
+func (m *ListMarker) SetUsername(username string) {
+	m.username = username
+}
+
+func (m *ListMarker) handleMarkersList(cfg *config.Config, text *ports.MessageText, username string) *ports.AnswerType {
+	userMarkers, ok := cfg.Markers[username+"_"+m.stream.ChannelID()]
 	if !ok || len(userMarkers) == 0 {
 		return &ports.AnswerType{
 			Text:    []string{"маркеры не найдены!"},
@@ -105,7 +131,7 @@ func (a *Admin) handleMarkersList(cfg *config.Config, text *ports.MessageText, u
 
 	var parts []string
 	processMarkers := func(name string, markers []*config.Markers) error {
-		vods, err := a.api.GetUrlVOD(markers)
+		vods, err := m.api.GetUrlVOD(markers)
 		if err != nil {
 			return err
 		}
@@ -124,7 +150,7 @@ func (a *Admin) handleMarkersList(cfg *config.Config, text *ports.MessageText, u
 			return &ports.AnswerType{Text: []string{"маркеры не найдены!"}, IsReply: true}
 		}
 		if len(markers) == 1 {
-			vods, err := a.api.GetUrlVOD(markers)
+			vods, err := m.api.GetUrlVOD(markers)
 			if err != nil {
 				return UnknownError
 			}
@@ -146,13 +172,13 @@ func (a *Admin) handleMarkersList(cfg *config.Config, text *ports.MessageText, u
 	}
 
 	msg := strings.Join(parts, "\n")
-	key, err := a.fs.UploadToHaste(msg)
+	key, err := m.fs.UploadToHaste(msg)
 	if err != nil {
 		return UnknownError
 	}
 
 	return &ports.AnswerType{
-		Text:    []string{a.fs.GetURL(key)},
+		Text:    []string{m.fs.GetURL(key)},
 		IsReply: true,
 	}
 }

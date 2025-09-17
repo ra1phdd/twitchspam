@@ -10,29 +10,30 @@ import (
 	"log/slog"
 	"net/http"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
+	admin2 "twitchspam/internal/app/adapters/messages/admin"
 	"twitchspam/internal/app/infrastructure/config"
 	"twitchspam/internal/app/ports"
 	"twitchspam/pkg/logger"
 )
 
 type EventSub struct {
-	log      logger.Logger
-	cfg      *config.Config
-	stream   ports.StreamPort
-	api      ports.APIPort
-	checker  ports.CheckerPort
-	admin    ports.AdminPort
-	user     ports.UserPort
-	template ports.TemplatePort
-	stats    ports.StatsPort
-	timers   ports.TimersPort
+	log         logger.Logger
+	cfg         *config.Config
+	stream      ports.StreamPort
+	api         ports.APIPort
+	checker     ports.CheckerPort
+	admin, user ports.CommandPort
+	template    ports.TemplatePort
+	stats       ports.StatsPort
+	timers      ports.TimersPort
 
 	client *http.Client
 }
 
-func New(log logger.Logger, cfg *config.Config, stream ports.StreamPort, api ports.APIPort, checker ports.CheckerPort, admin ports.AdminPort, user ports.UserPort, template ports.TemplatePort, stats ports.StatsPort, timers ports.TimersPort, client *http.Client) *EventSub {
+func New(log logger.Logger, cfg *config.Config, stream ports.StreamPort, api ports.APIPort, checker ports.CheckerPort, admin, user ports.CommandPort, template ports.TemplatePort, stats ports.StatsPort, timers ports.TimersPort, client *http.Client) *EventSub {
 	es := &EventSub{
 		log:      log,
 		cfg:      cfg,
@@ -48,21 +49,11 @@ func New(log logger.Logger, cfg *config.Config, stream ports.StreamPort, api por
 	}
 
 	for cmd, data := range es.cfg.Commands {
-		if data.Timer == nil || !data.Timer.Enabled {
+		if data.Timer == nil {
 			continue
 		}
 
-		es.timers.AddTimer(cmd, data.Timer.Interval, true, map[string]any{
-			"text":  data.Text,
-			"count": data.Timer.Count,
-		}, func(args map[string]any) {
-			msg := &ports.AnswerType{}
-			for i := 0; i < args["count"].(int); i++ {
-				msg.Text = append(msg.Text, args["text"].(string))
-			}
-
-			es.api.SendChatMessages(msg)
-		})
+		(&admin2.AddTimer{Timers: timers, Stream: stream, Api: api}).AddTimer(cmd, data)
 	}
 
 	return es
@@ -182,7 +173,9 @@ func (es *EventSub) handleMessage(cancel context.CancelFunc, msgBytes []byte) {
 			es.stream.SetIslive(false)
 			es.stats.SetEndTime(time.Now())
 
-			es.api.SendChatMessages(es.stats.GetStats())
+			if es.cfg.Enabled {
+				es.api.SendChatMessages(es.stats.GetStats())
+			}
 		case "channel.update":
 			var upd ChannelUpdateEvent
 			if err := json.Unmarshal(envelope.Event, &upd); err != nil {
@@ -281,7 +274,7 @@ func (es *EventSub) convertMap(msgEvent ChatMessageEvent) *ports.ChatMessage {
 
 	emoteOnly = true
 	for _, fragment := range msgEvent.Message.Fragments {
-		if fragment.Type == "text" {
+		if fragment.Type == "text" && strings.TrimSpace(fragment.Text) != "" {
 			emoteOnly = false
 		}
 		if fragment.Type == "emote" {
