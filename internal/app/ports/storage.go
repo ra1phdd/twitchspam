@@ -2,13 +2,16 @@ package ports
 
 import (
 	"time"
-	"twitchspam/internal/app/infrastructure/storage"
 )
 
 type StorePort[T any] interface {
-	Len(username string) int
-	Push(username string, data T, ttl time.Duration)
-	ForEach(username string, fn func(item *storage.Item[T]))
-	Cleanup()
-	CleanupUser(username string)
+	Push(key string, val T)
+	Get(key string) ([]T, bool)
+	Len(key string) int
+	ForEach(key string, fn func(val *T))
+	CleanAllExpired()
+	ClearKey(key string)
+	ClearAll()
+	SetCapacity(capacity int)
+	SetTTL(newTTL time.Duration)
 }

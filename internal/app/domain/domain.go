@@ -2,39 +2,46 @@ package domain
 
 import (
 	"fmt"
+	"hash/fnv"
 	"strings"
 	"time"
 	"twitchspam/internal/app/infrastructure/config"
 	"unicode"
 )
 
-func JaccardSimilarity(a, b string) float64 {
-	wa := strings.Fields(a)
-	wb := strings.Fields(b)
-	setA := make(map[string]struct{}, len(wa))
-	setB := make(map[string]struct{}, len(wb))
-	for _, w := range wa {
-		setA[w] = struct{}{}
+func WordsToHashes(words []string) []uint64 {
+	hashes := make([]uint64, len(words))
+	h := fnv.New64a()
+	for i, w := range words {
+		h.Reset()
+		h.Write([]byte(w))
+		hashes[i] = h.Sum64()
 	}
-	for _, w := range wb {
-		setB[w] = struct{}{}
+	return hashes
+}
+
+func JaccardHashSimilarity(a, b []uint64) float64 {
+	if len(a) > len(b) {
+		a, b = b, a
+	}
+
+	set := make(map[uint64]struct{}, len(a))
+	for _, h := range a {
+		set[h] = struct{}{}
 	}
 
 	intersection := 0
-	union := make(map[string]struct{}, len(setA)+len(setB))
-	for w := range setA {
-		if _, ok := setB[w]; ok {
+	for _, h := range b {
+		if _, ok := set[h]; ok {
 			intersection++
 		}
-		union[w] = struct{}{}
 	}
-	for w := range setB {
-		union[w] = struct{}{}
-	}
-	if len(union) == 0 {
+
+	unionSize := len(a) + len(b) - intersection
+	if unionSize == 0 {
 		return 0
 	}
-	return float64(intersection) / float64(len(union))
+	return float64(intersection) / float64(unionSize)
 }
 
 func NormalizeText(s string) string {

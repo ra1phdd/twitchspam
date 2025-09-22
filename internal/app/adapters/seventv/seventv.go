@@ -54,34 +54,26 @@ func (sv *SevenTV) GetUserChannel() (*ports.User, error) {
 	return &user, nil
 }
 
-func (sv *SevenTV) IsOnlyEmotes(text string) bool {
-	if text == "" {
-		return false
-	}
-	words := strings.Fields(text)
-
-	for _, w := range words {
-		if _, ok := sv.emoteSet[strings.TrimSpace(w)]; !ok {
-			return false
-		}
-	}
-
-	return true
-}
-
-func (sv *SevenTV) CountEmotes(words []string) int {
+func (sv *SevenTV) EmoteStats(words []string) (count int, onlyEmotes bool) {
 	if len(words) == 0 {
-		return 0
+		return 0, false
 	}
 
-	var emotes int
+	onlyEmotes = true
 	for _, w := range words {
+		w = strings.TrimSpace(w)
+		if w == "" {
+			continue
+		}
+
 		if _, ok := sv.emoteSet[w]; ok {
-			emotes++
+			count++
+		} else {
+			onlyEmotes = false
 		}
 	}
 
-	return emotes
+	return count, onlyEmotes
 }
 
 //func (sv *SevenTV) runEventLoop() {

@@ -131,7 +131,13 @@ func (a *Admin) buildCommandTree() ports.Command {
 				},
 				cursor: 2,
 			},
-			"da": &DelayAutomod{template: a.template},
+			"mod": &CompositeCommand{
+				subcommands: map[string]ports.Command{
+					"on":    &OnOffAutomod{enabled: true},
+					"off":   &OnOffAutomod{enabled: false},
+					"delay": &DelayAutomod{template: a.template},
+				},
+			},
 			"cmd": &CompositeCommand{
 				subcommands: map[string]ports.Command{
 					"add":  &AddCommand{},
@@ -152,11 +158,24 @@ func (a *Admin) buildCommandTree() ports.Command {
 			},
 			"ex": &CompositeCommand{
 				subcommands: map[string]ports.Command{
-					"set":  &SetExcept{template: a.template},
-					"del":  &DelExcept{},
-					"list": &ListExcept{template: a.template, fs: a.fs},
+					"set":  &SetExcept{template: a.template, typeExcept: "default"},
+					"del":  &DelExcept{typeExcept: "default"},
+					"list": &ListExcept{template: a.template, fs: a.fs, typeExcept: "default"},
+					"on":   &OnOffExcept{template: a.template, typeExcept: "default"},
+					"off":  &OnOffExcept{template: a.template, typeExcept: "default"},
 				},
-				defaultCmd: &AddExcept{template: a.template},
+				defaultCmd: &AddExcept{template: a.template, typeExcept: "default"},
+				cursor:     2,
+			},
+			"emx": &CompositeCommand{
+				subcommands: map[string]ports.Command{
+					"set":  &SetExcept{template: a.template, typeExcept: "emote"},
+					"del":  &DelExcept{typeExcept: "emote"},
+					"list": &ListExcept{template: a.template, fs: a.fs, typeExcept: "emote"},
+					"on":   &OnOffExcept{template: a.template, typeExcept: "emote"},
+					"off":  &OnOffExcept{template: a.template, typeExcept: "emote"},
+				},
+				defaultCmd: &AddExcept{template: a.template, typeExcept: "emote"},
 				cursor:     2,
 			},
 			"mark": &CompositeCommand{
@@ -344,6 +363,38 @@ func buildResponse(arg1 []string, nameArg1 string, arg2 []string, nameArg2, err 
 
 	return &ports.AnswerType{
 		Text:    []string{strings.Join(msgParts, " • ") + "!"},
+		IsReply: true,
+	}
+}
+
+func buildList[T any](
+	items map[string]T,
+	prefix string,
+	notFoundMsg string,
+	formatFunc func(key string, value T) string,
+	fs ports.FileServerPort,
+) *ports.AnswerType {
+	if len(items) == 0 {
+		return &ports.AnswerType{
+			Text:    []string{notFoundMsg},
+			IsReply: true,
+		}
+	}
+
+	var parts []string
+	for key, value := range items {
+		parts = append(parts, formatFunc(key, value))
+	}
+
+	msg := prefix + ":\n" + strings.Join(parts, "\n")
+
+	key, err := fs.UploadToHaste(msg)
+	if err != nil {
+		return UnknownError
+	}
+
+	return &ports.AnswerType{
+		Text:    []string{fs.GetURL(key)},
 		IsReply: true,
 	}
 }

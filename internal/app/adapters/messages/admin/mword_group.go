@@ -25,33 +25,20 @@ func (m *ListMwordGroup) Execute(cfg *config.Config, _ *ports.MessageText) *port
 }
 
 func (m *ListMwordGroup) handleMwgList(cfg *config.Config) *ports.AnswerType {
-	if len(cfg.MwordGroup) == 0 {
-		return &ports.AnswerType{
-			Text:    []string{"мворд группы не найдены!"},
-			IsReply: true,
-		}
-	}
-
-	var parts []string
-	for name, mwg := range cfg.MwordGroup {
-		var re []string
-		for _, pattern := range mwg.Regexp {
-			re = append(re, pattern.String())
-		}
-
-		parts = append(parts, fmt.Sprintf("- %s (enabled: %v, punishments: (%s), words: %s, regexp: %s)",
-			name, mwg.Enabled, m.template.FormatPunishments(mwg.Punishments), strings.Join(mwg.Words, ", "), strings.Join(re, ", ")))
-	}
-	msg := "мворд группы: \n" + strings.Join(parts, "\n")
-
-	key, err := m.fs.UploadToHaste(msg)
-	if err != nil {
-		return UnknownError
-	}
-	return &ports.AnswerType{
-		Text:    []string{m.fs.GetURL(key)},
-		IsReply: true,
-	}
+	return buildList(cfg.MwordGroup, "мворд группы", "мворд группы не найдены!",
+		func(name string, mwg *config.MwordGroup) string {
+			var re []string
+			for _, pattern := range mwg.Regexp {
+				re = append(re, pattern.String())
+			}
+			return fmt.Sprintf("- %s (enabled: %v, punishments: (%s), words: %s, regexp: %s)",
+				name,
+				mwg.Enabled,
+				m.template.FormatPunishments(mwg.Punishments),
+				strings.Join(mwg.Words, ", "),
+				strings.Join(re, ", "),
+			)
+		}, m.fs)
 }
 
 type CreateMwordGroup struct {

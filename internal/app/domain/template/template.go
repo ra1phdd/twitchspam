@@ -1,7 +1,7 @@
 package template
 
 import (
-	"github.com/dlclark/regexp2"
+	"regexp"
 	"twitchspam/internal/app/infrastructure/config"
 	"twitchspam/internal/app/ports"
 	"twitchspam/pkg/logger"
@@ -16,9 +16,11 @@ type Template struct {
 	parser       *ParserTemplate
 	punishment   *PunishmentTemplate
 	mword        *MwordTemplate
+	exDefault    *ExceptTemplate
+	exEmote      *ExceptTemplate
 }
 
-func New(log logger.Logger, al map[string]string, banWords []string, banRegexps []*regexp2.Regexp, mwordGroups map[string]*config.MwordGroup, mwords map[string]*config.Mword, stream ports.StreamPort) *Template {
+func New(log logger.Logger, al map[string]string, banWords []string, banRegexps []*regexp.Regexp, mwordGroups map[string]*config.MwordGroup, mwords map[string]*config.Mword, exDefault, exEmote map[string]*config.ExceptionsSettings, stream ports.StreamPort) *Template {
 	return &Template{
 		aliases:      NewAliases(al),
 		placeholders: NewPlaceholders(stream),
@@ -28,6 +30,8 @@ func New(log logger.Logger, al map[string]string, banWords []string, banRegexps 
 		parser:       NewParser(),
 		punishment:   NewPunishment(),
 		mword:        NewMword(log, mwordGroups, mwords),
+		exDefault:    NewExcept(log, exDefault),
+		exEmote:      NewExcept(log, exEmote),
 	}
 }
 
@@ -85,4 +89,20 @@ func (t *Template) UpdateMwords(mwordGroups map[string]*config.MwordGroup, mword
 
 func (t *Template) MatchMwords(text string, words []string) (bool, []config.Punishment, config.SpamOptions) {
 	return t.mword.match(text, words)
+}
+
+func (t *Template) UpdateExcept(exDefault map[string]*config.ExceptionsSettings) {
+	t.exDefault.update(exDefault)
+}
+
+func (t *Template) MatchExcept(text string, words []string, countSpam int) (bool, []config.Punishment, config.SpamOptions) {
+	return t.exDefault.match(text, words, countSpam)
+}
+
+func (t *Template) UpdateExceptEmote(exEmote map[string]*config.ExceptionsSettings) {
+	t.exEmote.update(exEmote)
+}
+
+func (t *Template) MatchExceptEmote(text string, words []string, countSpam int) (bool, []config.Punishment, config.SpamOptions) {
+	return t.exEmote.match(text, words, countSpam)
 }

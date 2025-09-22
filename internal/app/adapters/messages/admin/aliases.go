@@ -98,25 +98,8 @@ func (a *ListAlias) Execute(cfg *config.Config, text *ports.MessageText) *ports.
 }
 
 func (a *ListAlias) handleAliasesList(cfg *config.Config, _ *ports.MessageText) *ports.AnswerType {
-	if len(cfg.Aliases) == 0 {
-		return &ports.AnswerType{
-			Text:    []string{"алиасы не найдены!"},
-			IsReply: true,
-		}
-	}
-
-	var parts []string
-	for alias, original := range cfg.Aliases {
-		parts = append(parts, fmt.Sprintf("- %s → %s", alias, original))
-	}
-	msg := "алиасы: \n" + strings.Join(parts, "\n")
-
-	key, err := a.fs.UploadToHaste(msg)
-	if err != nil {
-		return UnknownError
-	}
-	return &ports.AnswerType{
-		Text:    []string{a.fs.GetURL(key)},
-		IsReply: true,
-	}
+	return buildList(cfg.Aliases, "алиасы", "алиасы не найдены!",
+		func(alias, original string) string {
+			return fmt.Sprintf("- %s → %s", alias, original)
+		}, a.fs)
 }

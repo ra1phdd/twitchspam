@@ -1,7 +1,7 @@
 package template
 
 import (
-	"github.com/dlclark/regexp2"
+	"regexp"
 	"strings"
 	"twitchspam/internal/app/infrastructure/trie"
 	"twitchspam/internal/app/ports"
@@ -10,10 +10,10 @@ import (
 
 type BanwordsTemplate struct {
 	trie ports.TriePort[bool]
-	re   *regexp2.Regexp
+	re   *regexp.Regexp
 }
 
-func NewBanwords(log logger.Logger, banWords []string, banRegexps []*regexp2.Regexp) *BanwordsTemplate {
+func NewBanwords(log logger.Logger, banWords []string, banRegexps []*regexp.Regexp) *BanwordsTemplate {
 	m := make(map[string]bool, len(banWords))
 	for _, w := range banWords {
 		w = strings.TrimSpace(w)
@@ -22,24 +22,29 @@ func NewBanwords(log logger.Logger, banWords []string, banRegexps []*regexp2.Reg
 		}
 	}
 
-	patterns := make([]string, len(banRegexps))
-	for i, r := range banRegexps {
-		patterns[i] = r.String()
-	}
-	combinedPattern := "(?i)(" + strings.Join(patterns, "|") + ")"
-	re, err := regexp2.Compile(combinedPattern, regexp2.IgnoreCase)
-	if err != nil {
-		log.Error("Failed to compile regexp on banwords", err)
+	bt := &BanwordsTemplate{
+		trie: trie.NewTrie(m),
 	}
 
-	return &BanwordsTemplate{
-		trie: trie.NewTrie(m),
-		re:   re,
+	if len(banRegexps) != 0 {
+		patterns := make([]string, len(banRegexps))
+		for i, r := range banRegexps {
+			patterns[i] = r.String()
+		}
+		combinedPattern := "(?i)(" + strings.Join(patterns, "|") + ")"
+
+		var err error
+		bt.re, err = regexp.Compile(combinedPattern)
+		if err != nil {
+			log.Error("Failed to compile regexp on banwords", err)
+		}
 	}
+
+	return bt
 }
 
 func (bt *BanwordsTemplate) checkMessage(textLower string, wordsOriginal []string) bool {
-	if isMatch, _ := bt.re.MatchString(textLower); isMatch {
+	if bt.re != nil && bt.re.MatchString(textLower) {
 		return true
 	}
 

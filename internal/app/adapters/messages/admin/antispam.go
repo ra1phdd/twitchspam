@@ -13,17 +13,17 @@ type OnOffAntispam struct {
 }
 
 func (a *OnOffAntispam) Execute(cfg *config.Config, _ *ports.MessageText) *ports.AnswerType {
-	return a.handleAntiSpamOnOff(cfg, a.enabled, a.typeSpam)
+	return a.handleAntiSpamOnOff(cfg)
 }
 
-func (a *OnOffAntispam) handleAntiSpamOnOff(cfg *config.Config, enabled bool, typeSpam string) *ports.AnswerType {
+func (a *OnOffAntispam) handleAntiSpamOnOff(cfg *config.Config) *ports.AnswerType {
 	targetMap := map[string]*bool{
 		"vip":     &cfg.Spam.SettingsVIP.Enabled,
 		"emote":   &cfg.Spam.SettingsEmotes.Enabled,
 		"default": &cfg.Spam.SettingsDefault.Enabled,
 	}
-	if target, ok := targetMap[typeSpam]; ok {
-		*target = enabled
+	if target, ok := targetMap[a.typeSpam]; ok {
+		*target = a.enabled
 	}
 
 	return nil

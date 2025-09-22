@@ -11,7 +11,8 @@ import (
 )
 
 type AddExcept struct {
-	template ports.TemplatePort
+	template   ports.TemplatePort
+	typeExcept string
 }
 
 func (e *AddExcept) Execute(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
@@ -57,10 +58,19 @@ func (e *AddExcept) handleExceptAdd(cfg *config.Config, text *ports.MessageText)
 		}
 
 		if p.Action == "inherit" {
-			punishments = cfg.Spam.SettingsDefault.Punishments
+			if e.typeExcept == "emote" {
+				punishments = cfg.Spam.SettingsEmotes.Punishments
+			} else {
+				punishments = cfg.Spam.SettingsDefault.Punishments
+			}
 			break
 		}
 		punishments = append(punishments, p)
+	}
+
+	exSettings := cfg.Spam.Exceptions
+	if e.typeExcept == "emote" {
+		exSettings = cfg.Spam.SettingsEmotes.Exceptions
 	}
 
 	if _, ok := opts["-regex"]; ok {
@@ -72,8 +82,8 @@ func (e *AddExcept) handleExceptAdd(cfg *config.Config, text *ports.MessageText)
 			}
 		}
 
-		except := cfg.Spam.Exceptions[strings.Join(words[idx+2:], " ")]
-		except = &config.SpamExceptionsSettings{
+		except := exSettings[strings.Join(words[idx+2:], " ")]
+		except = &config.ExceptionsSettings{
 			MessageLimit: messageLimit,
 			Punishments:  punishments,
 			Regexp:       re,
@@ -89,8 +99,8 @@ func (e *AddExcept) handleExceptAdd(cfg *config.Config, text *ports.MessageText)
 			continue
 		}
 
-		except := cfg.Spam.Exceptions[word]
-		except = &config.SpamExceptionsSettings{
+		except := exSettings[word]
+		except = &config.ExceptionsSettings{
 			MessageLimit: messageLimit,
 			Punishments:  punishments,
 			Options:      mergeSpamOptions(except.Options, opts),
@@ -101,7 +111,8 @@ func (e *AddExcept) handleExceptAdd(cfg *config.Config, text *ports.MessageText)
 }
 
 type SetExcept struct {
-	template ports.TemplatePort
+	template   ports.TemplatePort
+	typeExcept string
 }
 
 func (e *SetExcept) Execute(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
@@ -112,8 +123,8 @@ func (e *SetExcept) handleExceptSet(cfg *config.Config, text *ports.MessageText)
 	words := text.Words()                                         // !am ex set ml/p <параметр 1> <слова или фразы>
 	opts := e.template.ParseOptions(&words, template.SpamOptions) // ParseOptions удаляет опции из слайса words
 
-	cmds := map[string]func(exWord *config.SpamExceptionsSettings, param string) *ports.AnswerType{
-		"ml": func(exWord *config.SpamExceptionsSettings, param string) *ports.AnswerType {
+	cmds := map[string]func(exWord *config.ExceptionsSettings, param string) *ports.AnswerType{
+		"ml": func(exWord *config.ExceptionsSettings, param string) *ports.AnswerType {
 			value, err := strconv.Atoi(param)
 			if err != nil {
 				return NonParametr
@@ -122,7 +133,7 @@ func (e *SetExcept) handleExceptSet(cfg *config.Config, text *ports.MessageText)
 			exWord.MessageLimit = value
 			return nil
 		},
-		"p": func(exWord *config.SpamExceptionsSettings, param string) *ports.AnswerType {
+		"p": func(exWord *config.ExceptionsSettings, param string) *ports.AnswerType {
 			var punishments []config.Punishment
 			for _, pa := range strings.Split(param, ",") {
 				pa = strings.TrimSpace(pa)
@@ -151,9 +162,14 @@ func (e *SetExcept) handleExceptSet(cfg *config.Config, text *ports.MessageText)
 		},
 	}
 
+	exSettings := cfg.Spam.Exceptions
+	if e.typeExcept == "emote" {
+		exSettings = cfg.Spam.SettingsEmotes.Exceptions
+	}
+
 	var updated, notFound []string
-	processWord := func(word string) *ports.AnswerType {
-		exWord, ok := cfg.Spam.Exceptions[word]
+	processWord := func(exSettings map[string]*config.ExceptionsSettings, word string) *ports.AnswerType {
+		exWord, ok := exSettings[word]
 		if !ok {
 			notFound = append(notFound, word)
 			return nil
@@ -169,8 +185,8 @@ func (e *SetExcept) handleExceptSet(cfg *config.Config, text *ports.MessageText)
 		return nil
 	}
 
-	if regex, ok := cfg.Spam.Exceptions[text.Tail(5)]; ok {
-		if out := processWord(text.Tail(5)); out != nil {
+	if regex, ok := exSettings[text.Tail(5)]; ok {
+		if out := processWord(exSettings, text.Tail(5)); out != nil {
 			return out
 		}
 		_ = regex
@@ -181,7 +197,7 @@ func (e *SetExcept) handleExceptSet(cfg *config.Config, text *ports.MessageText)
 				continue
 			}
 
-			if out := processWord(word); out != nil {
+			if out := processWord(exSettings, word); out != nil {
 				return out
 			}
 		}
@@ -190,7 +206,9 @@ func (e *SetExcept) handleExceptSet(cfg *config.Config, text *ports.MessageText)
 	return buildResponse(updated, "изменены", notFound, "не найдены", "исключения не указаны")
 }
 
-type DelExcept struct{}
+type DelExcept struct {
+	typeExcept string
+}
 
 func (e *DelExcept) Execute(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
 	return e.handleExceptDel(cfg, text)
@@ -202,9 +220,14 @@ func (e *DelExcept) handleExceptDel(cfg *config.Config, text *ports.MessageText)
 		return NonParametr
 	}
 
+	exSettings := cfg.Spam.Exceptions
+	if e.typeExcept == "emote" {
+		exSettings = cfg.Spam.SettingsEmotes.Exceptions
+	}
+
 	var removed, notFound []string
-	if _, ok := cfg.Spam.Exceptions[text.Tail(3)]; ok {
-		delete(cfg.Spam.Exceptions, text.Tail(3))
+	if _, ok := exSettings[text.Tail(3)]; ok {
+		delete(exSettings, text.Tail(3))
 		removed = append(removed, text.Tail(3))
 	} else {
 		for _, word := range strings.Split(words[3], ",") {
@@ -213,8 +236,8 @@ func (e *DelExcept) handleExceptDel(cfg *config.Config, text *ports.MessageText)
 				continue
 			}
 
-			if _, ok := cfg.Spam.Exceptions[word]; ok {
-				delete(cfg.Spam.Exceptions, word)
+			if _, ok := exSettings[word]; ok {
+				delete(exSettings, word)
 				removed = append(removed, word)
 			} else {
 				notFound = append(notFound, word)
@@ -226,8 +249,9 @@ func (e *DelExcept) handleExceptDel(cfg *config.Config, text *ports.MessageText)
 }
 
 type ListExcept struct {
-	template ports.TemplatePort
-	fs       ports.FileServerPort
+	template   ports.TemplatePort
+	fs         ports.FileServerPort
+	typeExcept string
 }
 
 func (e *ListExcept) Execute(cfg *config.Config, _ *ports.MessageText) *ports.AnswerType {
@@ -235,26 +259,69 @@ func (e *ListExcept) Execute(cfg *config.Config, _ *ports.MessageText) *ports.An
 }
 
 func (e *ListExcept) handleExceptList(cfg *config.Config) *ports.AnswerType {
-	if len(cfg.Spam.Exceptions) == 0 {
-		return &ports.AnswerType{
-			Text:    []string{"исключений не найдено!"},
-			IsReply: true,
+	exSettings := cfg.Spam.Exceptions
+	if e.typeExcept == "emote" {
+		exSettings = cfg.Spam.SettingsEmotes.Exceptions
+	}
+
+	return buildList(exSettings, "исключения", "исключений не найдено!",
+		func(word string, ex *config.ExceptionsSettings) string {
+			return fmt.Sprintf("- %s (лимит сообщений: %d, наказания: %s)",
+				word, ex.MessageLimit, strings.Join(e.template.FormatPunishments(ex.Punishments), ", "))
+		}, e.fs)
+}
+
+type OnOffExcept struct {
+	template   ports.TemplatePort
+	typeExcept string
+}
+
+func (e *OnOffExcept) Execute(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+	return e.handleExceptOnOff(cfg, text)
+}
+
+func (e *OnOffExcept) handleExceptOnOff(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+	words := text.Words()
+	opts := e.template.ParseOptions(&words, template.SpamOptions)
+
+	if len(words) < 4 { // !am ex on/off <команды через запятую>
+		return NonParametr
+	}
+
+	exSettings := cfg.Spam.Exceptions
+	if e.typeExcept == "emote" {
+		exSettings = cfg.Spam.SettingsEmotes.Exceptions
+	}
+
+	if _, ok := opts["-regex"]; ok {
+		except, ok := exSettings[strings.Join(words[3:], " ")]
+		if !ok {
+			return &ports.AnswerType{
+				Text:    []string{"исключение не найдено"},
+				IsReply: true,
+			}
 		}
+
+		except.Enabled = words[2] == "on"
+		return nil
 	}
 
-	var parts []string
-	for word, ex := range cfg.Spam.Exceptions {
-		parts = append(parts, fmt.Sprintf("- %s (лимит сообщений: %d, наказания: %s)", word, ex.MessageLimit, strings.Join(e.template.FormatPunishments(ex.Punishments), ", ")))
-	}
-	msg := "исключения: \n" + strings.Join(parts, "\n")
+	var edited, notFound []string
+	for _, key := range strings.Split(words[3], ",") {
+		key = strings.TrimSpace(key)
+		if key == "" {
+			continue
+		}
 
-	key, err := e.fs.UploadToHaste(msg)
-	if err != nil {
-		return UnknownError
+		except, ok := exSettings[key]
+		if !ok {
+			notFound = append(notFound, key)
+			continue
+		}
+
+		except.Enabled = words[2] == "on"
+		edited = append(edited, key)
 	}
 
-	return &ports.AnswerType{
-		Text:    []string{e.fs.GetURL(key)},
-		IsReply: true,
-	}
+	return buildResponse(edited, "изменены", notFound, "не найдены", "исключения не указаны")
 }

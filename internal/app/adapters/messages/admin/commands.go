@@ -83,25 +83,8 @@ func (c *ListCommand) Execute(cfg *config.Config, _ *ports.MessageText) *ports.A
 }
 
 func (c *ListCommand) handleCommandList(cfg *config.Config) *ports.AnswerType {
-	if len(cfg.Commands) == 0 {
-		return &ports.AnswerType{
-			Text:    []string{"команды не найдены!"},
-			IsReply: true,
-		}
-	}
-
-	var parts []string
-	for key, link := range cfg.Commands {
-		parts = append(parts, fmt.Sprintf("- %s -> %s", key, link.Text))
-	}
-	msg := "команды: \n" + strings.Join(parts, "\n")
-
-	key, err := c.fs.UploadToHaste(msg)
-	if err != nil {
-		return UnknownError
-	}
-	return &ports.AnswerType{
-		Text:    []string{c.fs.GetURL(key)},
-		IsReply: true,
-	}
+	return buildList(cfg.Commands, "команды", "команды не найдены!",
+		func(key string, cmd *config.Commands) string {
+			return fmt.Sprintf("- %s -> %s", key, cmd.Text)
+		}, c.fs)
 }

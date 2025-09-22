@@ -5,6 +5,19 @@ import (
 	"twitchspam/internal/app/ports"
 )
 
+type OnOffAutomod struct {
+	enabled bool
+}
+
+func (a *OnOffAutomod) Execute(cfg *config.Config, _ *ports.MessageText) *ports.AnswerType {
+	return a.handleOnOffAutomod(cfg)
+}
+
+func (a *OnOffAutomod) handleOnOffAutomod(cfg *config.Config) *ports.AnswerType {
+	cfg.Automod.Enabled = a.enabled
+	return nil
+}
+
 type DelayAutomod struct {
 	template ports.TemplatePort
 }
@@ -15,12 +28,12 @@ func (a *DelayAutomod) Execute(cfg *config.Config, text *ports.MessageText) *por
 
 func (a *DelayAutomod) handleDelayAutomod(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
 	words := text.Words()
-	if len(words) < 3 { // !am da <значение>
+	if len(words) < 4 { // !am mod delay <значение>
 		return NonParametr
 	}
 
-	if val, ok := a.template.ParseIntArg(words[2], 0, 10); ok {
-		cfg.Spam.DelayAutomod = val
+	if val, ok := a.template.ParseIntArg(words[3], 0, 10); ok {
+		cfg.Automod.Delay = val
 		return nil
 	}
 	return &ports.AnswerType{

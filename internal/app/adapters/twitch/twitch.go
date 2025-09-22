@@ -73,8 +73,8 @@ func New(log logger.Logger, manager *config.Manager, client *http.Client, modCha
 	fs := file_server.New(client)
 	timer := timers.NewTimingWheel(100*time.Millisecond, 600)
 
-	t.template = template.New(log, t.cfg.Aliases, t.cfg.Banwords.Words, t.cfg.Banwords.Regexp, t.cfg.MwordGroup, t.cfg.Mword, t.stream)
-	t.checker = checker.NewCheck(log, t.cfg, t.stream, t.stats, t.irc, t.template)
+	t.template = template.New(log, t.cfg.Aliases, t.cfg.Banwords.Words, t.cfg.Banwords.Regexp, t.cfg.MwordGroup, t.cfg.Mword, t.cfg.Spam.Exceptions, t.cfg.Spam.SettingsEmotes.Exceptions, t.stream)
+	t.checker = checker.NewCheck(log, t.cfg, t.stream, t.stats, t.template)
 	t.admin = admin.New(log, manager, t.stream, t.api, t.template, fs, timer)
 	t.user = user.New(log, t.cfg, t.stream, t.stats, t.template, fs)
 

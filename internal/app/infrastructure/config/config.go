@@ -7,6 +7,7 @@ import (
 	"github.com/dlclark/regexp2"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sync"
 	"time"
 )
@@ -15,6 +16,7 @@ type Config struct {
 	App        App                              `json:"app"`
 	Enabled    bool                             `json:"enabled"`
 	Spam       Spam                             `json:"spam"`
+	Automod    Automod                          `json:"automod"`
 	Mword      map[string]*Mword                `json:"mword"`
 	MwordGroup map[string]*MwordGroup           `json:"mword_group"`
 	Aliases    map[string]string                `json:"aliases"` // ключ - алиас, значение - оригинальная команда
@@ -34,14 +36,13 @@ type App struct {
 }
 
 type Spam struct {
-	Mode               string                             `json:"mode"`                 // !am online/always - только на стриме/всегда
-	CheckWindowSeconds int                                `json:"check_window_seconds"` // !am time <секунды, макс 300>
-	DelayAutomod       int                                `json:"delay_automod"`        // !am da <0-10> - задержка срабатывания
-	WhitelistUsers     map[string]struct{}                `json:"whitelist_users"`      // !am add/del <список>
-	SettingsDefault    SpamSettings                       `json:"settings_default"`
-	SettingsVIP        SpamSettings                       `json:"settings_vip"`
-	SettingsEmotes     SpamSettingsEmote                  `json:"settings_emotes"`
-	Exceptions         map[string]*SpamExceptionsSettings `json:"exceptions"`
+	Mode               string                         `json:"mode"`                 // !am online/always - только на стриме/всегда
+	CheckWindowSeconds int                            `json:"check_window_seconds"` // !am time <секунды, макс 300>
+	WhitelistUsers     map[string]struct{}            `json:"whitelist_users"`      // !am add/del <список>
+	SettingsDefault    SpamSettings                   `json:"settings_default"`
+	SettingsVIP        SpamSettings                   `json:"settings_vip"`
+	SettingsEmotes     SpamSettingsEmote              `json:"settings_emotes"`
+	Exceptions         map[string]*ExceptionsSettings `json:"exceptions"`
 }
 
 type SpamSettings struct {
@@ -56,24 +57,22 @@ type SpamSettings struct {
 }
 
 type SpamSettingsEmote struct {
-	Enabled                  bool                        `json:"enabled"`
-	MessageLimit             int                         `json:"message_limit"`
-	Punishments              []Punishment                `json:"punishments"`
-	DurationResetPunishments int                         `json:"duration_reset_punishments"`
-	Exceptions               map[string]*EmoteExceptions `json:"exceptions"`
-	MaxEmotesLength          int                         `json:"max_emotes_length"`
-	MaxEmotesPunishment      Punishment                  `json:"max_emotes_punishment"`
+	Enabled                  bool                           `json:"enabled"`
+	MessageLimit             int                            `json:"message_limit"`
+	Punishments              []Punishment                   `json:"punishments"`
+	DurationResetPunishments int                            `json:"duration_reset_punishments"`
+	Exceptions               map[string]*ExceptionsSettings `json:"exceptions"`
+	MaxEmotesLength          int                            `json:"max_emotes_length"`
+	MaxEmotesPunishment      Punishment                     `json:"max_emotes_punishment"`
 }
 
-type EmoteExceptions struct {
+type Automod struct {
+	Enabled bool `json:"enabled"`
+	Delay   int  `json:"delay"`
+}
+
+type ExceptionsSettings struct {
 	Enabled      bool            `json:"enabled"`
-	MessageLimit int             `json:"message_limit"`
-	Punishments  []Punishment    `json:"punishments"`
-	Options      *SpamOptions    `json:"options"`
-	Regexp       *regexp2.Regexp `json:"regexp"`
-}
-
-type SpamExceptionsSettings struct {
 	MessageLimit int             `json:"message_limit"`
 	Punishments  []Punishment    `json:"punishments"`
 	Options      *SpamOptions    `json:"options"`
@@ -120,8 +119,8 @@ type Asks struct {
 }
 
 type Banwords struct {
-	Words  []string          `json:"words"`
-	Regexp []*regexp2.Regexp `json:"regexp"`
+	Words  []string         `json:"words"`
+	Regexp []*regexp.Regexp `json:"regexp"`
 }
 
 type Punishment struct {
@@ -202,7 +201,7 @@ func (m *Manager) GetDefault() *Config {
 			Mode:               "online",
 			CheckWindowSeconds: 60,
 			WhitelistUsers:     make(map[string]struct{}),
-			Exceptions:         make(map[string]*SpamExceptionsSettings),
+			Exceptions:         make(map[string]*ExceptionsSettings),
 			SettingsDefault: SpamSettings{
 				Enabled:             true,
 				SimilarityThreshold: 0.7,
@@ -252,7 +251,10 @@ func (m *Manager) GetDefault() *Config {
 					Duration: 30,
 				},
 			},
-			DelayAutomod: 0,
+		},
+		Automod: Automod{
+			Enabled: true,
+			Delay:   0,
 		},
 		Mword:      make(map[string]*Mword),
 		MwordGroup: make(map[string]*MwordGroup),
@@ -310,8 +312,8 @@ func (m *Manager) validate(cfg *Config) error {
 	if cfg.Spam.CheckWindowSeconds < 1 || cfg.Spam.CheckWindowSeconds > 300 {
 		return errors.New("spam.check_window_seconds must be 1..300")
 	}
-	if cfg.Spam.DelayAutomod < 0 || cfg.Spam.DelayAutomod > 10 {
-		return errors.New("spam.delay_automod must be between 0 and 10")
+	if cfg.Automod.Delay < 0 || cfg.Automod.Delay > 10 {
+		return errors.New("automod.delay must be between 0 and 10")
 	}
 
 	spam := map[string]SpamSettings{
@@ -342,7 +344,7 @@ func (m *Manager) validate(cfg *Config) error {
 	}
 
 	if cfg.Spam.Exceptions == nil {
-		cfg.Spam.Exceptions = make(map[string]*SpamExceptionsSettings)
+		cfg.Spam.Exceptions = make(map[string]*ExceptionsSettings)
 	}
 
 	if cfg.Mword == nil {

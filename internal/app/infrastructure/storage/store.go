@@ -1,171 +1,186 @@
 package storage
 
 import (
-	"container/heap"
+	"sync"
 	"time"
 )
 
 type Store[T any] struct {
-	shards          []Shard[T]
-	granularity     time.Duration
-	getLimitPerUser func() int
+	mu       sync.RWMutex
+	keys     map[string]*keyStore[T]
+	capacity int
+	ttl      time.Duration
 }
 
-type Item[T any] struct {
-	Username string
-	Data     T
-	Time     int64
-	TTL      int64
+type keyStore[T any] struct {
+	mu    sync.Mutex
+	items []*entry[T]
 }
 
-func New[T any](nShards int, granularity time.Duration, getLimitPerUser func() int) *Store[T] {
+type entry[T any] struct {
+	val       T
+	expiresAt time.Time
+}
+
+func New[T any](capacity int, ttl time.Duration) *Store[T] {
 	s := &Store[T]{
-		shards:          make([]Shard[T], nShards),
-		granularity:     granularity,
-		getLimitPerUser: getLimitPerUser,
+		keys:     make(map[string]*keyStore[T]),
+		capacity: capacity,
+		ttl:      ttl,
 	}
-	for i := range s.shards {
-		s.shards[i].userData = make(map[string][]*Item[T])
-		s.shards[i].expHeap = make(ItemHeap[T], 0)
-		heap.Init(&s.shards[i].expHeap)
-	}
-	go func() {
-		ticker := time.NewTicker(granularity)
-		defer ticker.Stop()
-		for range ticker.C {
-			s.Cleanup()
-		}
-	}()
+	go s.startAutoCleanup(100 * time.Millisecond)
+
 	return s
 }
 
-func (s *Store[T]) Len(username string) int {
-	sh := s.getShard(username)
+func (s *Store[T]) getOrCreateKeyStore(key string) *keyStore[T] {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
-	sh.userMu.RLock()
-	defer sh.userMu.RUnlock()
-
-	return len(sh.userData[username])
-}
-
-func (s *Store[T]) Push(username string, data T, ttl time.Duration) {
-	now := time.Now().UnixNano()
-	expire := now + ttl.Nanoseconds()
-	item := &Item[T]{
-		Username: username,
-		Data:     data,
-		Time:     now,
-		TTL:      expire,
-	}
-	sh := s.getShard(username)
-
-	sh.userMu.Lock()
-	q := sh.userData[username]
-	q = append(q, item)
-	messageLimitPerUser := s.getLimitPerUser()
-
-	if len(q) > messageLimitPerUser {
-		q = q[len(q)-messageLimitPerUser:]
-	}
-	sh.userData[username] = q
-	sh.userMu.Unlock()
-
-	sh.heapMu.Lock()
-	heap.Push(&sh.expHeap, item)
-	sh.heapMu.Unlock()
-}
-
-func (s *Store[T]) ForEach(username string, fn func(item *Item[T])) {
-	sh := s.getShard(username)
-
-	sh.userMu.RLock()
-	msgs, ok := sh.userData[username]
+	ks, ok := s.keys[key]
 	if !ok {
-		sh.userMu.RUnlock()
+		ks = &keyStore[T]{items: make([]*entry[T], 0, s.capacity)}
+		s.keys[key] = ks
+	}
+	return ks
+}
+
+func (s *Store[T]) Push(key string, val T) {
+	ks := s.getOrCreateKeyStore(key)
+
+	ks.mu.Lock()
+	defer ks.mu.Unlock()
+
+	if s.capacity > 0 && len(ks.items) >= s.capacity {
+		over := len(ks.items) - s.capacity
+		ks.items = ks.items[over:]
+	}
+
+	e := &entry[T]{val: val, expiresAt: time.Now().Add(s.ttl)}
+	ks.items = append(ks.items, e)
+}
+
+func (s *Store[T]) Get(key string) ([]T, bool) {
+	s.mu.RLock()
+	ks, ok := s.keys[key]
+	s.mu.RUnlock()
+	if !ok {
+		return nil, false
+	}
+
+	ks.mu.Lock()
+	defer ks.mu.Unlock()
+
+	var items []T
+	for _, e := range ks.items {
+		items = append(items, e.val)
+	}
+
+	return items, true
+}
+
+func (s *Store[T]) Len(key string) int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	ks, ok := s.keys[key]
+	if !ok {
+		return 0
+	}
+
+	return len(ks.items)
+}
+
+func (s *Store[T]) ForEach(key string, fn func(val *T)) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	ks, ok := s.keys[key]
+	if !ok {
 		return
 	}
 
-	for _, msg := range msgs {
-		fn(msg)
+	for _, item := range ks.items {
+		fn(&item.val)
 	}
-	sh.userMu.RUnlock()
 }
 
-func (s *Store[T]) Cleanup() {
-	now := time.Now().UnixNano()
-	for i := range s.shards {
-		sh := &s.shards[i]
-
-		for {
-			sh.userMu.Lock()
-			sh.heapMu.Lock()
-			if len(sh.expHeap) == 0 {
-				sh.heapMu.Unlock()
-				sh.userMu.Unlock()
-				break
-			}
-
-			item := sh.expHeap[0]
-			if item.TTL > now {
-				sh.heapMu.Unlock()
-				sh.userMu.Unlock()
-				break
-			}
-			heap.Pop(&sh.expHeap)
-			sh.heapMu.Unlock()
-
-			userItems, ok := sh.userData[item.Username]
-			if ok && userItems != nil {
-				newItems := userItems[:0]
-				for _, it := range userItems {
-					if it != item {
-						newItems = append(newItems, it)
-					}
-				}
-				if len(newItems) == 0 {
-					delete(sh.userData, item.Username)
-				} else {
-					sh.userData[item.Username] = newItems
-				}
-			}
-			sh.userMu.Unlock()
+func (s *Store[T]) startAutoCleanup(interval time.Duration) {
+	ticker := time.NewTicker(interval)
+	for {
+		select {
+		case <-ticker.C:
+			s.CleanAllExpired()
 		}
 	}
 }
 
-func (s *Store[T]) CleanupUser(username string) {
-	sh := s.getShard(username)
+func (s *Store[T]) CleanAllExpired() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
-	sh.userMu.Lock()
-	msgs, ok := sh.userData[username]
-	if !ok {
-		sh.userMu.Unlock()
-		return
-	}
-	delete(sh.userData, username)
-	sh.userMu.Unlock()
-
-	if len(msgs) == 0 {
-		return
-	}
-
-	sh.heapMu.Lock()
-	if len(sh.expHeap) > 0 {
-		newHeap := sh.expHeap[:0]
-		for _, m := range sh.expHeap {
-			remove := false
-			for _, um := range msgs {
-				if m == um {
-					remove = true
-					break
-				}
-			}
-			if !remove {
-				newHeap = append(newHeap, m)
+	now := time.Now()
+	for key, store := range s.keys {
+		store.mu.Lock()
+		newItems := store.items[:0]
+		for _, item := range store.items {
+			if item.expiresAt.After(now) {
+				newItems = append(newItems, item)
 			}
 		}
-		sh.expHeap = newHeap
-		heap.Init(&sh.expHeap)
+		store.items = newItems
+		store.mu.Unlock()
+
+		if len(newItems) == 0 {
+			delete(s.keys, key)
+		}
 	}
-	sh.heapMu.Unlock()
+}
+
+func (s *Store[T]) ClearKey(key string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	delete(s.keys, key)
+}
+
+func (s *Store[T]) ClearAll() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.keys = make(map[string]*keyStore[T])
+}
+
+func (s *Store[T]) SetCapacity(capacity int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.capacity = capacity
+	if capacity <= 0 {
+		return
+	}
+
+	for _, ks := range s.keys {
+		ks.mu.Lock()
+		if len(ks.items) > capacity {
+			ks.items = ks.items[len(ks.items)-capacity:]
+		}
+		ks.mu.Unlock()
+	}
+}
+
+func (s *Store[T]) SetTTL(newTTL time.Duration) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	oldTTL := s.ttl
+	diff := newTTL - oldTTL
+	s.ttl = newTTL
+
+	for _, ks := range s.keys {
+		ks.mu.Lock()
+		for _, item := range ks.items {
+			item.expiresAt = item.expiresAt.Add(diff)
+		}
+		ks.mu.Unlock()
+	}
 }

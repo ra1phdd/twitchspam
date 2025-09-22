@@ -163,7 +163,7 @@ func (es *EventSub) handleMessage(cancel context.CancelFunc, msgBytes []byte) {
 			}
 			es.log.Info("AutoMod held message", slog.String("user_id", am.UserID), slog.String("message_id", am.MessageID), slog.String("text", am.Message.Text))
 
-			es.checkAutomod(am)
+			go es.checkAutomod(am)
 		case "stream.online":
 			es.log.Info("Stream started")
 			es.stream.SetIslive(true)

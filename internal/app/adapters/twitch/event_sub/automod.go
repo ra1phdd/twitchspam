@@ -9,14 +9,15 @@ import (
 )
 
 func (es *EventSub) checkAutomod(am AutomodHoldEvent) {
-	if !es.cfg.Enabled {
+	if !es.cfg.Enabled || !es.cfg.Automod.Enabled {
 		return
 	}
+	time.Sleep(time.Duration(es.cfg.Automod.Delay) * time.Second)
+
 	text := strings.ToLower(domain.NormalizeText(am.Message.Text))
 	words := strings.Split(text, " ")
 
 	if action := es.checker.CheckBanwords(text, strings.Fields(am.Message.Text)); action != nil {
-		time.Sleep(time.Duration(es.cfg.Spam.DelayAutomod) * time.Second)
 		es.api.BanUser(am.UserID, action.Reason)
 	}
 

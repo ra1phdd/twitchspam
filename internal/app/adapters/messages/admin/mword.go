@@ -133,25 +133,9 @@ func (m *ListMword) Execute(cfg *config.Config, _ *ports.MessageText) *ports.Ans
 }
 
 func (m *ListMword) handleMwList(cfg *config.Config) *ports.AnswerType {
-	if len(cfg.Mword) == 0 {
-		return &ports.AnswerType{
-			Text:    []string{"мворды не найдены!"},
-			IsReply: true,
-		}
-	}
-
-	var parts []string
-	for word, mw := range cfg.Mword {
-		parts = append(parts, fmt.Sprintf("- %s (наказания: %s)", word, m.template.FormatPunishments(mw.Punishments)))
-	}
-	msg := "мворды: \n" + strings.Join(parts, "\n")
-
-	key, err := m.fs.UploadToHaste(msg)
-	if err != nil {
-		return UnknownError
-	}
-	return &ports.AnswerType{
-		Text:    []string{m.fs.GetURL(key)},
-		IsReply: true,
-	}
+	return buildList(cfg.Mword, "мворды", "мворды не найдены!",
+		func(word string, mw *config.Mword) string {
+			return fmt.Sprintf("- %s (наказания: %s)",
+				word, m.template.FormatPunishments(mw.Punishments))
+		}, m.fs)
 }
