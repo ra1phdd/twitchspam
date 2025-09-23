@@ -119,7 +119,15 @@ func (mt *MwordTemplate) match(text string, words []string) (bool, []config.Puni
 			cur = next
 			j++
 			if curValue := cur.Value(); curValue != nil {
-				return true, *curValue.punishments, *curValue.options
+				var opts config.SpamOptions
+				if curValue.options != nil {
+					opts = *curValue.options
+				}
+				var punish []config.Punishment
+				if curValue.punishments != nil {
+					punish = *curValue.punishments
+				}
+				return true, punish, opts
 			}
 		}
 	}
@@ -131,7 +139,15 @@ func (mt *MwordTemplate) match(text string, words []string) (bool, []config.Puni
 
 		for re, meta := range mt.regexps {
 			if isMatch, _ := re.MatchString(text); isMatch {
-				return true, *meta.punishments, *meta.options
+				var opts config.SpamOptions
+				if meta.options != nil {
+					opts = *meta.options
+				}
+				var punish []config.Punishment
+				if meta.punishments != nil {
+					punish = *meta.punishments
+				}
+				return true, punish, opts
 			}
 		}
 	}

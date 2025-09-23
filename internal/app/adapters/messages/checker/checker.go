@@ -275,9 +275,13 @@ func (c *Checker) handleEmotes(msg *ports.ChatMessage, countSpam int) *ports.Che
 }
 
 func (c *Checker) handleEmotesExceptions(msg *ports.ChatMessage, countSpam int) *ports.CheckerAction {
-	found, punishments, _ := c.template.MatchExceptEmote(msg.Message.Text.LowerNorm(), msg.Message.Text.WordsLowerNorm(), countSpam)
+	found, ml, punishments, _ := c.template.MatchExceptEmote(msg.Message.Text.LowerNorm(), msg.Message.Text.WordsLowerNorm())
 	if !found {
 		return nil
+	}
+
+	if countSpam < ml {
+		return &ports.CheckerAction{Type: None}
 	}
 
 	action, dur := domain.GetPunishment(punishments, c.timeouts.exceptionsEmotes.Len(msg.Chatter.Username))
@@ -291,9 +295,13 @@ func (c *Checker) handleEmotesExceptions(msg *ports.ChatMessage, countSpam int) 
 }
 
 func (c *Checker) handleExceptions(msg *ports.ChatMessage, countSpam int) *ports.CheckerAction {
-	found, punishments, _ := c.template.MatchExcept(msg.Message.Text.LowerNorm(), msg.Message.Text.WordsLowerNorm(), countSpam)
+	found, ml, punishments, _ := c.template.MatchExcept(msg.Message.Text.LowerNorm(), msg.Message.Text.WordsLowerNorm())
 	if !found {
 		return nil
+	}
+
+	if countSpam < ml {
+		return &ports.CheckerAction{Type: None}
 	}
 
 	action, dur := domain.GetPunishment(punishments, c.timeouts.exceptionsSpam.Len(msg.Chatter.Username))

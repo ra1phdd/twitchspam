@@ -95,14 +95,14 @@ func (t *Template) UpdateExcept(exDefault map[string]*config.ExceptionsSettings)
 	t.exDefault.update(exDefault)
 }
 
-func (t *Template) MatchExcept(text string, words []string, countSpam int) (bool, []config.Punishment, config.SpamOptions) {
-	return t.exDefault.match(text, words, countSpam)
+func (t *Template) MatchExcept(text string, words []string) (bool, int, []config.Punishment, config.SpamOptions) {
+	return t.exDefault.match(text, words)
 }
 
 func (t *Template) UpdateExceptEmote(exEmote map[string]*config.ExceptionsSettings) {
 	t.exEmote.update(exEmote)
 }
 
-func (t *Template) MatchExceptEmote(text string, words []string, countSpam int) (bool, []config.Punishment, config.SpamOptions) {
-	return t.exEmote.match(text, words, countSpam)
+func (t *Template) MatchExceptEmote(text string, words []string) (bool, int, []config.Punishment, config.SpamOptions) {
+	return t.exEmote.match(text, words)
 }

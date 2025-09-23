@@ -82,7 +82,7 @@ func (mt *ExceptTemplate) update(except map[string]*config.ExceptionsSettings) {
 	}
 }
 
-func (mt *ExceptTemplate) match(text string, words []string, countSpam int) (bool, []config.Punishment, config.SpamOptions) {
+func (mt *ExceptTemplate) match(text string, words []string) (bool, int, []config.Punishment, config.SpamOptions) {
 	for i := 0; i < len(words); i++ {
 		cur := mt.trie.Root()
 		j := i
@@ -93,23 +93,39 @@ func (mt *ExceptTemplate) match(text string, words []string, countSpam int) (boo
 			}
 			cur = next
 			j++
-			if curValue := cur.Value(); curValue != nil && curValue.messageLimit >= countSpam {
-				return true, *curValue.punishments, *curValue.options
+			if curValue := cur.Value(); curValue != nil {
+				var opts config.SpamOptions
+				if curValue.options != nil {
+					opts = *curValue.options
+				}
+				var punish []config.Punishment
+				if curValue.punishments != nil {
+					punish = *curValue.punishments
+				}
+				return true, curValue.messageLimit, punish, opts
 			}
 		}
 	}
 
 	if mt.re != nil {
 		if isMatch, _ := mt.re.MatchString(text); !isMatch {
-			return false, nil, config.SpamOptions{}
+			return false, 0, nil, config.SpamOptions{}
 		}
 
 		for re, meta := range mt.regexps {
-			if isMatch, _ := re.MatchString(text); isMatch && meta.messageLimit >= countSpam {
-				return true, *meta.punishments, *meta.options
+			if isMatch, _ := re.MatchString(text); isMatch {
+				var opts config.SpamOptions
+				if meta.options != nil {
+					opts = *meta.options
+				}
+				var punish []config.Punishment
+				if meta.punishments != nil {
+					punish = *meta.punishments
+				}
+				return true, meta.messageLimit, punish, opts
 			}
 		}
 	}
 
-	return false, nil, config.SpamOptions{}
+	return false, 0, nil, config.SpamOptions{}
 }
