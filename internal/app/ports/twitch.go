@@ -119,7 +119,10 @@ func (m *MessageText) Words() []string {
 				}
 
 				if buf.Len() > 0 {
-					words = append(words, strings.TrimSpace(buf.String()))
+					w := strings.TrimSpace(buf.String())
+					if w != "" {
+						words = append(words, w)
+					}
 					buf.Reset()
 				}
 			} else {
@@ -129,7 +132,10 @@ func (m *MessageText) Words() []string {
 		}
 
 		if buf.Len() > 0 {
-			words = append(words, buf.String())
+			w := strings.TrimSpace(buf.String())
+			if w != "" {
+				words = append(words, w)
+			}
 		}
 
 		m.words = &words

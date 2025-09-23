@@ -147,6 +147,7 @@ func (a *Admin) buildCommandTree() ports.Command {
 						subcommands: map[string]ports.Command{
 							"on":  &OnOffCommandTimer{template: a.template, timers: a.timers, t: timer},
 							"off": &OnOffCommandTimer{template: a.template, timers: a.timers, t: timer},
+							"add": &AddCommandTimer{template: a.template, t: timer},
 							"set": &SetCommandTimer{template: a.template, timers: a.timers, t: timer},
 							"del": &DelCommandTimer{template: a.template, timers: a.timers},
 						},
@@ -158,6 +159,7 @@ func (a *Admin) buildCommandTree() ports.Command {
 			},
 			"ex": &CompositeCommand{
 				subcommands: map[string]ports.Command{
+					"add":  &AddExcept{template: a.template, typeExcept: "default"},
 					"set":  &SetExcept{template: a.template, typeExcept: "default"},
 					"del":  &DelExcept{typeExcept: "default"},
 					"list": &ListExcept{template: a.template, fs: a.fs, typeExcept: "default"},
@@ -169,6 +171,7 @@ func (a *Admin) buildCommandTree() ports.Command {
 			},
 			"emx": &CompositeCommand{
 				subcommands: map[string]ports.Command{
+					"add":  &AddExcept{template: a.template, typeExcept: "emote"},
 					"set":  &SetExcept{template: a.template, typeExcept: "emote"},
 					"del":  &DelExcept{typeExcept: "emote"},
 					"list": &ListExcept{template: a.template, fs: a.fs, typeExcept: "emote"},
@@ -180,6 +183,7 @@ func (a *Admin) buildCommandTree() ports.Command {
 			},
 			"mark": &CompositeCommand{
 				subcommands: map[string]ports.Command{
+					"add":   &AddMarker{log: a.log, stream: a.stream, api: a.api, username: ""},
 					"clear": &ClearMarker{stream: a.stream, username: ""},
 					"list":  &ListMarker{stream: a.stream, api: a.api, fs: a.fs, username: ""},
 				},
@@ -188,6 +192,7 @@ func (a *Admin) buildCommandTree() ports.Command {
 			},
 			"mw": &CompositeCommand{
 				subcommands: map[string]ports.Command{
+					"add":  &AddMword{template: a.template},
 					"del":  &DelMword{template: a.template},
 					"list": &ListMword{template: a.template, fs: a.fs},
 				},
@@ -265,11 +270,7 @@ func (c *CompositeCommand) Execute(cfg *config.Config, text *ports.MessageText) 
 	return NotFoundCmd
 }
 
-func mergeSpamOptions(dst *config.SpamOptions, src map[string]bool) *config.SpamOptions {
-	if dst == nil {
-		dst = &config.SpamOptions{}
-	}
-
+func mergeSpamOptions(dst config.SpamOptions, src map[string]bool) config.SpamOptions {
 	if _, ok := src["-nofirst"]; ok {
 		dst.IsFirst = false
 	}

@@ -75,20 +75,20 @@ type ExceptionsSettings struct {
 	Enabled      bool            `json:"enabled"`
 	MessageLimit int             `json:"message_limit"`
 	Punishments  []Punishment    `json:"punishments"`
-	Options      *SpamOptions    `json:"options"`
+	Options      SpamOptions     `json:"options"`
 	Regexp       *regexp2.Regexp `json:"regexp"`
 }
 
 type Mword struct {
 	Punishments []Punishment    `json:"punishments"`
-	Options     *SpamOptions    `json:"options"`
+	Options     SpamOptions     `json:"options"`
 	Regexp      *regexp2.Regexp `json:"regexp"`
 }
 
 type MwordGroup struct {
 	Enabled     bool              `json:"enabled"`
 	Punishments []Punishment      `json:"punishments"`
-	Options     *SpamOptions      `json:"options"`
+	Options     SpamOptions       `json:"options"`
 	Words       []string          `json:"words"`
 	Regexp      []*regexp2.Regexp `json:"regexp"`
 }
@@ -108,7 +108,7 @@ type Timers struct {
 	Enabled  bool          `json:"enabled"`
 	Interval time.Duration `json:"interval"`
 	Count    int           `json:"count"`
-	Options  *TimerOptions `json:"options"`
+	Options  TimerOptions  `json:"options"`
 }
 
 type Asks struct {

@@ -88,7 +88,8 @@ func (t *Template) UpdateMwords(mwordGroups map[string]*config.MwordGroup, mword
 }
 
 func (t *Template) MatchMwords(text string, words []string) (bool, []config.Punishment, config.SpamOptions) {
-	return t.mword.match(text, words)
+	a, b := t.mword.match(&ports.ChatMessage{})
+	return a, b, config.SpamOptions{}
 }
 
 func (t *Template) UpdateExcept(exDefault map[string]*config.ExceptionsSettings) {

@@ -20,8 +20,8 @@ type MwordTemplate struct {
 }
 
 type mwordMeta struct {
-	punishments *[]config.Punishment
-	options     *config.SpamOptions
+	punishments []config.Punishment
+	options     config.SpamOptions
 }
 
 func NewMword(log logger.Logger, mwordGroups map[string]*config.MwordGroup, mwords map[string]*config.Mword) *MwordTemplate {
@@ -50,7 +50,7 @@ func (mt *MwordTemplate) update(mwordGroups map[string]*config.MwordGroup, mword
 			}
 
 			meta := mwordMeta{
-				punishments: &group.Punishments,
+				punishments: group.Punishments,
 				options:     group.Options,
 			}
 
@@ -62,7 +62,7 @@ func (mt *MwordTemplate) update(mwordGroups map[string]*config.MwordGroup, mword
 			patterns = append(patterns, re.String())
 
 			meta := mwordMeta{
-				punishments: &group.Punishments,
+				punishments: group.Punishments,
 				options:     group.Options,
 			}
 			mt.regexps[re] = meta
@@ -74,7 +74,7 @@ func (mt *MwordTemplate) update(mwordGroups map[string]*config.MwordGroup, mword
 			patterns = append(patterns, mword.Regexp.String())
 
 			meta := mwordMeta{
-				punishments: &mword.Punishments,
+				punishments: mword.Punishments,
 				options:     mword.Options,
 			}
 			mt.regexps[mword.Regexp] = meta
@@ -88,7 +88,7 @@ func (mt *MwordTemplate) update(mwordGroups map[string]*config.MwordGroup, mword
 		}
 
 		meta := mwordMeta{
-			punishments: &mword.Punishments,
+			punishments: mword.Punishments,
 			options:     mword.Options,
 		}
 
@@ -107,7 +107,10 @@ func (mt *MwordTemplate) update(mwordGroups map[string]*config.MwordGroup, mword
 	}
 }
 
-func (mt *MwordTemplate) match(text string, words []string) (bool, []config.Punishment, config.SpamOptions) {
+func (mt *MwordTemplate) match(msg *ports.ChatMessage) (bool, []config.Punishment) {
+	text := msg.Message.Text.LowerNorm()
+	words := msg.Message.Text.WordsLowerNorm()
+
 	for i := 0; i < len(words); i++ {
 		cur := mt.trie.Root()
 		j := i
@@ -119,38 +122,22 @@ func (mt *MwordTemplate) match(text string, words []string) (bool, []config.Puni
 			cur = next
 			j++
 			if curValue := cur.Value(); curValue != nil {
-				var opts config.SpamOptions
-				if curValue.options != nil {
-					opts = *curValue.options
-				}
-				var punish []config.Punishment
-				if curValue.punishments != nil {
-					punish = *curValue.punishments
-				}
-				return true, punish, opts
+				return true, curValue.punishments
 			}
 		}
 	}
 
 	if mt.re != nil {
 		if isMatch, _ := mt.re.MatchString(text); !isMatch {
-			return false, nil, config.SpamOptions{}
+			return false, nil
 		}
 
 		for re, meta := range mt.regexps {
 			if isMatch, _ := re.MatchString(text); isMatch {
-				var opts config.SpamOptions
-				if meta.options != nil {
-					opts = *meta.options
-				}
-				var punish []config.Punishment
-				if meta.punishments != nil {
-					punish = *meta.punishments
-				}
-				return true, punish, opts
+				return true, meta.punishments
 			}
 		}
 	}
 
-	return false, nil, config.SpamOptions{}
+	return false, nil
 }

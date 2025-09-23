@@ -16,9 +16,9 @@ type TemplatePort interface {
 	FormatPunishments(punishments []config.Punishment) []string
 	FormatPunishment(punishment config.Punishment) string
 	UpdateMwords(mwordGroups map[string]*config.MwordGroup, mwords map[string]*config.Mword)
-	MatchMwords(text string, words []string) (bool, []config.Punishment, config.SpamOptions)
+	MatchMwords(msg *ChatMessage) (bool, []config.Punishment)
 	UpdateExcept(exDefault map[string]*config.ExceptionsSettings)
-	MatchExcept(text string, words []string) (bool, int, []config.Punishment, config.SpamOptions)
+	MatchExcept(msg *ChatMessage) (bool, []config.Punishment)
 	UpdateExceptEmote(exEmote map[string]*config.ExceptionsSettings)
-	MatchExceptEmote(text string, words []string) (bool, int, []config.Punishment, config.SpamOptions)
+	MatchExceptEmote(msg *ChatMessage) (bool, []config.Punishment)
 }

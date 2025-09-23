@@ -21,8 +21,8 @@ type ExceptTemplate struct {
 
 type exceptMeta struct {
 	messageLimit int
-	punishments  *[]config.Punishment
-	options      *config.SpamOptions
+	punishments  []config.Punishment
+	options      config.SpamOptions
 }
 
 func NewExcept(log logger.Logger, except map[string]*config.ExceptionsSettings) *ExceptTemplate {
@@ -49,7 +49,7 @@ func (mt *ExceptTemplate) update(except map[string]*config.ExceptionsSettings) {
 
 			meta := exceptMeta{
 				messageLimit: ex.MessageLimit,
-				punishments:  &ex.Punishments,
+				punishments:  ex.Punishments,
 				options:      ex.Options,
 			}
 			mt.regexps[ex.Regexp] = meta
@@ -63,7 +63,7 @@ func (mt *ExceptTemplate) update(except map[string]*config.ExceptionsSettings) {
 
 		meta := exceptMeta{
 			messageLimit: ex.MessageLimit,
-			punishments:  &ex.Punishments,
+			punishments:  ex.Punishments,
 			options:      ex.Options,
 		}
 
@@ -94,15 +94,7 @@ func (mt *ExceptTemplate) match(text string, words []string) (bool, int, []confi
 			cur = next
 			j++
 			if curValue := cur.Value(); curValue != nil {
-				var opts config.SpamOptions
-				if curValue.options != nil {
-					opts = *curValue.options
-				}
-				var punish []config.Punishment
-				if curValue.punishments != nil {
-					punish = *curValue.punishments
-				}
-				return true, curValue.messageLimit, punish, opts
+				return true, curValue.messageLimit, curValue.punishments, curValue.options
 			}
 		}
 	}
@@ -114,15 +106,7 @@ func (mt *ExceptTemplate) match(text string, words []string) (bool, int, []confi
 
 		for re, meta := range mt.regexps {
 			if isMatch, _ := re.MatchString(text); isMatch {
-				var opts config.SpamOptions
-				if meta.options != nil {
-					opts = *meta.options
-				}
-				var punish []config.Punishment
-				if meta.punishments != nil {
-					punish = *meta.punishments
-				}
-				return true, meta.messageLimit, punish, opts
+				return true, meta.messageLimit, meta.punishments, meta.options
 			}
 		}
 	}
