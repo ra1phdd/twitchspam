@@ -13,7 +13,10 @@ func (es *EventSub) checkMessage(msgEvent ChatMessageEvent) {
 	}
 
 	if !strings.HasPrefix(msg.Message.Text.Original, "!am alias") {
-		msg.Message.Text.Original = es.template.ReplaceAlias(msg.Message.Text.Original)
+		text, ok := es.template.ReplaceAlias(msg.Message.Text.Words())
+		if ok {
+			msg.Message.Text.ReplaceOriginal(text)
+		}
 	}
 
 	if adminAction := es.admin.FindMessages(msg); adminAction != nil {
@@ -40,12 +43,10 @@ func (es *EventSub) checkMessage(msgEvent ChatMessageEvent) {
 	}
 
 	if userAction := es.user.FindMessages(msg); userAction != nil {
-		username := msg.Chatter.Username
-		if userAction.ReplyUsername != "" {
-			username = userAction.ReplyUsername
+		if userAction.IsReply && userAction.ReplyUsername == "" {
+			userAction.ReplyUsername = msg.Chatter.Username
 		}
 
-		userAction.ReplyUsername = username
 		es.api.SendChatMessages(userAction)
 		return
 	}

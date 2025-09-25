@@ -2,7 +2,7 @@ package admin
 
 import (
 	"fmt"
-	"github.com/dlclark/regexp2"
+	"regexp"
 	"strconv"
 	"strings"
 	"twitchspam/internal/app/domain/template"
@@ -74,7 +74,7 @@ func (e *AddExcept) handleExceptAdd(cfg *config.Config, text *ports.MessageText)
 	}
 
 	if _, ok := opts["-regex"]; ok {
-		re, err := regexp2.Compile(strings.Join(words[idx+2:], " "), regexp2.None)
+		re, err := regexp.Compile(strings.Join(words[idx+2:], " "))
 		if err != nil {
 			return &ports.AnswerType{
 				Text:    []string{"неверное регулярное выражение!"},
@@ -82,12 +82,16 @@ func (e *AddExcept) handleExceptAdd(cfg *config.Config, text *ports.MessageText)
 			}
 		}
 
-		except := exSettings[strings.Join(words[idx+2:], " ")]
-		except = &config.ExceptionsSettings{
+		optsMerged := mergeSpamOptions(config.SpamOptions{}, opts)
+		if except, ok := exSettings[strings.Join(words[idx+2:], " ")]; ok {
+			optsMerged = mergeSpamOptions(except.Options, opts)
+		}
+
+		exSettings[strings.Join(words[idx+2:], " ")] = &config.ExceptionsSettings{
 			MessageLimit: messageLimit,
 			Punishments:  punishments,
 			Regexp:       re,
-			Options:      mergeSpamOptions(except.Options, opts),
+			Options:      optsMerged,
 		}
 
 		return nil
@@ -99,11 +103,15 @@ func (e *AddExcept) handleExceptAdd(cfg *config.Config, text *ports.MessageText)
 			continue
 		}
 
-		except := exSettings[word]
-		except = &config.ExceptionsSettings{
+		optsMerged := mergeSpamOptions(config.SpamOptions{}, opts)
+		if except, ok := exSettings[word]; ok {
+			optsMerged = mergeSpamOptions(except.Options, opts)
+		}
+
+		exSettings[word] = &config.ExceptionsSettings{
 			MessageLimit: messageLimit,
 			Punishments:  punishments,
-			Options:      mergeSpamOptions(except.Options, opts),
+			Options:      optsMerged,
 		}
 	}
 

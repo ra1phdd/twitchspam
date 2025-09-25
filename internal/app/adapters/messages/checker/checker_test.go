@@ -2,6 +2,8 @@ package checker
 
 import (
 	"testing"
+	"time"
+	"twitchspam/internal/app/adapters/twitch/irc"
 	"twitchspam/internal/app/domain/stats"
 	"twitchspam/internal/app/domain/stream"
 	"twitchspam/internal/app/domain/template"
@@ -17,12 +19,11 @@ func BenchmarkCheck(b *testing.B) {
 	}
 
 	cfg := manager.Get()
-	cfg.Spam.SettingsDefault.MessageLimit = 99
 
 	s := stream.NewStream("afsygga")
-	t := template.New(logger.New(), cfg.Aliases, cfg.Banwords.Words, cfg.Banwords.Regexp,
-		cfg.MwordGroup, cfg.Mword, cfg.Spam.Exceptions, cfg.Spam.SettingsEmotes.Exceptions, s)
-	c := NewCheck(logger.New(), cfg, s, stats.New(), t)
+	t := template.New(logger.New(), cfg.Aliases, cfg.Banwords.Words, cfg.Banwords.Regexp, s)
+	i, _ := irc.New(logger.New(), cfg, 100*time.Millisecond, "afsygga")
+	c := NewCheck(logger.New(), cfg, s, stats.New(), t, i)
 
 	msg := &ports.ChatMessage{
 		Broadcaster: ports.Broadcaster{
@@ -46,7 +47,6 @@ func BenchmarkCheck(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		//fmt.Println(c.Check(msg))
 		c.Check(msg)
 	}
 }

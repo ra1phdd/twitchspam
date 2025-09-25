@@ -39,12 +39,19 @@ func (a *AddAlias) handleAliasesAdd(cfg *config.Config, text *ports.MessageText)
 	alias := strings.Join(words[3:fromIndex], " ")
 	original := strings.Join(words[fromIndex+1:], " ")
 
-	if !strings.HasPrefix(alias, "!") {
-		alias = "!" + alias
-	}
-
 	if !strings.HasPrefix(original, "!") {
 		original = "!" + original
+	}
+
+	if strings.Contains(alias, "!am alias") || alias == original {
+		return &ports.AnswerType{
+			Text:    []string{"нельзя добавить алиас на эту команду!"},
+			IsReply: true,
+		}
+	}
+
+	if cfg.Aliases[original] != "" {
+		original = cfg.Aliases[original]
 	}
 
 	cfg.Aliases[alias] = original
@@ -70,10 +77,6 @@ func (a *DelAlias) handleAliasesDel(cfg *config.Config, text *ports.MessageText)
 	}
 
 	alias := text.Tail(3)
-	if !strings.HasPrefix(alias, "!") {
-		alias = "!" + alias
-	}
-
 	if _, ok := cfg.Aliases[alias]; !ok {
 		return &ports.AnswerType{
 			Text:    []string{"алиас не найден!"},

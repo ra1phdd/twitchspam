@@ -9,7 +9,7 @@ type CheckerPort interface {
 	Check(msg *ChatMessage) *CheckerAction
 	CheckBanwords(textLower string, wordsOriginal []string) *CheckerAction
 	CheckAds(text string, username string) *CheckerAction
-	CheckMwords(text, username string, words []string) *CheckerAction
+	CheckMwords(msg *ChatMessage) *CheckerAction
 }
 
 type CommandPort interface {

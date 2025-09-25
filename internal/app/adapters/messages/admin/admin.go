@@ -318,11 +318,7 @@ func mergeSpamOptions(dst config.SpamOptions, src map[string]bool) config.SpamOp
 	return dst
 }
 
-func mergeTimerOptions(dst *config.TimerOptions, src map[string]bool) *config.TimerOptions {
-	if dst == nil {
-		dst = &config.TimerOptions{}
-	}
-
+func mergeTimerOptions(dst config.TimerOptions, src map[string]bool) config.TimerOptions {
 	if _, ok := src["-noa"]; ok {
 		dst.IsAnnounce = false
 	}

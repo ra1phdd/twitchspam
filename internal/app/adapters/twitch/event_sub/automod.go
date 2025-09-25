@@ -2,30 +2,38 @@ package event_sub
 
 import (
 	"log/slog"
-	"strings"
 	"time"
 	"twitchspam/internal/app/adapters/messages/checker"
-	"twitchspam/internal/app/domain"
+	"twitchspam/internal/app/ports"
 )
 
 func (es *EventSub) checkAutomod(am AutomodHoldEvent) {
 	if !es.cfg.Enabled || !es.cfg.Automod.Enabled {
 		return
 	}
-	time.Sleep(time.Duration(es.cfg.Automod.Delay) * time.Second)
 
-	text := strings.ToLower(domain.NormalizeText(am.Message.Text))
-	words := strings.Split(text, " ")
+	if es.cfg.Automod.Delay > 0 {
+		time.Sleep(time.Duration(es.cfg.Automod.Delay) * time.Second)
+	}
 
-	if action := es.checker.CheckBanwords(text, strings.Fields(am.Message.Text)); action != nil {
+	msg := &ports.ChatMessage{
+		Message: ports.Message{
+			ID: am.MessageID,
+			Text: ports.MessageText{
+				Original: am.Message.Text,
+			},
+		},
+	}
+
+	if action := es.checker.CheckBanwords(msg.Message.Text.LowerNorm(), msg.Message.Text.Words()); action != nil {
 		es.api.BanUser(am.UserID, action.Reason)
 	}
 
-	if action := es.checker.CheckAds(text, am.UserName); action != nil {
+	if action := es.checker.CheckAds(msg.Message.Text.Lower(), am.UserName); action != nil {
 		es.api.BanUser(am.UserID, action.Reason)
 	}
 
-	action := es.checker.CheckMwords(text, am.UserName, words)
+	action := es.checker.CheckMwords(msg)
 	if action == nil {
 		return
 	}

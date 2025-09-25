@@ -15,12 +15,9 @@ type Template struct {
 	options      *OptionsTemplate
 	parser       *ParserTemplate
 	punishment   *PunishmentTemplate
-	mword        *MwordTemplate
-	exDefault    *ExceptTemplate
-	exEmote      *ExceptTemplate
 }
 
-func New(log logger.Logger, al map[string]string, banWords []string, banRegexps []*regexp.Regexp, mwordGroups map[string]*config.MwordGroup, mwords map[string]*config.Mword, exDefault, exEmote map[string]*config.ExceptionsSettings, stream ports.StreamPort) *Template {
+func New(log logger.Logger, al map[string]string, banWords []string, banRegexps []*regexp.Regexp, stream ports.StreamPort) *Template {
 	return &Template{
 		aliases:      NewAliases(al),
 		placeholders: NewPlaceholders(stream),
@@ -29,14 +26,11 @@ func New(log logger.Logger, al map[string]string, banWords []string, banRegexps 
 		options:      NewOptions(),
 		parser:       NewParser(),
 		punishment:   NewPunishment(),
-		mword:        NewMword(log, mwordGroups, mwords),
-		exDefault:    NewExcept(log, exDefault),
-		exEmote:      NewExcept(log, exEmote),
 	}
 }
 
-func (t *Template) ReplaceAlias(text string) string {
-	return t.aliases.replace(text)
+func (t *Template) ReplaceAlias(parts []string) (string, bool) {
+	return t.aliases.replace(parts)
 }
 
 func (t *Template) UpdateAliases(newAliases map[string]string) {
@@ -81,29 +75,4 @@ func (t *Template) FormatPunishments(punishments []config.Punishment) []string {
 
 func (t *Template) FormatPunishment(punishment config.Punishment) string {
 	return t.punishment.format(punishment)
-}
-
-func (t *Template) UpdateMwords(mwordGroups map[string]*config.MwordGroup, mwords map[string]*config.Mword) {
-	t.mword.update(mwordGroups, mwords)
-}
-
-func (t *Template) MatchMwords(text string, words []string) (bool, []config.Punishment, config.SpamOptions) {
-	a, b := t.mword.match(&ports.ChatMessage{})
-	return a, b, config.SpamOptions{}
-}
-
-func (t *Template) UpdateExcept(exDefault map[string]*config.ExceptionsSettings) {
-	t.exDefault.update(exDefault)
-}
-
-func (t *Template) MatchExcept(text string, words []string) (bool, int, []config.Punishment, config.SpamOptions) {
-	return t.exDefault.match(text, words)
-}
-
-func (t *Template) UpdateExceptEmote(exEmote map[string]*config.ExceptionsSettings) {
-	t.exEmote.update(exEmote)
-}
-
-func (t *Template) MatchExceptEmote(text string, words []string) (bool, int, []config.Punishment, config.SpamOptions) {
-	return t.exEmote.match(text, words)
 }

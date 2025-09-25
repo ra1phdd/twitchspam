@@ -20,11 +20,10 @@ func (at *AliasesTemplate) update(newAliases map[string]string) {
 	at.trie.Update(newAliases)
 }
 
-func (at *AliasesTemplate) replace(text string) string {
+func (at *AliasesTemplate) replace(parts []string) (string, bool) {
 	var bestAlias string
 	var bestStart, bestEnd int
 
-	parts := strings.Fields(text)
 	for i := 0; i < len(parts); i++ {
 		cur := at.trie.Root()
 		j := i
@@ -47,7 +46,7 @@ func (at *AliasesTemplate) replace(text string) string {
 	}
 
 	if bestAlias == "" {
-		return text
+		return "", false
 	}
 
 	// это можно было сделать в одну строку через append, но это +лишние аллокации памяти
@@ -67,5 +66,5 @@ func (at *AliasesTemplate) replace(text string) string {
 		}
 	}
 
-	return sb.String()
+	return sb.String(), true
 }

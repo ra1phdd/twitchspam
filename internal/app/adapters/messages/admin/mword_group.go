@@ -2,7 +2,7 @@ package admin
 
 import (
 	"fmt"
-	"github.com/dlclark/regexp2"
+	"regexp"
 	"slices"
 	"strings"
 	"twitchspam/internal/app/domain/template"
@@ -83,8 +83,6 @@ func (m *CreateMwordGroup) handleMwgCreate(cfg *config.Config, text *ports.Messa
 		Punishments: punishments,
 		Options:     mergeSpamOptions(mwg.Options, opts),
 	}
-
-	m.template.UpdateMwords(cfg.MwordGroup, cfg.Mword)
 	return nil
 }
 
@@ -125,8 +123,6 @@ func (m *SetMwordGroup) handleMwgSet(cfg *config.Config, text *ports.MessageText
 		}
 		mwg.Punishments = punishments
 	}
-
-	m.template.UpdateMwords(cfg.MwordGroup, cfg.Mword)
 	return nil
 }
 
@@ -153,7 +149,7 @@ func (m *AddMwordGroup) handleMwgAdd(cfg *config.Config, text *ports.MessageText
 
 	joined := strings.Join(words[4:], " ")
 	if _, ok := opts["-regex"]; ok {
-		re, err := regexp2.Compile(joined, regexp2.None)
+		re, err := regexp.Compile(joined)
 		if err != nil {
 			return &ports.AnswerType{
 				Text:    []string{"неверное регулярное выражение!"},
@@ -175,8 +171,6 @@ func (m *AddMwordGroup) handleMwgAdd(cfg *config.Config, text *ports.MessageText
 			group.Words = append(group.Words, word)
 		}
 	}
-
-	m.template.UpdateMwords(cfg.MwordGroup, cfg.Mword)
 	return nil
 }
 
@@ -231,7 +225,6 @@ func (m *DelMwordGroup) handleMwgDel(cfg *config.Config, text *ports.MessageText
 	}
 	group.Words = newWords
 
-	m.template.UpdateMwords(cfg.MwordGroup, cfg.Mword)
 	return buildResponse(removed, "удалены", notFound, "не найдены", "слова в мворд группе не указаны")
 }
 
@@ -255,6 +248,5 @@ func (m *OnOffMwordGroup) handleMwgOnOff(cfg *config.Config, text *ports.Message
 	}
 	mwg.Enabled = words[2] == "on"
 
-	m.template.UpdateMwords(cfg.MwordGroup, cfg.Mword)
 	return nil
 }

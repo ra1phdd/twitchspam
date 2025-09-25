@@ -2,7 +2,7 @@ package admin
 
 import (
 	"fmt"
-	"github.com/dlclark/regexp2"
+	"regexp"
 	"strings"
 	"twitchspam/internal/app/domain/template"
 	"twitchspam/internal/app/infrastructure/config"
@@ -50,7 +50,7 @@ func (m *AddMword) handleMwAdd(cfg *config.Config, text *ports.MessageText) *por
 	}
 
 	if _, ok := opts["-regex"]; ok {
-		re, err := regexp2.Compile(strings.Join(words[idx+1:], " "), regexp2.None)
+		re, err := regexp.Compile(strings.Join(words[idx+1:], " "))
 		if err != nil {
 			return &ports.AnswerType{
 				Text:    []string{"неверное регулярное выражение!"},
@@ -64,7 +64,6 @@ func (m *AddMword) handleMwAdd(cfg *config.Config, text *ports.MessageText) *por
 			Regexp:      re,
 			Options:     mergeSpamOptions(mword.Options, opts),
 		}
-		m.template.UpdateMwords(cfg.MwordGroup, cfg.Mword)
 		return nil
 	}
 
@@ -80,8 +79,6 @@ func (m *AddMword) handleMwAdd(cfg *config.Config, text *ports.MessageText) *por
 			Options:     mergeSpamOptions(mword.Options, opts),
 		}
 	}
-
-	m.template.UpdateMwords(cfg.MwordGroup, cfg.Mword)
 	return nil
 }
 
@@ -119,7 +116,6 @@ func (m *DelMword) handleMwDel(cfg *config.Config, text *ports.MessageText) *por
 		}
 	}
 
-	m.template.UpdateMwords(cfg.MwordGroup, cfg.Mword)
 	return buildResponse(removed, "удалены", notFound, "не найдены", "мворды не указаны")
 }
 

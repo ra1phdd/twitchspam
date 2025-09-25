@@ -1,6 +1,7 @@
 package checker
 
 import (
+	"regexp"
 	"slices"
 	"strings"
 	"time"
@@ -93,10 +94,6 @@ func (c *Checker) Check(msg *ports.ChatMessage) *ports.CheckerAction {
 		return action
 	}
 
-	if action := c.CheckMwords(msg); action != nil {
-		return action
-	}
-
 	c.messages.Push(msg.Chatter.Username, storage.Message{HashWords: domain.WordsToHashes(msg.Message.Text.WordsLowerNorm())})
 	if action := c.checkSpam(msg); action != nil {
 		return action
@@ -147,119 +144,62 @@ func (c *Checker) CheckAds(text string, username string) *ports.CheckerAction {
 }
 
 func (c *Checker) CheckMwords(msg *ports.ChatMessage) *ports.CheckerAction {
-	var punishments []config.Punishment
 	for word, mw := range c.cfg.Mword {
-		if mw.Options.NoVip && msg.Chatter.IsVip {
+		if !c.matchRule(msg, word, mw.Regexp, mw.Options) {
 			continue
 		}
 
-		if mw.Options.NoSub && msg.Chatter.IsSubscriber {
-			continue
-		}
+		action, dur := domain.GetPunishment(mw.Punishments, c.timeouts.mword.Len(msg.Chatter.Username))
+		c.timeouts.mword.Push(msg.Chatter.Username, storage.Empty{})
 
-		if mw.Options.IsFirst {
-			if isFirst, _ := c.irc.WaitForIRC(msg.Message.ID, 250*time.Millisecond); !isFirst {
-				continue
-			}
-		}
-
-		if mw.Regexp != nil {
-			if mw.Options.NoRepeat {
-				if isMatch, _ := mw.Regexp.MatchString(msg.Message.Text.Original); !isMatch {
-					continue
-				}
-			} else {
-				if isMatch, _ := mw.Regexp.MatchString(msg.Message.Text.LowerNorm()); !isMatch {
-					continue
-				}
-			}
-
-			punishments = mw.Punishments
-			break
-		}
-
-		if mw.Options.OneWord && len(msg.Message.Text.Words()) > 1 {
-			continue
-		}
-
-		if mw.Options.Contains && strings.Contains(msg.Message.Text.LowerNorm(), word) {
-			punishments = mw.Punishments
-			break
-		}
-
-		if mw.Options.NoRepeat && slices.Contains(msg.Message.Text.Words(), word) {
-			punishments = mw.Punishments
-			break
-		}
-
-		if slices.Contains(msg.Message.Text.WordsLowerNorm(), word) {
-			punishments = mw.Punishments
-			break
+		return &ports.CheckerAction{
+			Type:     action,
+			Reason:   "мворд",
+			Duration: dur,
 		}
 	}
 
 	for _, mwg := range c.cfg.MwordGroup {
-		if mwg.Options.NoVip && msg.Chatter.IsVip {
+		if !mwg.Enabled {
 			continue
 		}
 
-		if mwg.Options.NoSub && msg.Chatter.IsSubscriber {
-			continue
-		}
-
-		if mwg.Options.IsFirst {
-			if isFirst, _ := c.irc.WaitForIRC(msg.Message.ID, 250*time.Millisecond); !isFirst {
+		var isMatch bool
+		for _, word := range mwg.Words {
+			if !c.matchRule(msg, word, nil, mwg.Options) {
 				continue
 			}
+
+			isMatch = true
+			break
 		}
 
-		if mwg.Options.OneWord && len(msg.Message.Text.Words()) > 1 {
+		if !isMatch {
+			for _, re := range mwg.Regexp {
+				if !c.matchRule(msg, "", re, mwg.Options) {
+					continue
+				}
+
+				isMatch = true
+				break
+			}
+		}
+
+		if !isMatch {
 			continue
 		}
 
-		for _, word := range mwg.Words {
-			if mwg.Options.Contains && strings.Contains(msg.Message.Text.LowerNorm(), word) {
-				punishments = mwg.Punishments
-				break
-			}
+		action, dur := domain.GetPunishment(mwg.Punishments, c.timeouts.mwordGroup.Len(msg.Chatter.Username))
+		c.timeouts.mwordGroup.Push(msg.Chatter.Username, storage.Empty{})
 
-			if mwg.Options.NoRepeat && slices.Contains(msg.Message.Text.Words(), word) {
-				punishments = mwg.Punishments
-				break
-			}
-
-			if slices.Contains(msg.Message.Text.WordsLowerNorm(), word) {
-				punishments = mwg.Punishments
-				break
-			}
-		}
-
-		for _, re := range mwg.Regexp {
-			if mwg.Options.NoRepeat {
-				if isMatch, _ := re.MatchString(msg.Message.Text.Original); !isMatch {
-					continue
-				}
-			} else {
-				if isMatch, _ := re.MatchString(msg.Message.Text.LowerNorm()); !isMatch {
-					continue
-				}
-			}
-
-			punishments = mwg.Punishments
-			break
+		return &ports.CheckerAction{
+			Type:     action,
+			Reason:   "мворд",
+			Duration: dur,
 		}
 	}
 
-	if len(punishments) == 0 {
-		return nil
-	}
-
-	action, dur := domain.GetPunishment(punishments, c.timeouts.mwordGroup.Len(msg.Chatter.Username))
-	return &ports.CheckerAction{
-		Type:     action,
-		Reason:   "мворд",
-		Duration: dur,
-	}
+	return nil
 }
 
 func (c *Checker) checkSpam(msg *ports.ChatMessage) *ports.CheckerAction {
@@ -380,151 +320,93 @@ func (c *Checker) handleEmotes(msg *ports.ChatMessage, countSpam int) *ports.Che
 }
 
 func (c *Checker) handleEmotesExceptions(msg *ports.ChatMessage, countSpam int) *ports.CheckerAction {
-	var messageLimit int
-	var punishments []config.Punishment
 	for word, ex := range c.cfg.Spam.SettingsEmotes.Exceptions {
-		if ex.Options.NoVip && msg.Chatter.IsVip {
+		if !ex.Enabled {
 			continue
 		}
 
-		if ex.Options.NoSub && msg.Chatter.IsSubscriber {
+		if !c.matchRule(msg, word, ex.Regexp, ex.Options) {
 			continue
 		}
 
-		if ex.Options.IsFirst {
-			if isFirst, _ := c.irc.WaitForIRC(msg.Message.ID, 250*time.Millisecond); !isFirst {
-				continue
-			}
+		if countSpam < ex.MessageLimit {
+			return &ports.CheckerAction{Type: None}
 		}
 
-		if ex.Regexp != nil {
-			if ex.Options.NoRepeat {
-				if isMatch, _ := ex.Regexp.MatchString(msg.Message.Text.Original); !isMatch {
-					continue
-				}
-			} else {
-				if isMatch, _ := ex.Regexp.MatchString(msg.Message.Text.LowerNorm()); !isMatch {
-					continue
-				}
-			}
+		action, dur := domain.GetPunishment(ex.Punishments, c.timeouts.exceptionsEmotes.Len(msg.Chatter.Username))
+		c.timeouts.exceptionsEmotes.Push(msg.Chatter.Username, storage.Empty{})
 
-			punishments = ex.Punishments
-			messageLimit = ex.MessageLimit
-			break
-		}
-
-		if ex.Options.OneWord && len(msg.Message.Text.Words()) > 1 {
-			continue
-		}
-
-		if ex.Options.Contains && strings.Contains(msg.Message.Text.LowerNorm(), word) {
-			punishments = ex.Punishments
-			messageLimit = ex.MessageLimit
-			break
-		}
-
-		if ex.Options.NoRepeat && slices.Contains(msg.Message.Text.Words(), word) {
-			punishments = ex.Punishments
-			messageLimit = ex.MessageLimit
-			break
-		}
-
-		if slices.Contains(msg.Message.Text.WordsLowerNorm(), word) {
-			punishments = ex.Punishments
-			messageLimit = ex.MessageLimit
-			break
+		return &ports.CheckerAction{
+			Type:     action,
+			Reason:   "спам",
+			Duration: dur,
 		}
 	}
 
-	if len(punishments) == 0 || messageLimit == 0 {
-		return nil
-	}
-
-	if countSpam < messageLimit {
-		return &ports.CheckerAction{Type: None}
-	}
-
-	action, dur := domain.GetPunishment(punishments, c.timeouts.exceptionsEmotes.Len(msg.Chatter.Username))
-	c.timeouts.exceptionsEmotes.Push(msg.Chatter.Username, storage.Empty{})
-
-	return &ports.CheckerAction{
-		Type:     action,
-		Reason:   "спам",
-		Duration: dur,
-	}
+	return nil
 }
 
 func (c *Checker) handleExceptions(msg *ports.ChatMessage, countSpam int) *ports.CheckerAction {
-	var messageLimit int
-	var punishments []config.Punishment
 	for word, ex := range c.cfg.Spam.Exceptions {
-		if ex.Options.NoVip && msg.Chatter.IsVip {
+		if !ex.Enabled {
 			continue
 		}
 
-		if ex.Options.NoSub && msg.Chatter.IsSubscriber {
+		if !c.matchRule(msg, word, ex.Regexp, ex.Options) {
 			continue
 		}
 
-		if ex.Options.IsFirst {
-			if isFirst, _ := c.irc.WaitForIRC(msg.Message.ID, 250*time.Millisecond); !isFirst {
-				continue
+		if countSpam < ex.MessageLimit {
+			return &ports.CheckerAction{Type: None}
+		}
+
+		action, dur := domain.GetPunishment(ex.Punishments, c.timeouts.exceptionsSpam.Len(msg.Chatter.Username))
+		c.timeouts.exceptionsSpam.Push(msg.Chatter.Username, storage.Empty{})
+
+		return &ports.CheckerAction{
+			Type:     action,
+			Reason:   "спам",
+			Duration: dur,
+		}
+	}
+
+	return nil
+}
+
+func (c *Checker) matchRule(msg *ports.ChatMessage, word string, re *regexp.Regexp, opts config.SpamOptions) bool {
+	if opts.NoVip && msg.Chatter.IsVip {
+		return false
+	}
+	if opts.NoSub && msg.Chatter.IsSubscriber {
+		return false
+	}
+	if opts.IsFirst {
+		if isFirst, _ := c.irc.WaitForIRC(msg.Message.ID, 250*time.Millisecond); !isFirst {
+			return false
+		}
+	}
+	if opts.OneWord && len(msg.Message.Text.Words()) > 1 {
+		return false
+	}
+
+	switch {
+	case re != nil:
+		if opts.NoRepeat {
+			return re.MatchString(msg.Message.Text.Original)
+		}
+		return re.MatchString(msg.Message.Text.LowerNorm())
+	case word != "":
+		if opts.Contains {
+			if strings.Contains(msg.Message.Text.LowerNorm(), word) || (opts.NoRepeat && strings.Contains(msg.Message.Text.Original, word)) {
+				return true
 			}
 		}
 
-		if ex.Regexp != nil {
-			if ex.Options.NoRepeat {
-				if isMatch, _ := ex.Regexp.MatchString(msg.Message.Text.Original); !isMatch {
-					continue
-				}
-			} else {
-				if isMatch, _ := ex.Regexp.MatchString(msg.Message.Text.LowerNorm()); !isMatch {
-					continue
-				}
-			}
-
-			punishments = ex.Punishments
-			messageLimit = ex.MessageLimit
-			break
+		if opts.NoRepeat {
+			return slices.Contains(msg.Message.Text.Words(), word)
 		}
+		return slices.Contains(msg.Message.Text.WordsLowerNorm(), word)
 
-		if ex.Options.OneWord && len(msg.Message.Text.Words()) > 1 {
-			continue
-		}
-
-		if ex.Options.Contains && strings.Contains(msg.Message.Text.LowerNorm(), word) {
-			punishments = ex.Punishments
-			messageLimit = ex.MessageLimit
-			break
-		}
-
-		if ex.Options.NoRepeat && slices.Contains(msg.Message.Text.Words(), word) {
-			punishments = ex.Punishments
-			messageLimit = ex.MessageLimit
-			break
-		}
-
-		if slices.Contains(msg.Message.Text.WordsLowerNorm(), word) {
-			punishments = ex.Punishments
-			messageLimit = ex.MessageLimit
-			break
-		}
 	}
-
-	if len(punishments) == 0 || messageLimit == 0 {
-		return nil
-	}
-
-	if countSpam < messageLimit {
-		return &ports.CheckerAction{Type: None}
-	}
-
-	action, dur := domain.GetPunishment(punishments, c.timeouts.exceptionsSpam.Len(msg.Chatter.Username))
-	c.timeouts.exceptionsSpam.Push(msg.Chatter.Username, storage.Empty{})
-
-	return &ports.CheckerAction{
-		Type:     action,
-		Reason:   "спам",
-		Duration: dur,
-	}
+	return false
 }

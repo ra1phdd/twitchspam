@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/dlclark/regexp2"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -22,7 +21,6 @@ type Config struct {
 	Aliases    map[string]string                `json:"aliases"` // ключ - алиас, значение - оригинальная команда
 	Markers    map[string]map[string][]*Markers `json:"markers"` // первый ключ - юзернейм, второй ключ - название маркера
 	Commands   map[string]*Commands             `json:"commands"`
-	Asks       map[string]*Asks                 `json:"asks"` // ключ
 	Banwords   Banwords                         `json:"banwords"`
 }
 
@@ -72,25 +70,25 @@ type Automod struct {
 }
 
 type ExceptionsSettings struct {
-	Enabled      bool            `json:"enabled"`
-	MessageLimit int             `json:"message_limit"`
-	Punishments  []Punishment    `json:"punishments"`
-	Options      SpamOptions     `json:"options"`
-	Regexp       *regexp2.Regexp `json:"regexp"`
+	Enabled      bool           `json:"enabled"`
+	MessageLimit int            `json:"message_limit"`
+	Punishments  []Punishment   `json:"punishments"`
+	Options      SpamOptions    `json:"options"`
+	Regexp       *regexp.Regexp `json:"regexp"`
 }
 
 type Mword struct {
-	Punishments []Punishment    `json:"punishments"`
-	Options     SpamOptions     `json:"options"`
-	Regexp      *regexp2.Regexp `json:"regexp"`
+	Punishments []Punishment   `json:"punishments"`
+	Options     SpamOptions    `json:"options"`
+	Regexp      *regexp.Regexp `json:"regexp"`
 }
 
 type MwordGroup struct {
-	Enabled     bool              `json:"enabled"`
-	Punishments []Punishment      `json:"punishments"`
-	Options     SpamOptions       `json:"options"`
-	Words       []string          `json:"words"`
-	Regexp      []*regexp2.Regexp `json:"regexp"`
+	Enabled     bool             `json:"enabled"`
+	Punishments []Punishment     `json:"punishments"`
+	Options     SpamOptions      `json:"options"`
+	Words       []string         `json:"words"`
+	Regexp      []*regexp.Regexp `json:"regexp"`
 }
 
 type Markers struct {
@@ -109,13 +107,6 @@ type Timers struct {
 	Interval time.Duration `json:"interval"`
 	Count    int           `json:"count"`
 	Options  TimerOptions  `json:"options"`
-}
-
-type Asks struct {
-	Enabled bool              `json:"enabled"`
-	Words   []string          `json:"words"`
-	Regexp  []*regexp2.Regexp `json:"regexp"`
-	Text    string            `json:"text"`
 }
 
 type Banwords struct {
@@ -261,7 +252,6 @@ func (m *Manager) GetDefault() *Config {
 		Aliases:    make(map[string]string),
 		Markers:    make(map[string]map[string][]*Markers),
 		Commands:   make(map[string]*Commands),
-		Asks:       make(map[string]*Asks),
 	}
 }
 
@@ -365,10 +355,6 @@ func (m *Manager) validate(cfg *Config) error {
 
 	if cfg.Commands == nil {
 		cfg.Commands = make(map[string]*Commands)
-	}
-
-	if cfg.Asks == nil {
-		cfg.Asks = make(map[string]*Asks)
 	}
 
 	return nil

@@ -77,6 +77,17 @@ type Reply struct {
 	ParentMessage Message
 }
 
+func (m *MessageText) ReplaceOriginal(text string) {
+	m.Original = text
+	m.lower = nil
+	m.normalized = nil
+	m.lowerNorm = nil
+	m.words = nil
+	m.wordsLower = nil
+	m.wordsNorm = nil
+	m.wordsLowerNorm = nil
+}
+
 func (m *MessageText) Lower() string {
 	if m.lower == nil {
 		l := strings.ToLower(m.Original)
@@ -102,45 +113,44 @@ func (m *MessageText) LowerNorm() string {
 }
 
 func (m *MessageText) Words() []string {
-	if m.words == nil {
-		var (
-			words []string
-			buf   strings.Builder
-			prev  rune
-		)
-
-		for i, r := range m.Original {
-			if r == ' ' {
-				// если пробел стоит ПОСЛЕ запятой или ПЕРЕД запятой — это часть слова
-				if prev == ',' || (i+1 < len(m.Original) && m.Original[i+1] == ',') {
-					buf.WriteRune(r)
-					prev = r
-					continue
-				}
-
-				if buf.Len() > 0 {
-					w := strings.TrimSpace(buf.String())
-					if w != "" {
-						words = append(words, w)
-					}
-					buf.Reset()
-				}
-			} else {
-				buf.WriteRune(r)
-			}
-			prev = r
-		}
-
-		if buf.Len() > 0 {
-			w := strings.TrimSpace(buf.String())
-			if w != "" {
-				words = append(words, w)
-			}
-		}
-
-		m.words = &words
+	if m.words != nil {
+		return *m.words
 	}
-	return *m.words
+
+	var (
+		words []string
+		buf   strings.Builder
+	)
+
+	for i, r := range m.Original {
+		if r == ' ' {
+			// если пробел стоит ПОСЛЕ запятой или ПЕРЕД запятой — это часть слова
+			if (i > 0 && m.Original[i-1] == ',') || (i+1 < len(m.Original) && m.Original[i+1] == ',') {
+				buf.WriteRune(r)
+				continue
+			}
+
+			if buf.Len() > 0 {
+				w := strings.TrimSpace(buf.String())
+				if w != "" {
+					words = append(words, w)
+				}
+				buf.Reset()
+			}
+		} else {
+			buf.WriteRune(r)
+		}
+	}
+
+	if buf.Len() > 0 {
+		w := strings.TrimSpace(buf.String())
+		if w != "" {
+			words = append(words, w)
+		}
+	}
+
+	m.words = &words
+	return words
 }
 
 func (m *MessageText) WordsLower() []string {

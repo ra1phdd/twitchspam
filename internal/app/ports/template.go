@@ -3,7 +3,7 @@ package ports
 import "twitchspam/internal/app/infrastructure/config"
 
 type TemplatePort interface {
-	ReplaceAlias(text string) string
+	ReplaceAlias(parts []string) (string, bool)
 	UpdateAliases(newAliases map[string]string)
 	ReplacePlaceholders(text string, parts []string) string
 	CheckOnBanwords(text string, wordsOriginal []string) bool
@@ -15,10 +15,4 @@ type TemplatePort interface {
 	ParsePunishment(punishment string, allowInherit bool) (config.Punishment, error)
 	FormatPunishments(punishments []config.Punishment) []string
 	FormatPunishment(punishment config.Punishment) string
-	UpdateMwords(mwordGroups map[string]*config.MwordGroup, mwords map[string]*config.Mword)
-	MatchMwords(msg *ChatMessage) (bool, []config.Punishment)
-	UpdateExcept(exDefault map[string]*config.ExceptionsSettings)
-	MatchExcept(msg *ChatMessage) (bool, []config.Punishment)
-	UpdateExceptEmote(exEmote map[string]*config.ExceptionsSettings)
-	MatchExceptEmote(msg *ChatMessage) (bool, []config.Punishment)
 }
