@@ -3,6 +3,8 @@ package stream
 import (
 	"sync"
 	"sync/atomic"
+	"time"
+	"twitchspam/internal/app/ports"
 )
 
 type Stream struct {
@@ -13,12 +15,21 @@ type Stream struct {
 	streamID    string
 	category    string
 	isLive      atomic.Bool
+
+	stats ports.StatsPort
 }
 
 func NewStream(channelName string) *Stream {
-	s := &Stream{}
+	s := &Stream{
+		stats: NewStats(),
+	}
+
 	s.SetChannelName(channelName)
 	return s
+}
+
+func (s *Stream) Stats() ports.StatsPort {
+	return s.stats
 }
 
 func (s *Stream) IsLive() bool {
@@ -67,8 +78,16 @@ func (s *Stream) SetChannelName(channelName string) {
 
 func (s *Stream) SetCategory(category string) {
 	s.mu.Lock()
+	if s.category == category {
+		s.mu.Unlock()
+		return
+	}
 	s.category = category
 	s.mu.Unlock()
+
+	if s.stats != nil {
+		s.stats.AddCategoryChange(category, time.Now())
+	}
 }
 
 func (s *Stream) Category() string {

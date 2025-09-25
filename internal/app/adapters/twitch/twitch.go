@@ -10,7 +10,6 @@ import (
 	"twitchspam/internal/app/adapters/twitch/api"
 	"twitchspam/internal/app/adapters/twitch/event_sub"
 	"twitchspam/internal/app/adapters/twitch/irc"
-	"twitchspam/internal/app/domain/stats"
 	"twitchspam/internal/app/domain/stream"
 	"twitchspam/internal/app/domain/template"
 	"twitchspam/internal/app/infrastructure/config"
@@ -27,7 +26,6 @@ type Twitch struct {
 	checker     ports.CheckerPort
 	admin, user ports.CommandPort
 	template    ports.TemplatePort
-	stats       ports.StatsPort
 	irc         ports.IRCPort
 
 	client *http.Client
@@ -37,7 +35,6 @@ func New(log logger.Logger, manager *config.Manager, client *http.Client, modCha
 	t := &Twitch{
 		log:    log,
 		cfg:    manager.Get(),
-		stats:  stats.New(),
 		client: client,
 	}
 
@@ -61,8 +58,8 @@ func New(log logger.Logger, manager *config.Manager, client *http.Client, modCha
 		t.stream.SetIslive(true)
 		t.stream.SetStreamID(live.ID)
 
-		t.stats.SetStartTime(live.StartedAt)
-		t.stats.SetOnline(live.ViewerCount)
+		t.stream.Stats().SetStartTime(live.StartedAt)
+		t.stream.Stats().SetOnline(live.ViewerCount)
 	}
 
 	t.irc, err = irc.New(t.log, t.cfg, 1*time.Second, modChannel)
@@ -74,9 +71,9 @@ func New(log logger.Logger, manager *config.Manager, client *http.Client, modCha
 	timer := timers.NewTimingWheel(100*time.Millisecond, 600)
 
 	t.template = template.New(log, t.cfg.Aliases, t.cfg.Banwords.Words, t.cfg.Banwords.Regexp, t.stream)
-	t.checker = checker.NewCheck(log, t.cfg, t.stream, t.stats, t.template, t.irc)
+	t.checker = checker.NewCheck(log, t.cfg, t.stream, t.template, t.irc)
 	t.admin = admin.New(log, manager, t.stream, t.api, t.template, fs, timer)
-	t.user = user.New(log, t.cfg, t.stream, t.stats, t.template, fs)
+	t.user = user.New(log, t.cfg, t.stream, t.template, fs)
 
 	go func() {
 		ticker := time.NewTicker(30 * time.Second)
@@ -90,13 +87,13 @@ func New(log logger.Logger, manager *config.Manager, client *http.Client, modCha
 			if live.IsOnline {
 				t.stream.SetIslive(true)
 				t.stream.SetStreamID(live.ID)
-				t.stats.SetOnline(live.ViewerCount)
-				t.stats.SetEndTime(time.Now())
+				t.stream.Stats().SetOnline(live.ViewerCount)
+				t.stream.Stats().SetEndTime(time.Now())
 			}
 		}
 	}()
 
-	es := event_sub.New(t.log, t.cfg, t.stream, t.api, t.checker, t.admin, t.user, t.template, t.stats, timer, t.client)
+	es := event_sub.New(t.log, t.cfg, t.stream, t.api, t.checker, t.admin, t.user, t.template, timer, t.client)
 	go es.RunEventLoop()
 
 	return t, nil

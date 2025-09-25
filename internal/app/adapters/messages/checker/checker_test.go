@@ -4,7 +4,6 @@ import (
 	"testing"
 	"time"
 	"twitchspam/internal/app/adapters/twitch/irc"
-	"twitchspam/internal/app/domain/stats"
 	"twitchspam/internal/app/domain/stream"
 	"twitchspam/internal/app/domain/template"
 	"twitchspam/internal/app/infrastructure/config"
@@ -23,7 +22,7 @@ func BenchmarkCheck(b *testing.B) {
 	s := stream.NewStream("afsygga")
 	t := template.New(logger.New(), cfg.Aliases, cfg.Banwords.Words, cfg.Banwords.Regexp, s)
 	i, _ := irc.New(logger.New(), cfg, 100*time.Millisecond, "afsygga")
-	c := NewCheck(logger.New(), cfg, s, stats.New(), t, i)
+	c := NewCheck(logger.New(), cfg, s, stream.New(), t, i)
 
 	msg := &ports.ChatMessage{
 		Broadcaster: ports.Broadcaster{

@@ -9,7 +9,7 @@ import (
 func (es *EventSub) checkMessage(msgEvent ChatMessageEvent) {
 	msg := es.convertMap(msgEvent)
 	if es.stream.IsLive() {
-		es.stats.AddMessage(msg.Chatter.Username)
+		es.stream.Stats().AddMessage(msg.Chatter.Username)
 	}
 
 	if !strings.HasPrefix(msg.Message.Text.Original, "!am alias") {

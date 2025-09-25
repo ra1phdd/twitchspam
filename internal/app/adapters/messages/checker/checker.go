@@ -27,7 +27,6 @@ type Checker struct {
 	cfg *config.Config
 
 	stream   ports.StreamPort
-	stats    ports.StatsPort
 	timeouts struct {
 		spam             ports.StorePort[storage.Empty]
 		emote            ports.StorePort[storage.Empty]
@@ -42,7 +41,7 @@ type Checker struct {
 	irc      ports.IRCPort
 }
 
-func NewCheck(log logger.Logger, cfg *config.Config, stream ports.StreamPort, stats ports.StatsPort, template ports.TemplatePort, irc ports.IRCPort) *Checker {
+func NewCheck(log logger.Logger, cfg *config.Config, stream ports.StreamPort, template ports.TemplatePort, irc ports.IRCPort) *Checker {
 	capacity := func() int {
 		defLimit := float64(cfg.Spam.SettingsDefault.MessageLimit*cfg.Spam.SettingsDefault.MinGapMessages) / cfg.Spam.SettingsDefault.SimilarityThreshold
 		vipLimit := float64(cfg.Spam.SettingsVIP.MessageLimit*cfg.Spam.SettingsVIP.MinGapMessages) / cfg.Spam.SettingsVIP.SimilarityThreshold
@@ -54,7 +53,6 @@ func NewCheck(log logger.Logger, cfg *config.Config, stream ports.StreamPort, st
 		log:    log,
 		cfg:    cfg,
 		stream: stream,
-		stats:  stats,
 		timeouts: struct {
 			spam             ports.StorePort[storage.Empty]
 			emote            ports.StorePort[storage.Empty]

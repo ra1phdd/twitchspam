@@ -1,4 +1,4 @@
-package stats
+package stream
 
 import (
 	"fmt"
@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"twitchspam/internal/app/domain"
 	"twitchspam/internal/app/ports"
 )
 
@@ -25,9 +26,17 @@ type Stats struct {
 	countDeletes  map[string]int
 	countTimeouts map[string]int
 	countBans     map[string]int
+
+	categoryHistory []CategoryInterval
 }
 
-func New() *Stats {
+type CategoryInterval struct {
+	Name      string
+	StartTime time.Time
+	EndTime   time.Time
+}
+
+func NewStats() *Stats {
 	return &Stats{}
 }
 
@@ -128,6 +137,20 @@ func (s *Stats) AddBan(username string) {
 	s.countBans[strings.ToLower(username)]++
 }
 
+func (s *Stats) AddCategoryChange(category string, t time.Time) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if n := len(s.categoryHistory); n > 0 {
+		s.categoryHistory[n-1].EndTime = t
+	}
+
+	s.categoryHistory = append(s.categoryHistory, CategoryInterval{
+		Name:      category,
+		StartTime: t,
+	})
+}
+
 func (s *Stats) GetStats() *ports.AnswerType {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -177,7 +200,7 @@ func (s *Stats) GetStats() *ports.AnswerType {
 	}
 
 	msg := fmt.Sprintf("длительность стрима: %s • средний онлайн: %.0f • максимальный онлайн: %d • всего сообщений: %d • кол-во чаттеров: %d • скорость сообщений: %.1f/сек • кол-во банов: %d • кол-во мутов: %d • кол-во удаленных сообщений: %d • топ 3 модератора за стрим: ",
-		s.endStreamTime.Sub(s.startStreamTime).Round(time.Second).String(), math.Round(avgViewers), s.online.maxViewers,
+		domain.FormatDuration(s.endStreamTime.Sub(s.startStreamTime)), math.Round(avgViewers), s.online.maxViewers,
 		countMessages, len(s.countMessages), float64(countMessages)/s.endStreamTime.Sub(s.startStreamTime).Seconds(), countBans, countTimeouts, countDeletes)
 
 	top := 3

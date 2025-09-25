@@ -16,7 +16,6 @@ type User struct {
 	log          logger.Logger
 	cfg          *config.Config
 	stream       ports.StreamPort
-	stats        ports.StatsPort
 	template     ports.TemplatePort
 	fs           ports.FileServerPort
 	limiterGame  *rate.Limiter
@@ -24,12 +23,11 @@ type User struct {
 	usersLimiter map[string]*rate.Limiter
 }
 
-func New(log logger.Logger, cfg *config.Config, stream ports.StreamPort, stats ports.StatsPort, template ports.TemplatePort, fs ports.FileServerPort) *User {
+func New(log logger.Logger, cfg *config.Config, stream ports.StreamPort, template ports.TemplatePort, fs ports.FileServerPort) *User {
 	return &User{
 		log:          log,
 		cfg:          cfg,
 		stream:       stream,
-		stats:        stats,
 		template:     template,
 		fs:           fs,
 		limiterGame:  rate.NewLimiter(rate.Every(30*time.Second), 1),
@@ -77,19 +75,19 @@ func (u *User) handleStats(msg *ports.ChatMessage) *ports.AnswerType {
 	if len(words) > 1 {
 		switch words[1] {
 		case "all":
-			return u.stats.GetStats()
+			return u.stream.Stats().GetStats()
 		case "top":
 			count := 0
 			if len(words) > 2 {
 				count, _ = strconv.Atoi(words[2])
 			}
-			return u.stats.GetTopStats(count)
+			return u.stream.Stats().GetTopStats(count)
 		default:
 			target = words[1]
 		}
 	}
 
-	return u.stats.GetUserStats(target)
+	return u.stream.Stats().GetUserStats(target)
 }
 
 func (u *User) handleCommands(msg *ports.ChatMessage) *ports.AnswerType {

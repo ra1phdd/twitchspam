@@ -27,13 +27,12 @@ type EventSub struct {
 	checker     ports.CheckerPort
 	admin, user ports.CommandPort
 	template    ports.TemplatePort
-	stats       ports.StatsPort
 	timers      ports.TimersPort
 
 	client *http.Client
 }
 
-func New(log logger.Logger, cfg *config.Config, stream ports.StreamPort, api ports.APIPort, checker ports.CheckerPort, admin, user ports.CommandPort, template ports.TemplatePort, stats ports.StatsPort, timers ports.TimersPort, client *http.Client) *EventSub {
+func New(log logger.Logger, cfg *config.Config, stream ports.StreamPort, api ports.APIPort, checker ports.CheckerPort, admin, user ports.CommandPort, template ports.TemplatePort, timers ports.TimersPort, client *http.Client) *EventSub {
 	es := &EventSub{
 		log:      log,
 		cfg:      cfg,
@@ -43,7 +42,6 @@ func New(log logger.Logger, cfg *config.Config, stream ports.StreamPort, api por
 		admin:    admin,
 		user:     user,
 		template: template,
-		stats:    stats,
 		timers:   timers,
 		client:   client,
 	}
@@ -167,14 +165,14 @@ func (es *EventSub) handleMessage(cancel context.CancelFunc, msgBytes []byte) {
 		case "stream.online":
 			es.log.Info("Stream started")
 			es.stream.SetIslive(true)
-			es.stats.SetStartTime(time.Now())
+			es.stream.Stats().SetStartTime(time.Now())
 		case "stream.offline":
 			es.log.Info("Stream ended")
 			es.stream.SetIslive(false)
-			es.stats.SetEndTime(time.Now())
+			es.stream.Stats().SetEndTime(time.Now())
 
 			if es.cfg.Enabled {
-				es.api.SendChatMessages(es.stats.GetStats())
+				es.api.SendChatMessages(es.stream.Stats().GetStats())
 			}
 		case "channel.update":
 			var upd ChannelUpdateEvent
