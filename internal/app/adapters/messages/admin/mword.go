@@ -19,7 +19,7 @@ func (m *AddMword) Execute(cfg *config.Config, text *ports.MessageText) *ports.A
 
 func (m *AddMword) handleMwAdd(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
 	words := text.Words()
-	opts := m.template.ParseOptions(&words, template.SpamOptions) // ParseOptions удаляет опции из слайса words
+	opts := m.template.Options().ParseAll(&words, template.MwordOptions) // ParseOptions удаляет опции из слайса words
 
 	idx := 2 // id параметра, с которого начинаются аргументы команды
 	if words[2] == "add" {
@@ -39,7 +39,7 @@ func (m *AddMword) handleMwAdd(cfg *config.Config, text *ports.MessageText) *por
 			continue
 		}
 
-		p, err := m.template.ParsePunishment(pa, false)
+		p, err := m.template.Punishment().Parse(pa, false)
 		if err != nil {
 			return &ports.AnswerType{
 				Text:    []string{fmt.Sprintf("не удалось распарсить наказания (%s)!", pa)},
@@ -58,11 +58,15 @@ func (m *AddMword) handleMwAdd(cfg *config.Config, text *ports.MessageText) *por
 			}
 		}
 
-		mword := cfg.Mword[strings.Join(words[idx+1:], " ")]
-		mword = &config.Mword{
+		optsMerged := m.template.Options().MergeMword(config.MwordOptions{}, opts)
+		if mword, ok := cfg.Mword[strings.Join(words[idx+1:], " ")]; ok {
+			optsMerged = m.template.Options().MergeMword(mword.Options, opts)
+		}
+
+		cfg.Mword[strings.Join(words[idx+1:], " ")] = &config.Mword{
 			Punishments: punishments,
 			Regexp:      re,
-			Options:     mergeSpamOptions(mword.Options, opts),
+			Options:     optsMerged,
 		}
 		return nil
 	}
@@ -73,10 +77,14 @@ func (m *AddMword) handleMwAdd(cfg *config.Config, text *ports.MessageText) *por
 			continue
 		}
 
-		mword := cfg.Mword[word]
-		mword = &config.Mword{
+		optsMerged := m.template.Options().MergeMword(config.MwordOptions{}, opts)
+		if mword, ok := cfg.Mword[word]; ok {
+			optsMerged = m.template.Options().MergeMword(mword.Options, opts)
+		}
+
+		cfg.Mword[word] = &config.Mword{
 			Punishments: punishments,
-			Options:     mergeSpamOptions(mword.Options, opts),
+			Options:     optsMerged,
 		}
 	}
 	return nil
@@ -132,6 +140,6 @@ func (m *ListMword) handleMwList(cfg *config.Config) *ports.AnswerType {
 	return buildList(cfg.Mword, "мворды", "мворды не найдены!",
 		func(word string, mw *config.Mword) string {
 			return fmt.Sprintf("- %s (наказания: %s)",
-				word, m.template.FormatPunishments(mw.Punishments))
+				word, m.template.Punishment().FormatAll(mw.Punishments))
 		}, m.fs)
 }

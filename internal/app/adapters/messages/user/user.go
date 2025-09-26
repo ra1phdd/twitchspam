@@ -104,7 +104,7 @@ func (u *User) handleCommands(msg *ports.ChatMessage) *ports.AnswerType {
 		}
 
 		if link, ok := u.cfg.Commands[word]; ok {
-			text = u.template.ReplacePlaceholders(link.Text, words)
+			text = u.template.Placeholders().ReplaceAll(link.Text, words)
 			break
 		}
 	}

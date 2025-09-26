@@ -114,7 +114,7 @@ func (c *Checker) checkBypass(msg *ports.ChatMessage) *ports.CheckerAction {
 }
 
 func (c *Checker) CheckBanwords(textLower string, wordsOriginal []string) *ports.CheckerAction {
-	if !c.template.CheckOnBanwords(textLower, wordsOriginal) {
+	if !c.template.Banwords().CheckMessage(textLower, wordsOriginal) {
 		return nil
 	}
 
@@ -143,7 +143,7 @@ func (c *Checker) CheckAds(text string, username string) *ports.CheckerAction {
 
 func (c *Checker) CheckMwords(msg *ports.ChatMessage) *ports.CheckerAction {
 	for word, mw := range c.cfg.Mword {
-		if !c.matchRule(msg, word, mw.Regexp, mw.Options) {
+		if !c.matchMwordRule(msg, word, mw.Regexp, mw.Options) {
 			continue
 		}
 
@@ -164,7 +164,7 @@ func (c *Checker) CheckMwords(msg *ports.ChatMessage) *ports.CheckerAction {
 
 		var isMatch bool
 		for _, word := range mwg.Words {
-			if !c.matchRule(msg, word, nil, mwg.Options) {
+			if !c.matchMwordRule(msg, word, nil, mwg.Options) {
 				continue
 			}
 
@@ -174,7 +174,7 @@ func (c *Checker) CheckMwords(msg *ports.ChatMessage) *ports.CheckerAction {
 
 		if !isMatch {
 			for _, re := range mwg.Regexp {
-				if !c.matchRule(msg, "", re, mwg.Options) {
+				if !c.matchMwordRule(msg, "", re, mwg.Options) {
 					continue
 				}
 
@@ -323,7 +323,7 @@ func (c *Checker) handleEmotesExceptions(msg *ports.ChatMessage, countSpam int) 
 			continue
 		}
 
-		if !c.matchRule(msg, word, ex.Regexp, ex.Options) {
+		if !c.matchExceptRule(msg, word, ex.Regexp, ex.Options) {
 			continue
 		}
 
@@ -350,7 +350,7 @@ func (c *Checker) handleExceptions(msg *ports.ChatMessage, countSpam int) *ports
 			continue
 		}
 
-		if !c.matchRule(msg, word, ex.Regexp, ex.Options) {
+		if !c.matchExceptRule(msg, word, ex.Regexp, ex.Options) {
 			continue
 		}
 
@@ -371,7 +371,7 @@ func (c *Checker) handleExceptions(msg *ports.ChatMessage, countSpam int) *ports
 	return nil
 }
 
-func (c *Checker) matchRule(msg *ports.ChatMessage, word string, re *regexp.Regexp, opts config.SpamOptions) bool {
+func (c *Checker) matchMwordRule(msg *ports.ChatMessage, word string, re *regexp.Regexp, opts config.MwordOptions) bool {
 	if opts.NoVip && msg.Chatter.IsVip {
 		return false
 	}
@@ -387,24 +387,62 @@ func (c *Checker) matchRule(msg *ports.ChatMessage, word string, re *regexp.Rege
 		return false
 	}
 
+	var text string
+	var words []string
 	switch {
-	case re != nil:
-		if opts.NoRepeat {
-			return re.MatchString(msg.Message.Text.Original)
-		}
-		return re.MatchString(msg.Message.Text.LowerNorm())
-	case word != "":
-		if opts.Contains {
-			if strings.Contains(msg.Message.Text.LowerNorm(), word) || (opts.NoRepeat && strings.Contains(msg.Message.Text.Original, word)) {
-				return true
-			}
-		}
-
-		if opts.NoRepeat {
-			return slices.Contains(msg.Message.Text.Words(), word)
-		}
-		return slices.Contains(msg.Message.Text.WordsLowerNorm(), word)
-
+	case opts.CaseSensitive && opts.NoRepeat:
+		text = msg.Message.Text.Original
+		words = msg.Message.Text.Words()
+	case opts.NoRepeat:
+		text = msg.Message.Text.Original
+		words = msg.Message.Text.Words()
+	case opts.CaseSensitive:
+		text = msg.Message.Text.Normalized()
+		words = msg.Message.Text.WordsNorm()
+	default:
+		text = msg.Message.Text.LowerNorm()
+		words = msg.Message.Text.WordsLowerNorm()
 	}
-	return false
+
+	return c.matchRule(word, re, text, words, opts.Contains)
+}
+
+func (c *Checker) matchExceptRule(msg *ports.ChatMessage, word string, re *regexp.Regexp, opts config.ExceptOptions) bool {
+	if opts.OneWord && len(msg.Message.Text.Words()) > 1 {
+		return false
+	}
+
+	var text string
+	var words []string
+	switch {
+	case opts.CaseSensitive && opts.NoRepeat:
+		text = msg.Message.Text.Original
+		words = msg.Message.Text.Words()
+	case opts.NoRepeat:
+		text = msg.Message.Text.Original
+		words = msg.Message.Text.Words()
+	case opts.CaseSensitive:
+		text = msg.Message.Text.Normalized()
+		words = msg.Message.Text.WordsNorm()
+	default:
+		text = msg.Message.Text.LowerNorm()
+		words = msg.Message.Text.WordsLowerNorm()
+	}
+
+	return c.matchRule(word, re, text, words, opts.Contains)
+}
+
+func (c *Checker) matchRule(word string, re *regexp.Regexp, text string, words []string, contains bool) bool {
+	if re != nil {
+		return re.MatchString(text)
+	}
+
+	if word == "" {
+		return false
+	}
+
+	if contains || strings.Contains(word, " ") {
+		return strings.Contains(text, word)
+	}
+	return slices.Contains(words, word)
 }

@@ -21,7 +21,7 @@ func (e *AddExcept) Execute(cfg *config.Config, text *ports.MessageText) *ports.
 
 func (e *AddExcept) handleExceptAdd(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
 	words := text.Words()
-	opts := e.template.ParseOptions(&words, template.SpamOptions) // ParseOptions удаляет опции из слайса words
+	opts := e.template.Options().ParseAll(&words, template.SpamExceptOptions) // ParseOptions удаляет опции из слайса words
 
 	idx := 2 // id параметра, с которого начинаются аргументы команды
 	if words[2] == "add" {
@@ -49,7 +49,7 @@ func (e *AddExcept) handleExceptAdd(cfg *config.Config, text *ports.MessageText)
 			continue
 		}
 
-		p, err := e.template.ParsePunishment(pa, true)
+		p, err := e.template.Punishment().Parse(pa, true)
 		if err != nil {
 			return &ports.AnswerType{
 				Text:    []string{fmt.Sprintf("не удалось распарсить наказания (%s)!", pa)},
@@ -82,9 +82,9 @@ func (e *AddExcept) handleExceptAdd(cfg *config.Config, text *ports.MessageText)
 			}
 		}
 
-		optsMerged := mergeSpamOptions(config.SpamOptions{}, opts)
+		optsMerged := e.template.Options().MergeExcept(config.ExceptOptions{}, opts)
 		if except, ok := exSettings[strings.Join(words[idx+2:], " ")]; ok {
-			optsMerged = mergeSpamOptions(except.Options, opts)
+			optsMerged = e.template.Options().MergeExcept(except.Options, opts)
 		}
 
 		exSettings[strings.Join(words[idx+2:], " ")] = &config.ExceptionsSettings{
@@ -103,9 +103,9 @@ func (e *AddExcept) handleExceptAdd(cfg *config.Config, text *ports.MessageText)
 			continue
 		}
 
-		optsMerged := mergeSpamOptions(config.SpamOptions{}, opts)
+		optsMerged := e.template.Options().MergeExcept(config.ExceptOptions{}, opts)
 		if except, ok := exSettings[word]; ok {
-			optsMerged = mergeSpamOptions(except.Options, opts)
+			optsMerged = e.template.Options().MergeExcept(except.Options, opts)
 		}
 
 		exSettings[word] = &config.ExceptionsSettings{
@@ -128,8 +128,8 @@ func (e *SetExcept) Execute(cfg *config.Config, text *ports.MessageText) *ports.
 }
 
 func (e *SetExcept) handleExceptSet(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
-	words := text.Words()                                         // !am ex set ml/p <параметр 1> <слова или фразы>
-	opts := e.template.ParseOptions(&words, template.SpamOptions) // ParseOptions удаляет опции из слайса words
+	words := text.Words()                                                     // !am ex set ml/p <параметр 1> <слова или фразы>
+	opts := e.template.Options().ParseAll(&words, template.SpamExceptOptions) // ParseOptions удаляет опции из слайса words
 
 	cmds := map[string]func(exWord *config.ExceptionsSettings, param string) *ports.AnswerType{
 		"ml": func(exWord *config.ExceptionsSettings, param string) *ports.AnswerType {
@@ -149,7 +149,7 @@ func (e *SetExcept) handleExceptSet(cfg *config.Config, text *ports.MessageText)
 					continue
 				}
 
-				p, err := e.template.ParsePunishment(pa, true)
+				p, err := e.template.Punishment().Parse(pa, true)
 				if err != nil {
 					return &ports.AnswerType{
 						Text:    []string{fmt.Sprintf("не удалось распарсить наказания (%s)!", pa)},
@@ -182,7 +182,7 @@ func (e *SetExcept) handleExceptSet(cfg *config.Config, text *ports.MessageText)
 			notFound = append(notFound, word)
 			return nil
 		}
-		exWord.Options = mergeSpamOptions(exWord.Options, opts)
+		exWord.Options = e.template.Options().MergeExcept(exWord.Options, opts)
 
 		if cmd, ok := cmds[words[3]]; ok {
 			if out := cmd(exWord, words[4]); out != nil {
@@ -275,7 +275,7 @@ func (e *ListExcept) handleExceptList(cfg *config.Config) *ports.AnswerType {
 	return buildList(exSettings, "исключения", "исключений не найдено!",
 		func(word string, ex *config.ExceptionsSettings) string {
 			return fmt.Sprintf("- %s (лимит сообщений: %d, наказания: %s)",
-				word, ex.MessageLimit, strings.Join(e.template.FormatPunishments(ex.Punishments), ", "))
+				word, ex.MessageLimit, strings.Join(e.template.Punishment().FormatAll(ex.Punishments), ", "))
 		}, e.fs)
 }
 
@@ -290,7 +290,7 @@ func (e *OnOffExcept) Execute(cfg *config.Config, text *ports.MessageText) *port
 
 func (e *OnOffExcept) handleExceptOnOff(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
 	words := text.Words()
-	opts := e.template.ParseOptions(&words, template.SpamOptions)
+	opts := e.template.Options().ParseAll(&words, template.SpamExceptOptions)
 
 	if len(words) < 4 { // !am ex on/off <команды через запятую>
 		return NonParametr

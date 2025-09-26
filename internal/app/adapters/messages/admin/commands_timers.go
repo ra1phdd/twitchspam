@@ -20,7 +20,7 @@ func (c *AddCommandTimer) Execute(cfg *config.Config, text *ports.MessageText) *
 
 func (c *AddCommandTimer) handleCommandTimersAdd(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
 	words := text.Words()
-	opts := c.template.ParseOptions(&words, template.TimersOptions) // ParseOptions удаляет опции из слайса words
+	opts := c.template.Options().ParseAll(&words, template.TimersOptions) // ParseOptions удаляет опции из слайса words
 
 	idx := 3 // id параметра, с которого начинаются аргументы команды
 	if words[3] == "add" {
@@ -167,7 +167,7 @@ func (c *SetCommandTimer) Execute(cfg *config.Config, text *ports.MessageText) *
 
 func (c *SetCommandTimer) handleCommandTimersSet(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
 	words := text.Words()
-	opts := c.template.ParseOptions(&words, template.TimersOptions) // ParseOptions удаляет опции из слайса words
+	opts := c.template.Options().ParseAll(&words, template.TimersOptions) // ParseOptions удаляет опции из слайса words
 
 	// !am cmd timer set int/count <значение> <команды через запятую> или !am cmd timer set <опции>
 	idx := 4

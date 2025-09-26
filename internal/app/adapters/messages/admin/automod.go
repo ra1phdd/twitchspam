@@ -32,7 +32,7 @@ func (a *DelayAutomod) handleDelayAutomod(cfg *config.Config, text *ports.Messag
 		return NonParametr
 	}
 
-	if val, ok := a.template.ParseIntArg(words[3], 0, 10); ok {
+	if val, ok := a.template.Parser().ParseIntArg(words[3], 0, 10); ok {
 		cfg.Automod.Delay = val
 		return nil
 	}

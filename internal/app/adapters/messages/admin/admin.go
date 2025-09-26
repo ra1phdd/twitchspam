@@ -270,54 +270,6 @@ func (c *CompositeCommand) Execute(cfg *config.Config, text *ports.MessageText) 
 	return NotFoundCmd
 }
 
-func mergeSpamOptions(dst config.SpamOptions, src map[string]bool) config.SpamOptions {
-	if _, ok := src["-nofirst"]; ok {
-		dst.IsFirst = false
-	}
-
-	if _, ok := src["-first"]; ok {
-		dst.IsFirst = true
-	}
-
-	if _, ok := src["-nosub"]; ok {
-		dst.NoSub = true
-	}
-
-	if _, ok := src["-sub"]; ok {
-		dst.NoSub = false
-	}
-
-	if _, ok := src["-novip"]; ok {
-		dst.NoVip = true
-	}
-
-	if _, ok := src["-vip"]; ok {
-		dst.NoVip = false
-	}
-
-	if _, ok := src["-norepeat"]; ok {
-		dst.NoRepeat = true
-	}
-
-	if _, ok := src["-repeat"]; ok {
-		dst.NoRepeat = false
-	}
-
-	if _, ok := src["-oneword"]; ok {
-		dst.OneWord = true
-	}
-
-	if _, ok := src["-noontains"]; ok {
-		dst.Contains = false
-	}
-
-	if _, ok := src["-contains"]; ok {
-		dst.Contains = true
-	}
-
-	return dst
-}
-
 func mergeTimerOptions(dst config.TimerOptions, src map[string]bool) config.TimerOptions {
 	if _, ok := src["-noa"]; ok {
 		dst.IsAnnounce = false

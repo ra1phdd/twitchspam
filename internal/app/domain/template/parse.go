@@ -11,7 +11,7 @@ func NewParser() *ParserTemplate {
 	return &ParserTemplate{}
 }
 
-func (p *ParserTemplate) parseIntArg(valStr string, min, max int) (int, bool) {
+func (p *ParserTemplate) ParseIntArg(valStr string, min, max int) (int, bool) {
 	val, err := strconv.Atoi(valStr)
 	if err != nil {
 		return 0, false
@@ -22,7 +22,7 @@ func (p *ParserTemplate) parseIntArg(valStr string, min, max int) (int, bool) {
 	return val, true
 }
 
-func (p *ParserTemplate) parseFloatArg(valStr string, min, max float64) (float64, bool) {
+func (p *ParserTemplate) ParseFloatArg(valStr string, min, max float64) (float64, bool) {
 	val, err := strconv.ParseFloat(valStr, 64)
 	if err != nil || val < min || val > max {
 		return 0, false

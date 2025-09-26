@@ -43,7 +43,7 @@ func NewBanwords(log logger.Logger, banWords []string, banRegexps []*regexp.Rege
 	return bt
 }
 
-func (bt *BanwordsTemplate) checkMessage(textLower string, wordsOriginal []string) bool {
+func (bt *BanwordsTemplate) CheckMessage(textLower string, wordsOriginal []string) bool {
 	if bt.re != nil && bt.re.MatchString(textLower) {
 		return true
 	}

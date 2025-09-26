@@ -13,7 +13,7 @@ func (es *EventSub) checkMessage(msgEvent ChatMessageEvent) {
 	}
 
 	if !strings.HasPrefix(msg.Message.Text.Original, "!am alias") {
-		text, ok := es.template.ReplaceAlias(msg.Message.Text.Words())
+		text, ok := es.template.Aliases().Replace(msg.Message.Text.Words())
 		if ok {
 			msg.Message.Text.ReplaceOriginal(text)
 		}

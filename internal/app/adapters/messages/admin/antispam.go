@@ -53,11 +53,23 @@ func (a *InfoAntispam) handleAntiSpamInfo(cfg *config.Config, _ *ports.MessageTe
 		whitelistUsers = sb.String()
 	}
 
+	emoteExceptions := "не найдены"
+	if len(cfg.Spam.SettingsEmotes.Exceptions) > 0 {
+		var sb strings.Builder
+		sb.WriteString("\n")
+		for word, ex := range cfg.Spam.SettingsEmotes.Exceptions {
+			sb.WriteString(fmt.Sprintf("  - %s (включено: %v, лимит сообщений: %d, наказания: %s, опции: %s)\n", word,
+				ex.Enabled, ex.MessageLimit, strings.Join(a.template.Punishment().FormatAll(ex.Punishments), ", "), a.template.Options().ExceptToString(ex.Options)))
+		}
+		emoteExceptions = sb.String()
+	}
+
 	exceptions := "не найдены"
 	if len(cfg.Spam.Exceptions) > 0 {
 		var sb strings.Builder
 		for word, ex := range cfg.Spam.Exceptions {
-			sb.WriteString(fmt.Sprintf("  - %s (лимит сообщений: %d, наказания: %s)\n", word, ex.MessageLimit, strings.Join(a.template.FormatPunishments(ex.Punishments), ", ")))
+			sb.WriteString(fmt.Sprintf("- %s (включено: %v, лимит сообщений: %d, наказания: %s, опции: %s)\n", word,
+				ex.Enabled, ex.MessageLimit, strings.Join(a.template.Punishment().FormatAll(ex.Punishments), ", "), a.template.Options().ExceptToString(ex.Options)))
 		}
 		exceptions = sb.String()
 	}
@@ -70,27 +82,28 @@ func (a *InfoAntispam) handleAntiSpamInfo(cfg *config.Config, _ *ports.MessageTe
 		"- включен: " + fmt.Sprint(cfg.Spam.SettingsDefault.Enabled),
 		"- порог схожести сообщений: " + fmt.Sprint(cfg.Spam.SettingsDefault.SimilarityThreshold),
 		"- кол-во похожих сообщений: " + fmt.Sprint(cfg.Spam.SettingsDefault.MessageLimit),
-		"- наказания: " + strings.Join(a.template.FormatPunishments(cfg.Spam.SettingsDefault.Punishments), ", "),
+		"- наказания: " + strings.Join(a.template.Punishment().FormatAll(cfg.Spam.SettingsDefault.Punishments), ", "),
 		"- время сброса счётчика наказаний: " + fmt.Sprint(cfg.Spam.SettingsDefault.DurationResetPunishments),
 		"- ограничение максимальной длины слова: " + fmt.Sprint(cfg.Spam.SettingsDefault.MaxWordLength),
-		"- наказание за превышение длины слова: " + a.template.FormatPunishment(cfg.Spam.SettingsDefault.MaxWordPunishment),
+		"- наказание за превышение длины слова: " + a.template.Punishment().Format(cfg.Spam.SettingsDefault.MaxWordPunishment),
 		"- минимальное количество разных сообщений между спамом: " + fmt.Sprint(cfg.Spam.SettingsDefault.MinGapMessages),
 		"\nвиперы:",
 		"- включен: " + fmt.Sprint(cfg.Spam.SettingsVIP.Enabled),
 		"- порог схожести сообщений: " + fmt.Sprint(cfg.Spam.SettingsVIP.SimilarityThreshold),
 		"- кол-во похожих сообщений: " + fmt.Sprint(cfg.Spam.SettingsVIP.MessageLimit),
-		"- наказания: " + strings.Join(a.template.FormatPunishments(cfg.Spam.SettingsVIP.Punishments), ", "),
+		"- наказания: " + strings.Join(a.template.Punishment().FormatAll(cfg.Spam.SettingsVIP.Punishments), ", "),
 		"- время сброса счётчика наказаний: " + fmt.Sprint(cfg.Spam.SettingsVIP.DurationResetPunishments),
 		"- ограничение максимальной длины слова: " + fmt.Sprint(cfg.Spam.SettingsVIP.MaxWordLength),
-		"- наказание за превышение длины слова: " + a.template.FormatPunishment(cfg.Spam.SettingsVIP.MaxWordPunishment),
+		"- наказание за превышение длины слова: " + a.template.Punishment().Format(cfg.Spam.SettingsVIP.MaxWordPunishment),
 		"- минимальное количество разных сообщений между спамом: " + fmt.Sprint(cfg.Spam.SettingsVIP.MinGapMessages),
 		"\nэмоуты:",
 		"- включен: " + fmt.Sprint(cfg.Spam.SettingsEmotes.Enabled),
 		"- кол-во похожих сообщений: " + fmt.Sprint(cfg.Spam.SettingsEmotes.MessageLimit),
-		"- наказания: " + strings.Join(a.template.FormatPunishments(cfg.Spam.SettingsEmotes.Punishments), ", "),
+		"- наказания: " + strings.Join(a.template.Punishment().FormatAll(cfg.Spam.SettingsEmotes.Punishments), ", "),
 		"- время сброса счётчика наказаний: " + fmt.Sprint(cfg.Spam.SettingsEmotes.DurationResetPunishments),
 		"- ограничение количества эмоутов в сообщении: " + fmt.Sprint(cfg.Spam.SettingsEmotes.MaxEmotesLength),
-		"- наказание за превышение количества эмоутов в сообщении: " + a.template.FormatPunishment(cfg.Spam.SettingsEmotes.MaxEmotesPunishment),
+		"- наказание за превышение количества эмоутов в сообщении: " + a.template.Punishment().Format(cfg.Spam.SettingsEmotes.MaxEmotesPunishment),
+		"- исключения: " + emoteExceptions,
 		"\nисключения:",
 		exceptions,
 	}
@@ -140,7 +153,7 @@ func (a *SimAntispam) handleSim(cfg *config.Config, text *ports.MessageText, typ
 		return NonParametr
 	}
 
-	if val, ok := a.template.ParseFloatArg(words[idx], 0.1, 1); ok {
+	if val, ok := a.template.Parser().ParseFloatArg(words[idx], 0.1, 1); ok {
 		*target = val
 		return nil
 	}
@@ -173,7 +186,7 @@ func (a *MsgAntispam) handleMsg(cfg *config.Config, text *ports.MessageText, typ
 		return NonParametr
 	}
 
-	if val, ok := a.template.ParseIntArg(words[idx], 2, 15); ok {
+	if val, ok := a.template.Parser().ParseIntArg(words[idx], 2, 15); ok {
 		*target = val
 		return nil
 	}
@@ -218,7 +231,7 @@ func (a *PunishmentsAntispam) handlePunishments(cfg *config.Config, text *ports.
 		}
 
 		allowInherit := typeSpam != "default"
-		p, err := a.template.ParsePunishment(str, allowInherit)
+		p, err := a.template.Punishment().Parse(str, allowInherit)
 		if err != nil {
 			return &ports.AnswerType{
 				Text:    []string{fmt.Sprintf("не удалось распарсить наказание (%s)!", str)},
@@ -270,7 +283,7 @@ func (a *ResetPunishmentsAntispam) handleDurationResetPunishments(cfg *config.Co
 		return NonParametr
 	}
 
-	if val, ok := a.template.ParseIntArg(words[idx], 1, 86400); ok {
+	if val, ok := a.template.Parser().ParseIntArg(words[idx], 1, 86400); ok {
 		*target = val
 		return nil
 	}
@@ -308,7 +321,7 @@ func (a *MaxLenAntispam) handleMaxLen(cfg *config.Config, text *ports.MessageTex
 			return NonParametr
 		}
 
-		if val, ok := a.template.ParseIntArg(words[param.idx], 0, param.max); ok {
+		if val, ok := a.template.Parser().ParseIntArg(words[param.idx], 0, param.max); ok {
 			*param.target = val
 			return nil
 		}
@@ -344,7 +357,7 @@ func (a *MaxPunishmentAntispam) handleMaxPunishment(cfg *config.Config, text *po
 		return NonParametr
 	}
 
-	p, err := a.template.ParsePunishment(words[idx], true)
+	p, err := a.template.Punishment().Parse(words[idx], true)
 	if err != nil {
 		return &ports.AnswerType{
 			Text:    []string{fmt.Sprintf("не удалось распарсить наказание (%s)!", words[2])},
@@ -387,7 +400,7 @@ func (a *MinGapAntispam) handleMinGap(cfg *config.Config, text *ports.MessageTex
 		return NonParametr
 	}
 
-	if val, ok := a.template.ParseIntArg(words[idx], 0, 15); ok {
+	if val, ok := a.template.Parser().ParseIntArg(words[idx], 0, 15); ok {
 		*target = val
 		return nil
 	}
@@ -412,7 +425,7 @@ func (a *TimeAntispam) handleTime(cfg *config.Config, text *ports.MessageText) *
 		return NonParametr
 	}
 
-	if val, ok := a.template.ParseIntArg(words[2], 1, 300); ok {
+	if val, ok := a.template.Parser().ParseIntArg(words[2], 1, 300); ok {
 		cfg.Spam.CheckWindowSeconds = val
 		return nil
 	}

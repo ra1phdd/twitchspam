@@ -13,7 +13,7 @@ func NewPunishment() *PunishmentTemplate {
 	return &PunishmentTemplate{}
 }
 
-func (p *PunishmentTemplate) parse(punishment string, allowInherit bool) (config.Punishment, error) {
+func (p *PunishmentTemplate) Parse(punishment string, allowInherit bool) (config.Punishment, error) {
 	punishment = strings.TrimSpace(punishment)
 	if punishment == "-" {
 		return config.Punishment{Action: "delete"}, nil
@@ -35,15 +35,15 @@ func (p *PunishmentTemplate) parse(punishment string, allowInherit bool) (config
 	return config.Punishment{Action: "timeout", Duration: duration}, nil
 }
 
-func (p *PunishmentTemplate) formatAll(punishments []config.Punishment) []string {
+func (p *PunishmentTemplate) FormatAll(punishments []config.Punishment) []string {
 	result := make([]string, 0, len(punishments))
 	for _, punish := range punishments {
-		result = append(result, p.format(punish))
+		result = append(result, p.Format(punish))
 	}
 	return result
 }
 
-func (p *PunishmentTemplate) format(punishment config.Punishment) string {
+func (p *PunishmentTemplate) Format(punishment config.Punishment) string {
 	var result string
 	switch punishment.Action {
 	case "delete":

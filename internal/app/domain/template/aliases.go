@@ -16,11 +16,11 @@ func NewAliases(m map[string]string) *AliasesTemplate {
 	}
 }
 
-func (at *AliasesTemplate) update(newAliases map[string]string) {
+func (at *AliasesTemplate) Update(newAliases map[string]string) {
 	at.trie.Update(newAliases)
 }
 
-func (at *AliasesTemplate) replace(parts []string) (string, bool) {
+func (at *AliasesTemplate) Replace(parts []string) (string, bool) {
 	var bestAlias string
 	var bestStart, bestEnd int
 

@@ -73,20 +73,20 @@ type ExceptionsSettings struct {
 	Enabled      bool           `json:"enabled"`
 	MessageLimit int            `json:"message_limit"`
 	Punishments  []Punishment   `json:"punishments"`
-	Options      SpamOptions    `json:"options"`
+	Options      ExceptOptions  `json:"options"`
 	Regexp       *regexp.Regexp `json:"regexp"`
 }
 
 type Mword struct {
 	Punishments []Punishment   `json:"punishments"`
-	Options     SpamOptions    `json:"options"`
+	Options     MwordOptions   `json:"options"`
 	Regexp      *regexp.Regexp `json:"regexp"`
 }
 
 type MwordGroup struct {
 	Enabled     bool             `json:"enabled"`
 	Punishments []Punishment     `json:"punishments"`
-	Options     SpamOptions      `json:"options"`
+	Options     MwordOptions     `json:"options"`
 	Words       []string         `json:"words"`
 	Regexp      []*regexp.Regexp `json:"regexp"`
 }
@@ -119,13 +119,21 @@ type Punishment struct {
 	Duration int    `json:"duration"` // только для таймаута
 }
 
-type SpamOptions struct {
-	IsFirst  bool `json:"is_first"`
-	NoSub    bool `json:"no_sub"`
-	NoVip    bool `json:"no_vip"`
-	NoRepeat bool `json:"no_repeat"`
-	OneWord  bool `json:"one_word"`
-	Contains bool `json:"contains"`
+type ExceptOptions struct {
+	NoRepeat      bool `json:"norepeat"`
+	OneWord       bool `json:"one_word"`
+	Contains      bool `json:"contains"`
+	CaseSensitive bool `json:"case_sensitive"`
+}
+
+type MwordOptions struct {
+	IsFirst       bool `json:"is_first"`
+	NoSub         bool `json:"no_sub"`
+	NoVip         bool `json:"no_vip"`
+	NoRepeat      bool `json:"norepeat"`
+	OneWord       bool `json:"one_word"`
+	Contains      bool `json:"contains"`
+	CaseSensitive bool `json:"case_sensitive"`
 }
 
 type TimerOptions struct {

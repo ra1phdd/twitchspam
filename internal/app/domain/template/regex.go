@@ -10,7 +10,7 @@ func NewRegex() *RegexTemplate {
 	return &RegexTemplate{}
 }
 
-func (rt *RegexTemplate) matchPhrase(words []string, phrase string) bool {
+func (rt *RegexTemplate) MatchPhrase(words []string, phrase string) bool {
 	phraseParts := strings.Split(phrase, " ")
 	if len(phraseParts) == 1 {
 		for _, w := range words {

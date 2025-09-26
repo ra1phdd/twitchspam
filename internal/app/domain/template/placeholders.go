@@ -54,7 +54,7 @@ func NewPlaceholders(stream ports.StreamPort) *PlaceholdersTemplate {
 	return pt
 }
 
-func (pt *PlaceholdersTemplate) replaceAll(text string, parts []string) string {
+func (pt *PlaceholdersTemplate) ReplaceAll(text string, parts []string) string {
 	phs := pt.parse(text)
 
 	for ph, argsList := range phs {
