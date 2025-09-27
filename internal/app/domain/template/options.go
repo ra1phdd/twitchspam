@@ -133,6 +133,23 @@ func (ot *OptionsTemplate) MergeMword(dst config.MwordOptions, src map[string]bo
 func (ot *OptionsTemplate) MergeExcept(dst config.ExceptOptions, src map[string]bool) config.ExceptOptions {
 	if dst == (config.ExceptOptions{}) { // значение по умолчанию
 		dst.OneWord = true
+		dst.NoVip = true
+	}
+
+	if _, ok := src["-nosub"]; ok {
+		dst.NoSub = true
+	}
+
+	if _, ok := src["-sub"]; ok {
+		dst.NoSub = false
+	}
+
+	if _, ok := src["-novip"]; ok {
+		dst.NoVip = true
+	}
+
+	if _, ok := src["-vip"]; ok {
+		dst.NoVip = false
 	}
 
 	if _, ok := src["-norepeat"]; ok {
@@ -195,6 +212,18 @@ func (ot *OptionsTemplate) ExceptToString(opts config.ExceptOptions) string {
 				return "-case"
 			}
 			return "-nocase"
+		}(),
+		func() string {
+			if !opts.NoSub {
+				return "-sub"
+			}
+			return "-nosub"
+		}(),
+		func() string {
+			if !opts.NoVip {
+				return "-vip"
+			}
+			return "-novip"
 		}(),
 	}
 	return strings.Join(result, " ")

@@ -408,6 +408,12 @@ func (c *Checker) matchMwordRule(msg *ports.ChatMessage, word string, re *regexp
 }
 
 func (c *Checker) matchExceptRule(msg *ports.ChatMessage, word string, re *regexp.Regexp, opts config.ExceptOptions) bool {
+	if opts.NoVip && msg.Chatter.IsVip {
+		return false
+	}
+	if opts.NoSub && msg.Chatter.IsSubscriber {
+		return false
+	}
 	if opts.OneWord && len(msg.Message.Text.Words()) > 1 {
 		return false
 	}

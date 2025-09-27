@@ -25,6 +25,14 @@ func (es *EventSub) checkMessage(msgEvent ChatMessageEvent) {
 		return
 	}
 
+	if userAction := es.user.FindMessages(msg); userAction != nil {
+		if userAction.IsReply && userAction.ReplyUsername == "" {
+			userAction.ReplyUsername = msg.Chatter.Username
+		}
+		es.api.SendChatMessages(userAction)
+		return
+	}
+
 	action := es.checker.Check(msg)
 	switch action.Type {
 	case checker.Ban:
@@ -40,14 +48,5 @@ func (es *EventSub) checkMessage(msgEvent ChatMessageEvent) {
 		if err := es.api.DeleteChatMessage(msg.Message.ID); err != nil {
 			es.log.Error("Failed to delete message on chat", err)
 		}
-	}
-
-	if userAction := es.user.FindMessages(msg); userAction != nil {
-		if userAction.IsReply && userAction.ReplyUsername == "" {
-			userAction.ReplyUsername = msg.Chatter.Username
-		}
-
-		es.api.SendChatMessages(userAction)
-		return
 	}
 }

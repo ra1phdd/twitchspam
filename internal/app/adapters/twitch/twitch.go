@@ -70,10 +70,10 @@ func New(log logger.Logger, manager *config.Manager, client *http.Client, modCha
 	fs := file_server.New(client)
 	timer := timers.NewTimingWheel(100*time.Millisecond, 600)
 
-	t.template = template.New(log, t.cfg.Aliases, t.cfg.Banwords.Words, t.cfg.Banwords.Regexp, t.stream)
+	t.template = template.New(log, t.cfg.Aliases, t.cfg.AliasGroups, t.cfg.Banwords.Words, t.cfg.Banwords.Regexp, t.stream)
 	t.checker = checker.NewCheck(log, t.cfg, t.stream, t.template, t.irc)
 	t.admin = admin.New(log, manager, t.stream, t.api, t.template, fs, timer)
-	t.user = user.New(log, t.cfg, t.stream, t.template, fs)
+	t.user = user.New(log, manager, t.stream, t.template, fs)
 
 	go func() {
 		ticker := time.NewTicker(30 * time.Second)

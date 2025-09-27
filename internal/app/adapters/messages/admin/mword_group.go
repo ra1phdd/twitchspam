@@ -213,7 +213,7 @@ func (m *DelMwordGroup) handleMwgDel(cfg *config.Config, text *ports.MessageText
 	}
 	cfg.MwordGroup[words[3]].Regexp = newSlice
 
-	args := words[4:]
+	args := strings.Split(words[4], ",")
 	argsSet := make(map[string]struct{}, len(args))
 	for _, a := range args {
 		argsSet[a] = struct{}{}

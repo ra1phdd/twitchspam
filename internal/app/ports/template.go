@@ -15,7 +15,7 @@ type TemplatePort interface {
 }
 
 type AliasesPort interface {
-	Update(newAliases map[string]string)
+	Update(newAliases map[string]string, newAliasGroups map[string]*config.AliasGroups)
 	Replace(parts []string) (string, bool)
 }
 

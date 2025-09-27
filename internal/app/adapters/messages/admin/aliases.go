@@ -55,7 +55,7 @@ func (a *AddAlias) handleAliasesAdd(cfg *config.Config, text *ports.MessageText)
 	}
 
 	cfg.Aliases[alias] = original
-	a.template.Aliases().Update(cfg.Aliases)
+	a.template.Aliases().Update(cfg.Aliases, cfg.AliasGroups)
 	return &ports.AnswerType{
 		Text:    []string{fmt.Sprintf("алиас `%s` добавлен для команды `%s`!", alias, original)},
 		IsReply: true,
@@ -85,7 +85,7 @@ func (a *DelAlias) handleAliasesDel(cfg *config.Config, text *ports.MessageText)
 	}
 
 	delete(cfg.Aliases, alias)
-	a.template.Aliases().Update(cfg.Aliases)
+	a.template.Aliases().Update(cfg.Aliases, cfg.AliasGroups)
 	return &ports.AnswerType{
 		Text:    []string{fmt.Sprintf("алиас `%s` удален!", alias)},
 		IsReply: true,
@@ -101,6 +101,15 @@ func (a *ListAlias) Execute(cfg *config.Config, text *ports.MessageText) *ports.
 }
 
 func (a *ListAlias) handleAliasesList(cfg *config.Config, _ *ports.MessageText) *ports.AnswerType {
+	aliases := cfg.Aliases
+	for _, als := range cfg.AliasGroups {
+		var alias []string
+		for key := range als.Aliases {
+			alias = append(alias, key)
+		}
+		aliases[strings.Join(alias, ", ")] = als.Original
+	}
+
 	return buildList(cfg.Aliases, "алиасы", "алиасы не найдены!",
 		func(alias, original string) string {
 			return fmt.Sprintf("- %s → %s", alias, original)

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"golang.org/x/time/rate"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -12,16 +13,18 @@ import (
 )
 
 type Config struct {
-	App        App                              `json:"app"`
-	Enabled    bool                             `json:"enabled"`
-	Spam       Spam                             `json:"spam"`
-	Automod    Automod                          `json:"automod"`
-	Mword      map[string]*Mword                `json:"mword"`
-	MwordGroup map[string]*MwordGroup           `json:"mword_group"`
-	Aliases    map[string]string                `json:"aliases"` // ключ - алиас, значение - оригинальная команда
-	Markers    map[string]map[string][]*Markers `json:"markers"` // первый ключ - юзернейм, второй ключ - название маркера
-	Commands   map[string]*Commands             `json:"commands"`
-	Banwords   Banwords                         `json:"banwords"`
+	App         App                              `json:"app"`
+	Enabled     bool                             `json:"enabled"`
+	Limiter     *Limiter                         `json:"limiter"`
+	Spam        Spam                             `json:"spam"`
+	Automod     Automod                          `json:"automod"`
+	Mword       map[string]*Mword                `json:"mword"`
+	MwordGroup  map[string]*MwordGroup           `json:"mword_group"`
+	Aliases     map[string]string                `json:"aliases"`       // ключ - алиас, значение - оригинальная команда
+	AliasGroups map[string]*AliasGroups          `json:"aliases_group"` // первый ключ - название группы, второй ключ - алиас, значение - оригинальная команда
+	Markers     map[string]map[string][]*Markers `json:"markers"`       // первый ключ - юзернейм, второй ключ - название маркера
+	Commands    map[string]*Commands             `json:"commands"`
+	Banwords    Banwords                         `json:"banwords"`
 }
 
 type App struct {
@@ -77,6 +80,11 @@ type ExceptionsSettings struct {
 	Regexp       *regexp.Regexp `json:"regexp"`
 }
 
+type AliasGroups struct {
+	Aliases  map[string]struct{} `json:"aliases"`
+	Original string              `json:"original"`
+}
+
 type Mword struct {
 	Punishments []Punishment   `json:"punishments"`
 	Options     MwordOptions   `json:"options"`
@@ -98,8 +106,9 @@ type Markers struct {
 }
 
 type Commands struct {
-	Text  string  `json:"text"`
-	Timer *Timers `json:"timer"`
+	Text    string   `json:"text"`
+	Timer   *Timers  `json:"timer"`
+	Limiter *Limiter `json:"limiter"`
 }
 
 type Timers struct {
@@ -120,6 +129,8 @@ type Punishment struct {
 }
 
 type ExceptOptions struct {
+	NoSub         bool `json:"no_sub"`
+	NoVip         bool `json:"no_vip"`
 	NoRepeat      bool `json:"norepeat"`
 	OneWord       bool `json:"one_word"`
 	Contains      bool `json:"contains"`
@@ -139,6 +150,12 @@ type MwordOptions struct {
 type TimerOptions struct {
 	IsAnnounce bool `json:"is_announce"`
 	IsAlways   bool `json:"is_always"`
+}
+
+type Limiter struct {
+	Requests int           `json:"requests"` // сколько запросов
+	Per      time.Duration `json:"per"`      // за какое время
+	Rate     *rate.Limiter `json:"-"`
 }
 
 type Manager struct {
@@ -196,6 +213,10 @@ func (m *Manager) Update(modify func(cfg *Config)) error {
 func (m *Manager) GetDefault() *Config {
 	return &Config{
 		App: App{},
+		Limiter: &Limiter{
+			Requests: 3,
+			Per:      30 * time.Second,
+		},
 		Spam: Spam{
 			Mode:               "online",
 			CheckWindowSeconds: 60,
@@ -363,6 +384,10 @@ func (m *Manager) validate(cfg *Config) error {
 
 	if cfg.Commands == nil {
 		cfg.Commands = make(map[string]*Commands)
+	}
+
+	if cfg.AliasGroups == nil {
+		cfg.AliasGroups = make(map[string]*AliasGroups)
 	}
 
 	return nil
