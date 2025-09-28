@@ -82,9 +82,9 @@ func (e *AddExcept) handleExceptAdd(cfg *config.Config, text *ports.MessageText)
 			}
 		}
 
-		optsMerged := e.template.Options().MergeExcept(config.ExceptOptions{}, opts)
+		optsMerged := e.template.Options().MergeExcept(config.ExceptOptions{}, opts, e.typeExcept != "emote")
 		if except, ok := exSettings[strings.Join(words[idx+2:], " ")]; ok {
-			optsMerged = e.template.Options().MergeExcept(except.Options, opts)
+			optsMerged = e.template.Options().MergeExcept(except.Options, opts, e.typeExcept != "emote")
 		}
 
 		exSettings[strings.Join(words[idx+2:], " ")] = &config.ExceptionsSettings{
@@ -103,12 +103,13 @@ func (e *AddExcept) handleExceptAdd(cfg *config.Config, text *ports.MessageText)
 			continue
 		}
 
-		optsMerged := e.template.Options().MergeExcept(config.ExceptOptions{}, opts)
+		optsMerged := e.template.Options().MergeExcept(config.ExceptOptions{}, opts, e.typeExcept != "emote")
 		if except, ok := exSettings[word]; ok {
-			optsMerged = e.template.Options().MergeExcept(except.Options, opts)
+			optsMerged = e.template.Options().MergeExcept(except.Options, opts, e.typeExcept != "emote")
 		}
 
 		exSettings[word] = &config.ExceptionsSettings{
+			Enabled:      true,
 			MessageLimit: messageLimit,
 			Punishments:  punishments,
 			Options:      optsMerged,
@@ -182,7 +183,7 @@ func (e *SetExcept) handleExceptSet(cfg *config.Config, text *ports.MessageText)
 			notFound = append(notFound, word)
 			return nil
 		}
-		exWord.Options = e.template.Options().MergeExcept(exWord.Options, opts)
+		exWord.Options = e.template.Options().MergeExcept(exWord.Options, opts, e.typeExcept != "emote")
 
 		if cmd, ok := cmds[words[3]]; ok {
 			if out := cmd(exWord, words[4]); out != nil {
@@ -274,8 +275,8 @@ func (e *ListExcept) handleExceptList(cfg *config.Config) *ports.AnswerType {
 
 	return buildList(exSettings, "исключения", "исключений не найдено!",
 		func(word string, ex *config.ExceptionsSettings) string {
-			return fmt.Sprintf("- %s (лимит сообщений: %d, наказания: %s)",
-				word, ex.MessageLimit, strings.Join(e.template.Punishment().FormatAll(ex.Punishments), ", "))
+			return fmt.Sprintf("- %s (включено: %v, лимит сообщений: %d, наказания: %s)",
+				word, ex.Enabled, ex.MessageLimit, strings.Join(e.template.Punishment().FormatAll(ex.Punishments), ", "))
 		}, e.fs)
 }
 

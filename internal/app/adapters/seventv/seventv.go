@@ -5,21 +5,25 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"twitchspam/internal/app/infrastructure/config"
 	"twitchspam/internal/app/ports"
 	"twitchspam/pkg/logger"
+	"unicode/utf8"
 )
 
 type SevenTV struct {
 	log    logger.Logger
+	cfg    *config.Config
 	stream ports.StreamPort
 
 	setID    string
 	emoteSet map[string]struct{}
 }
 
-func New(log logger.Logger, stream ports.StreamPort) *SevenTV {
+func New(log logger.Logger, cfg *config.Config, stream ports.StreamPort) *SevenTV {
 	s := &SevenTV{
 		log:      log,
+		cfg:      cfg,
 		stream:   stream,
 		emoteSet: make(map[string]struct{}),
 	}
@@ -59,7 +63,9 @@ func (sv *SevenTV) EmoteStats(words []string) (count int, onlyEmotes bool) {
 		return 0, false
 	}
 
-	onlyEmotes = true
+	emoteChars := 0
+	textChars := 0
+
 	for _, w := range words {
 		w = strings.TrimSpace(w)
 		if w == "" {
@@ -68,9 +74,15 @@ func (sv *SevenTV) EmoteStats(words []string) (count int, onlyEmotes bool) {
 
 		if _, ok := sv.emoteSet[w]; ok {
 			count++
+			emoteChars += utf8.RuneCountInString(w)
 		} else {
-			onlyEmotes = false
+			textChars += utf8.RuneCountInString(w)
 		}
+	}
+
+	total := emoteChars + textChars
+	if total > 0 && float64(count)/float64(total) >= sv.cfg.Spam.SettingsEmotes.EmoteThreshold {
+		onlyEmotes = true
 	}
 
 	return count, onlyEmotes

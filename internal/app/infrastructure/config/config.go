@@ -56,6 +56,7 @@ type SpamSettings struct {
 
 type SpamSettingsEmote struct {
 	Enabled                  bool                           `json:"enabled"`
+	EmoteThreshold           float64                        `json:"emote_threshold"`
 	MessageLimit             int                            `json:"message_limit"`
 	Punishments              []Punishment                   `json:"punishments"`
 	DurationResetPunishments int                            `json:"duration_reset_punishments"`
@@ -236,14 +237,16 @@ func (m *Manager) GetDefault() *Config {
 				MinGapMessages: 3,
 			},
 			SettingsEmotes: SpamSettingsEmote{
-				Enabled:      true,
-				MessageLimit: 7,
+				Enabled:        true,
+				EmoteThreshold: 0.9,
+				MessageLimit:   7,
 				Punishments: []Punishment{
 					{Action: "timeout", Duration: 60},
 					{Action: "timeout", Duration: 300},
 					{Action: "timeout", Duration: 600},
 				},
 				DurationResetPunishments: 600,
+				Exceptions:               make(map[string]*ExceptionsSettings),
 				MaxEmotesLength:          15,
 				MaxEmotesPunishment: Punishment{
 					Action:   "timeout",
@@ -363,6 +366,10 @@ func (m *Manager) validate(cfg *Config) error {
 
 	if cfg.Commands == nil {
 		cfg.Commands = make(map[string]*Commands)
+	}
+
+	if cfg.Spam.SettingsEmotes.Exceptions == nil {
+		cfg.Spam.SettingsEmotes.Exceptions = make(map[string]*ExceptionsSettings)
 	}
 
 	return nil

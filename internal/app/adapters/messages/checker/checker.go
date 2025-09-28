@@ -27,18 +27,20 @@ type Checker struct {
 	cfg *config.Config
 
 	stream   ports.StreamPort
-	timeouts struct {
-		spam             ports.StorePort[storage.Empty]
-		emote            ports.StorePort[storage.Empty]
-		exceptionsSpam   ports.StorePort[storage.Empty]
-		exceptionsEmotes ports.StorePort[storage.Empty]
-		mword            ports.StorePort[storage.Empty]
-		mwordGroup       ports.StorePort[storage.Empty]
-	}
+	timeouts StoreTimeouts
 	messages ports.StorePort[storage.Message]
 	sevenTV  ports.SevenTVPort
 	template ports.TemplatePort
 	irc      ports.IRCPort
+}
+
+type StoreTimeouts struct {
+	spam             ports.StorePort[storage.Empty]
+	emote            ports.StorePort[storage.Empty]
+	exceptionsSpam   ports.StorePort[storage.Empty]
+	exceptionsEmotes ports.StorePort[storage.Empty]
+	mword            ports.StorePort[storage.Empty]
+	mwordGroup       ports.StorePort[storage.Empty]
 }
 
 func NewCheck(log logger.Logger, cfg *config.Config, stream ports.StreamPort, template ports.TemplatePort, irc ports.IRCPort) *Checker {
@@ -53,14 +55,7 @@ func NewCheck(log logger.Logger, cfg *config.Config, stream ports.StreamPort, te
 		log:    log,
 		cfg:    cfg,
 		stream: stream,
-		timeouts: struct {
-			spam             ports.StorePort[storage.Empty]
-			emote            ports.StorePort[storage.Empty]
-			exceptionsSpam   ports.StorePort[storage.Empty]
-			exceptionsEmotes ports.StorePort[storage.Empty]
-			mword            ports.StorePort[storage.Empty]
-			mwordGroup       ports.StorePort[storage.Empty]
-		}{
+		timeouts: StoreTimeouts{
 			spam:             storage.New[storage.Empty](15, time.Duration(cfg.Spam.CheckWindowSeconds)*time.Second),
 			emote:            storage.New[storage.Empty](15, time.Duration(cfg.Spam.CheckWindowSeconds)*time.Second),
 			exceptionsSpam:   storage.New[storage.Empty](15, time.Duration(cfg.Spam.CheckWindowSeconds)*time.Second),
@@ -69,7 +64,7 @@ func NewCheck(log logger.Logger, cfg *config.Config, stream ports.StreamPort, te
 			mwordGroup:       storage.New[storage.Empty](15, time.Duration(cfg.Spam.CheckWindowSeconds)*time.Second),
 		},
 		messages: storage.New[storage.Message](capacity, time.Duration(cfg.Spam.CheckWindowSeconds)*time.Second),
-		sevenTV:  seventv.New(log, stream),
+		sevenTV:  seventv.New(log, cfg, stream),
 		template: template,
 		irc:      irc,
 	}

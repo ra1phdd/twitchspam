@@ -17,6 +17,7 @@ import (
 	"twitchspam/internal/app/infrastructure/config"
 	"twitchspam/internal/app/ports"
 	"twitchspam/pkg/logger"
+	"unicode/utf8"
 )
 
 type EventSub struct {
@@ -254,9 +255,7 @@ func (es *EventSub) subscribeEvent(eventType, version string, condition map[stri
 }
 
 func (es *EventSub) convertMap(msgEvent ChatMessageEvent) *ports.ChatMessage {
-	var isBroadcaster, isMod, isVip, isSubscriber, emoteOnly bool
-	var emotes []string
-
+	var isBroadcaster, isMod, isVip, isSubscriber bool
 	for _, badge := range msgEvent.Badges {
 		switch badge.SetID {
 		case "broadcaster":
@@ -270,14 +269,29 @@ func (es *EventSub) convertMap(msgEvent ChatMessageEvent) *ports.ChatMessage {
 		}
 	}
 
-	emoteOnly = true
+	emoteChars := 0
+	textChars := 0
+
+	var emotes []string
 	for _, fragment := range msgEvent.Message.Fragments {
-		if fragment.Type == "text" && strings.TrimSpace(fragment.Text) != "" {
-			emoteOnly = false
+		text := strings.TrimSpace(fragment.Text)
+		if text == "" {
+			continue
+		}
+
+		if fragment.Type == "text" {
+			textChars += utf8.RuneCountInString(text)
 		}
 		if fragment.Type == "emote" {
-			emotes = append(emotes, fragment.Text)
+			emotes = append(emotes, text)
+			emoteChars += utf8.RuneCountInString(text)
 		}
+	}
+
+	total := emoteChars + textChars
+	emoteOnly := false
+	if total > 0 && float64(emoteChars)/float64(total) >= es.cfg.Spam.SettingsEmotes.EmoteThreshold {
+		emoteOnly = true
 	}
 
 	msg := &ports.ChatMessage{

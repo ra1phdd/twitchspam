@@ -140,9 +140,10 @@ func (a *Admin) buildCommandTree() ports.Command {
 			},
 			"cmd": &CompositeCommand{
 				subcommands: map[string]ports.Command{
-					"add":  &AddCommand{},
-					"del":  &DelCommand{},
-					"list": &ListCommand{fs: a.fs},
+					"add":     &AddCommand{},
+					"del":     &DelCommand{},
+					"list":    &ListCommand{fs: a.fs},
+					"aliases": &AliasesCommand{},
 					"timer": &CompositeCommand{
 						subcommands: map[string]ports.Command{
 							"on":  &OnOffCommandTimer{template: a.template, timers: a.timers, t: timer},

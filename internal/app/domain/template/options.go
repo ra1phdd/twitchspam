@@ -130,8 +130,8 @@ func (ot *OptionsTemplate) MergeMword(dst config.MwordOptions, src map[string]bo
 	return dst
 }
 
-func (ot *OptionsTemplate) MergeExcept(dst config.ExceptOptions, src map[string]bool) config.ExceptOptions {
-	if dst == (config.ExceptOptions{}) { // значение по умолчанию
+func (ot *OptionsTemplate) MergeExcept(dst config.ExceptOptions, src map[string]bool, isDefault bool) config.ExceptOptions {
+	if isDefault && dst == (config.ExceptOptions{}) { // значение по умолчанию
 		dst.OneWord = true
 	}
 

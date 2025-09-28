@@ -35,7 +35,7 @@ type OptionsPort interface {
 	ParseAll(words *[]string, opts map[string]struct{}) map[string]bool
 	Parse(words *[]string, opt string) *bool
 	MergeMword(dst config.MwordOptions, src map[string]bool) config.MwordOptions
-	MergeExcept(dst config.ExceptOptions, src map[string]bool) config.ExceptOptions
+	MergeExcept(dst config.ExceptOptions, src map[string]bool, isDefault bool) config.ExceptOptions
 	ExceptToString(opts config.ExceptOptions) string
 	MwordToString(opts config.MwordOptions) string
 }

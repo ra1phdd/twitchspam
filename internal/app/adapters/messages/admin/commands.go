@@ -88,3 +88,45 @@ func (c *ListCommand) handleCommandList(cfg *config.Config) *ports.AnswerType {
 			return fmt.Sprintf("- %s -> %s", key, cmd.Text)
 		}, c.fs)
 }
+
+type AliasesCommand struct{}
+
+func (c *AliasesCommand) Execute(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+	return c.handleCommandAliases(cfg, text)
+}
+
+func (c *AliasesCommand) handleCommandAliases(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+	words := text.Words()
+	if len(words) < 5 { // !am cmd aliases <команда>
+		return NonParametr
+	}
+
+	cmd := words[3]
+	if !strings.HasPrefix(cmd, "!") {
+		cmd = "!" + cmd
+	}
+
+	if orig, ok := cfg.Aliases[cmd]; ok {
+		cmd = orig
+	}
+
+	var aliases []string
+	for alias, orig := range cfg.Aliases {
+		if strings.Contains(cmd, orig) {
+			aliases = append(aliases, alias)
+		}
+	}
+
+	if len(aliases) == 0 {
+		return &ports.AnswerType{
+			Text:    []string{fmt.Sprintf("команда: %s, алиасы: не найдены", cmd)},
+			IsReply: true,
+		}
+	}
+
+	msg := fmt.Sprintf("команда: %s, алиасы: %s", cmd, strings.Join(aliases, ","))
+	return &ports.AnswerType{
+		Text:    []string{msg},
+		IsReply: true,
+	}
+}

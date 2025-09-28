@@ -28,7 +28,7 @@ func (m *AddMword) handleMwAdd(cfg *config.Config, text *ports.MessageText) *por
 
 	// !am mw <наказания через запятую> <слова/фразы через запятую>
 	// или !am mw add <наказания через запятую> <слова/фразы через запятую>
-	if len(words) < idx+3 {
+	if len(words) < idx+2 {
 		return NonParametr
 	}
 
