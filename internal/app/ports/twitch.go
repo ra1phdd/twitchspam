@@ -118,35 +118,49 @@ func (m *MessageText) Words() []string {
 	}
 
 	var (
-		words []string
-		buf   strings.Builder
+		words     []string
+		buf       strings.Builder
+		inMention bool
 	)
 
-	for i, r := range m.Original {
-		if r == ' ' {
-			// если пробел стоит ПОСЛЕ запятой или ПЕРЕД запятой — это часть слова
-			if (i > 0 && m.Original[i-1] == ',') || (i+1 < len(m.Original) && m.Original[i+1] == ',') {
+	for _, r := range m.Original {
+		if r == '@' && !inMention {
+			inMention = true
+			if buf.Len() > 0 {
+				words = append(words, strings.TrimSpace(buf.String()))
+				buf.Reset()
+			}
+			buf.WriteRune(r)
+			continue
+		}
+
+		if inMention {
+			// пока в упоминании, останавливаем по пробелу или запятой
+			if r == ' ' || r == ',' {
+				words = append(words, buf.String())
+				buf.Reset()
+				inMention = false
+				if r != ' ' {
+					continue
+				}
+			} else {
 				buf.WriteRune(r)
 				continue
 			}
-
-			if buf.Len() > 0 {
-				w := strings.TrimSpace(buf.String())
-				if w != "" {
-					words = append(words, w)
-				}
-				buf.Reset()
-			}
 		} else {
+			if r == ' ' {
+				if buf.Len() > 0 {
+					words = append(words, strings.TrimSpace(buf.String()))
+					buf.Reset()
+				}
+				continue
+			}
 			buf.WriteRune(r)
 		}
 	}
 
 	if buf.Len() > 0 {
-		w := strings.TrimSpace(buf.String())
-		if w != "" {
-			words = append(words, w)
-		}
+		words = append(words, buf.String())
 	}
 
 	m.words = &words

@@ -85,6 +85,16 @@ func (a *Admin) buildCommandTree() ports.Command {
 				},
 				cursor: 2,
 			},
+			"alg": &CompositeCommand{
+				subcommands: map[string]ports.Command{
+					"on":     &OnOffAliasGroup{template: a.template},
+					"off":    &OnOffAliasGroup{template: a.template},
+					"create": &CreateAliasGroup{template: a.template},
+					"add":    &AddAliasGroup{template: a.template},
+					"del":    &DelAliasGroup{template: a.template},
+				},
+				cursor: 2,
+			},
 			"as": &CompositeCommand{
 				subcommands: map[string]ports.Command{
 					"on":   &OnOffAntispam{enabled: true, typeSpam: "default"},
@@ -153,6 +163,15 @@ func (a *Admin) buildCommandTree() ports.Command {
 							"del": &DelCommandTimer{template: a.template, timers: a.timers},
 						},
 						defaultCmd: &AddCommandTimer{template: a.template, t: timer},
+						cursor:     3,
+					},
+					"lim": &CompositeCommand{
+						subcommands: map[string]ports.Command{
+							"add": &AddCommandLimiter{},
+							"set": &SetCommandLimiter{},
+							"del": &DelCommandLimiter{},
+						},
+						defaultCmd: &AddCommandLimiter{},
 						cursor:     3,
 					},
 				},

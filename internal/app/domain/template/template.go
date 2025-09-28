@@ -2,6 +2,7 @@ package template
 
 import (
 	"regexp"
+	"twitchspam/internal/app/infrastructure/config"
 	"twitchspam/internal/app/ports"
 	"twitchspam/pkg/logger"
 )
@@ -16,9 +17,9 @@ type Template struct {
 	punishment   ports.PunishmentPort
 }
 
-func New(log logger.Logger, al map[string]string, banWords []string, banRegexps []*regexp.Regexp, stream ports.StreamPort) *Template {
+func New(log logger.Logger, aliases map[string]string, aliasGroups map[string]*config.AliasGroups, banWords []string, banRegexps []*regexp.Regexp, stream ports.StreamPort) *Template {
 	return &Template{
-		aliases:      NewAliases(al),
+		aliases:      NewAliases(aliases, aliasGroups),
 		placeholders: NewPlaceholders(stream),
 		banwords:     NewBanwords(log, banWords, banRegexps),
 		regex:        NewRegex(),

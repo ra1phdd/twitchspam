@@ -11,7 +11,7 @@ import (
 )
 
 var nonGameCategories = []string{
-	"Just Chatting", "IRL", "I'm Only Sleeping", "DJs", "Music",
+	"", "Just Chatting", "IRL", "I'm Only Sleeping", "DJs", "Music",
 	"Games + Demos", "ASMR", "Special Events", "Art", "Politics",
 	"Pools, Hot Tubs, and Beaches", "Slots", "Food & Drink",
 	"Science & Technology", "Sports", "Animals, Aquariums, and Zoos",
@@ -68,9 +68,11 @@ func (pt *PlaceholdersTemplate) ReplaceAll(text string, parts []string) string {
 		}
 
 		replacement := fn(argsList)
-		if replacement != "" {
-			text = pt.replace(text, ph, replacement)
+		if replacement == "" {
+			return ""
 		}
+
+		text = pt.replace(text, ph, replacement)
 	}
 
 	if !strings.Contains(text, "{query") {
@@ -157,7 +159,7 @@ func (pt *PlaceholdersTemplate) replace(s, key, replacement string) string {
 
 func (pt *PlaceholdersTemplate) placeholderGame(args []string) string {
 	if _, ok := pt.nonGameCategories[pt.stream.Category()]; ok {
-		if len(args) > 1 && args[0] == "true" {
+		if len(args) > 0 && args[0] == "true" {
 			return "игра не найдена"
 		}
 		return ""
@@ -169,7 +171,7 @@ func (pt *PlaceholdersTemplate) placeholderGame(args []string) string {
 func (pt *PlaceholdersTemplate) placeholderCategory(args []string) string {
 	category := pt.stream.Category()
 	if category == "" {
-		if len(args) > 1 && args[0] == "false" {
+		if len(args) > 0 && args[0] == "false" {
 			return ""
 		}
 		return "игра не найдена"

@@ -2,6 +2,7 @@ package template
 
 import (
 	"strings"
+	"twitchspam/internal/app/infrastructure/config"
 	"twitchspam/internal/app/infrastructure/trie"
 	"twitchspam/internal/app/ports"
 )
@@ -10,14 +11,28 @@ type AliasesTemplate struct {
 	trie ports.TriePort[string]
 }
 
-func NewAliases(m map[string]string) *AliasesTemplate {
-	return &AliasesTemplate{
-		trie: trie.NewTrie(m),
+func NewAliases(aliases map[string]string, aliasGroups map[string]*config.AliasGroups) *AliasesTemplate {
+	at := &AliasesTemplate{
+		trie: trie.NewTrie(map[string]string{}),
 	}
+	at.Update(aliases, aliasGroups)
+
+	return at
 }
 
-func (at *AliasesTemplate) Update(newAliases map[string]string) {
-	at.trie.Update(newAliases)
+func (at *AliasesTemplate) Update(newAliases map[string]string, newAliasGroups map[string]*config.AliasGroups) {
+	als := make(map[string]string)
+	for k, v := range newAliases {
+		als[k] = v
+	}
+
+	for _, alg := range newAliasGroups {
+		for alias := range alg.Aliases {
+			als[alias] = alg.Original
+		}
+	}
+
+	at.trie.Update(als)
 }
 
 func (at *AliasesTemplate) Replace(parts []string) (string, bool) {
