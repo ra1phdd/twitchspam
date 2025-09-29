@@ -11,7 +11,7 @@ func NewOptions() *OptionsTemplate {
 	return &OptionsTemplate{}
 }
 
-var SpamExceptOptions = map[string]struct{}{
+var ExceptOptions = map[string]struct{}{
 	"-regex":  {},
 	"-repeat": {}, "-norepeat": {},
 	"-oneword": {}, "-nooneword": {},
@@ -35,39 +35,21 @@ var TimersOptions = map[string]struct{}{
 	"-online": {}, "-always": {},
 }
 
-func (ot *OptionsTemplate) ParseAll(words *[]string, opts map[string]struct{}) map[string]bool {
-	clean := (*words)[:0]
+func (ot *OptionsTemplate) ParseAll(input string, opts map[string]struct{}) (string, map[string]bool) {
+	words := strings.Fields(input)
 
+	var clean []string
 	founds := make(map[string]bool)
-	for _, w := range *words {
-		if _, ok := opts[w]; ok {
-			founds[w] = true
+
+	for _, w := range words {
+		if _, ok := opts[strings.ToLower(w)]; ok {
+			founds[strings.ToLower(w)] = true
 			continue
 		}
-
 		clean = append(clean, w)
 	}
 
-	*words = clean
-	return founds
-}
-
-func (ot *OptionsTemplate) Parse(words *[]string, opt string) *bool {
-	clean := (*words)[:0]
-
-	var foundOpt *bool
-	for _, w := range *words {
-		if w == opt {
-			*foundOpt = true
-			break
-		}
-
-		clean = append(clean, w)
-
-	}
-
-	*words = clean
-	return foundOpt
+	return strings.Join(clean, " "), founds
 }
 
 func (ot *OptionsTemplate) MergeMword(dst config.MwordOptions, src map[string]bool) config.MwordOptions {
@@ -182,6 +164,26 @@ func (ot *OptionsTemplate) MergeExcept(dst config.ExceptOptions, src map[string]
 
 	if _, ok := src["-case"]; ok {
 		dst.CaseSensitive = true
+	}
+
+	return dst
+}
+
+func (ot *OptionsTemplate) MergeTimer(dst config.TimerOptions, src map[string]bool) config.TimerOptions {
+	if _, ok := src["-noa"]; ok {
+		dst.IsAnnounce = false
+	}
+
+	if _, ok := src["-a"]; ok {
+		dst.IsAnnounce = true
+	}
+
+	if _, ok := src["-online"]; ok {
+		dst.IsAlways = false
+	}
+
+	if _, ok := src["-always"]; ok {
+		dst.IsAlways = true
 	}
 
 	return dst

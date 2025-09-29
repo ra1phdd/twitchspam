@@ -1,6 +1,7 @@
 package admin
 
 import (
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -10,6 +11,7 @@ import (
 )
 
 type AddCommandTimer struct {
+	re       *regexp.Regexp
 	template ports.TemplatePort
 	t        *AddTimer
 }
@@ -19,21 +21,16 @@ func (c *AddCommandTimer) Execute(cfg *config.Config, text *ports.MessageText) *
 }
 
 func (c *AddCommandTimer) handleCommandTimersAdd(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
-	words := text.Words()
-	opts := c.template.Options().ParseAll(&words, template.TimersOptions) // ParseOptions удаляет опции из слайса words
-
-	idx := 3 // id параметра, с которого начинаются аргументы команды
-	if words[3] == "add" {
-		idx = 4
-	}
+	textWithoutOpts, opts := c.template.Options().ParseAll(text.Original, template.TimersOptions)
 
 	// !am cmd timer <интервал в секундах> <кол-во сообщений> <команда>
 	// или !am cmd timer add <интервал в секундах> <кол-во сообщений> <команда>
-	if len(words) < idx+3 {
+	matches := c.re.FindStringSubmatch(textWithoutOpts)
+	if len(matches) != 4 {
 		return NonParametr
 	}
 
-	interval, err := strconv.Atoi(words[3])
+	interval, err := strconv.Atoi(strings.TrimSpace(matches[1]))
 	if err != nil {
 		return &ports.AnswerType{
 			Text:    []string{"не указан интервал команды!"},
@@ -41,7 +38,7 @@ func (c *AddCommandTimer) handleCommandTimersAdd(cfg *config.Config, text *ports
 		}
 	}
 
-	count, err := strconv.Atoi(words[4])
+	count, err := strconv.Atoi(strings.TrimSpace(matches[2]))
 	if err != nil {
 		return &ports.AnswerType{
 			Text:    []string{"не указано количество сообщений!"},
@@ -49,18 +46,17 @@ func (c *AddCommandTimer) handleCommandTimersAdd(cfg *config.Config, text *ports
 		}
 	}
 
-	name := words[5]
+	name := strings.TrimSpace(matches[3])
 	if !strings.HasPrefix(name, "!") {
 		name = "!" + name
 	}
 
-	cmd := cfg.Commands[name]
-	cmd.Timer = &config.Timers{
+	cfg.Commands[name].Timer = &config.Timers{
 		Interval: time.Duration(interval) * time.Second,
 		Count:    count,
-		Options:  mergeTimerOptions(cmd.Timer.Options, opts),
+		Options:  c.template.Options().MergeTimer(config.TimerOptions{}, opts),
 	}
-	c.t.AddTimer(words[5], cmd)
+	c.t.AddTimer(name, cfg.Commands[name])
 
 	return &ports.AnswerType{
 		Text:    []string{"успешно!"},
@@ -69,6 +65,7 @@ func (c *AddCommandTimer) handleCommandTimersAdd(cfg *config.Config, text *ports
 }
 
 type DelCommandTimer struct {
+	re       *regexp.Regexp
 	template ports.TemplatePort
 	timers   ports.TimersPort
 }
@@ -78,13 +75,13 @@ func (c *DelCommandTimer) Execute(cfg *config.Config, text *ports.MessageText) *
 }
 
 func (c *DelCommandTimer) handleCommandTimersDel(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
-	words := text.Words()
-	if len(words) < 5 { // !am cmd timer del <команды через запятую>
+	matches := c.re.FindStringSubmatch(text.Original) // !am cmd timer del <команды через запятую>
+	if len(matches) != 2 {
 		return NonParametr
 	}
 
 	var removed, notFound []string
-	for _, key := range strings.Split(text.Tail(4), ",") {
+	for _, key := range strings.Split(strings.TrimSpace(matches[1]), ",") {
 		key = strings.TrimSpace(key)
 		if key == "" {
 			continue
@@ -104,10 +101,11 @@ func (c *DelCommandTimer) handleCommandTimersDel(cfg *config.Config, text *ports
 		removed = append(removed, key)
 	}
 
-	return buildResponse(removed, "удалены", notFound, "не найдены", "таймеры не указаны")
+	return buildResponse("команды не указаны", RespArg{Items: removed, Name: "удалены"}, RespArg{Items: notFound, Name: "не найдены"})
 }
 
 type OnOffCommandTimer struct {
+	re       *regexp.Regexp
 	template ports.TemplatePort
 	timers   ports.TimersPort
 	t        *AddTimer
@@ -118,13 +116,15 @@ func (c *OnOffCommandTimer) Execute(cfg *config.Config, text *ports.MessageText)
 }
 
 func (c *OnOffCommandTimer) handleCommandTimersOnOff(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
-	words := text.Words()
-	if len(words) < 5 { // !am cmd timer on/off <команды через запятую>
+	matches := c.re.FindStringSubmatch(text.Original) // !am cmd timer on/off <команды через запятую>
+	if len(matches) != 3 {
 		return NonParametr
 	}
 
+	state := strings.ToLower(strings.TrimSpace(matches[1]))
+
 	var edited, notFound []string
-	for _, key := range strings.Split(words[4], ",") {
+	for _, key := range strings.Split(strings.TrimSpace(matches[2]), ",") {
 		key = strings.TrimSpace(key)
 		if key == "" {
 			continue
@@ -139,7 +139,7 @@ func (c *OnOffCommandTimer) handleCommandTimersOnOff(cfg *config.Config, text *p
 			key = "!" + key
 		}
 
-		if words[3] != "on" {
+		if state != "on" {
 			c.timers.RemoveTimer(key)
 			cfg.Commands[key].Timer.Enabled = false
 			edited = append(edited, key)
@@ -152,10 +152,11 @@ func (c *OnOffCommandTimer) handleCommandTimersOnOff(cfg *config.Config, text *p
 		c.t.AddTimer(key, cmd)
 	}
 
-	return buildResponse(edited, "изменены", notFound, "не найдены", "таймеры не указаны")
+	return buildResponse("команды не указаны", RespArg{Items: edited, Name: "изменены"}, RespArg{Items: notFound, Name: "не найдены"})
 }
 
 type SetCommandTimer struct {
+	re       *regexp.Regexp
 	template ports.TemplatePort
 	timers   ports.TimersPort
 	t        *AddTimer
@@ -166,24 +167,26 @@ func (c *SetCommandTimer) Execute(cfg *config.Config, text *ports.MessageText) *
 }
 
 func (c *SetCommandTimer) handleCommandTimersSet(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
-	words := text.Words()
-	opts := c.template.Options().ParseAll(&words, template.TimersOptions) // ParseOptions удаляет опции из слайса words
+	textWithoutOpts, opts := c.template.Options().ParseAll(text.Original, template.TimersOptions)
 
-	// !am cmd timer set int/count <значение> <команды через запятую> или !am cmd timer set <опции>
-	idx := 4
-	param := 0
-	if words[4] == "int" || words[4] == "count" {
-		var err error
-		param, err = strconv.Atoi(words[5])
+	// !am cmd timer set int/count <значение> <команды через запятую> или !am cmd timer set <опции> <команды через запятую>
+	matches := c.re.FindStringSubmatch(textWithoutOpts)
+	if len(matches) < 2 {
+		return NonParametr
+	}
+
+	param, idx := 0, 1
+	match := strings.ToLower(strings.TrimSpace(matches[1]))
+	if len(matches) == 4 && (match == "int" || match == "count") {
+		val, err := strconv.Atoi(strings.TrimSpace(matches[2]))
 		if err != nil {
 			return UnknownError
 		}
-
-		idx = 6
+		param, idx = val, 3
 	}
 
-	var edited, notFound []string
-	for _, key := range strings.Split(words[idx], ",") {
+	var edited, notFound, incorrectValue []string
+	for _, key := range strings.Split(strings.TrimSpace(matches[idx]), ",") {
 		key = strings.TrimSpace(key)
 		if key == "" {
 			continue
@@ -194,27 +197,29 @@ func (c *SetCommandTimer) handleCommandTimersSet(cfg *config.Config, text *ports
 		}
 
 		cmd, ok := cfg.Commands[key]
-		if !ok {
+		if !ok || cmd.Timer == nil {
 			notFound = append(notFound, key)
 			continue
 		}
 
-		if param != 0 {
-			switch words[4] {
-			case "int":
+		switch {
+		case param < 0:
+			incorrectValue = append(incorrectValue, key)
+		case param > 0:
+			if match == "int" {
 				cmd.Timer.Interval = time.Duration(param) * time.Second
-			case "count":
+			} else if match == "count" {
 				cmd.Timer.Count = param
 			}
 		}
 
 		c.timers.RemoveTimer(key)
-		cfg.Commands[key].Timer.Options = mergeTimerOptions(cfg.Commands[key].Timer.Options, opts)
-		c.t.AddTimer(key, cmd)
+		cfg.Commands[key].Timer.Options = c.template.Options().MergeTimer(cmd.Timer.Options, opts)
+		c.t.AddTimer(key, cfg.Commands[key])
 		edited = append(edited, key)
 	}
 
-	return buildResponse(edited, "изменены", notFound, "не найдены", "таймеры не указаны")
+	return buildResponse("команды не указаны", RespArg{Items: edited, Name: "изменены"}, RespArg{Items: notFound, Name: "не найдены"}, RespArg{Items: incorrectValue, Name: "некорректные значения"})
 }
 
 type AddTimer struct {
@@ -239,7 +244,7 @@ func (a *AddTimer) AddTimer(key string, cmd *config.Commands) {
 		}
 
 		if timer.Options.IsAnnounce {
-			a.Api.SendChatMessages(msg) //FIXME
+			a.Api.SendChatMessages(msg) // FIXME
 		} else {
 			a.Api.SendChatMessages(msg)
 		}

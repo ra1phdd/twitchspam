@@ -91,7 +91,7 @@ func (c *DelCommand) handleCommandDel(cfg *config.Config, text *ports.MessageTex
 		removed = append(removed, cmd)
 	}
 
-	return buildResponse(removed, "удалены", notFound, "не найдены", "команды не указаны")
+	return buildResponse("команды не указаны", RespArg{Items: removed, Name: "удалены"}, RespArg{Items: notFound, Name: "не найдены"})
 }
 
 type AliasesCommand struct {

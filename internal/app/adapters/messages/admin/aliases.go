@@ -144,7 +144,7 @@ func (a *DelAlias) handleAliasesDel(cfg *config.Config, text *ports.MessageText)
 	}
 
 	a.template.Aliases().Update(cfg.Aliases, cfg.AliasGroups)
-	return buildResponse(removed, "удалены", notFound, "не найдены", "алиасы не указаны")
+	return buildResponse("алиасы не указаны", RespArg{Items: removed, Name: "удалены"}, RespArg{Items: notFound, Name: "не найдены"})
 }
 
 // Группы алиасов
@@ -262,7 +262,7 @@ func (a *DelAliasGroup) handleAlgDel(cfg *config.Config, text *ports.MessageText
 		}
 	}
 
-	return buildResponse(removed, "удалены", notFound, "не найдены", "алиасы не указаны")
+	return buildResponse("алиасы не указаны", RespArg{Items: removed, Name: "удалены"}, RespArg{Items: notFound, Name: "не найдены"})
 }
 
 type OnOffAliasGroup struct {
@@ -280,7 +280,7 @@ func (a *OnOffAliasGroup) handleAlgOnOff(cfg *config.Config, text *ports.Message
 		return incorrectSyntax
 	}
 
-	state := strings.TrimSpace(matches[1])
+	state := strings.ToLower(strings.TrimSpace(matches[1]))
 	groupName := strings.TrimSpace(matches[2])
 
 	if _, exists := cfg.AliasGroups[groupName]; !exists {

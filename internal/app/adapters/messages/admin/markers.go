@@ -3,6 +3,7 @@ package admin
 import (
 	"fmt"
 	"log/slog"
+	"regexp"
 	"strings"
 	"time"
 	"twitchspam/internal/app/infrastructure/config"
@@ -11,6 +12,7 @@ import (
 )
 
 type AddMarker struct {
+	re       *regexp.Regexp
 	log      logger.Logger
 	stream   ports.StreamPort
 	api      ports.APIPort
@@ -32,16 +34,11 @@ func (m *AddMarker) handleMarkersAdd(cfg *config.Config, text *ports.MessageText
 			IsReply: true,
 		}
 	}
-	words := text.Words()
 
 	// !am mark <имя маркера> или !am mark add <имя маркера>
-	if len(words) < 3 || (words[2] == "add" && len(words) < 4) {
+	matches := m.re.FindStringSubmatch(text.Original)
+	if len(matches) != 2 {
 		return NonParametr
-	}
-
-	markerName := text.Tail(2)
-	if words[2] == "add" {
-		markerName = text.Tail(3)
 	}
 
 	userKey := username + "_" + m.stream.ChannelID()
@@ -61,11 +58,13 @@ func (m *AddMarker) handleMarkersAdd(cfg *config.Config, text *ports.MessageText
 		Timecode:  time.Since(live.StartedAt),
 	}
 
+	markerName := strings.TrimSpace(matches[1])
 	cfg.Markers[userKey][markerName] = append(cfg.Markers[userKey][markerName], marker)
-	return nil
+	return Success
 }
 
 type ClearMarker struct {
+	re       *regexp.Regexp
 	stream   ports.StreamPort
 	username string
 }
@@ -79,20 +78,31 @@ func (m *ClearMarker) SetUsername(username string) {
 }
 
 func (m *ClearMarker) handleMarkersClear(cfg *config.Config, text *ports.MessageText, username string) *ports.AnswerType {
-	words := text.Words()
-	userKey := username + "_" + m.stream.ChannelID()
-	if userMarkers, ok := cfg.Markers[userKey]; ok {
-		if len(words) > 3 { // !am mark clear <имя маркера>
-			delete(userMarkers, text.Tail(3))
-			return nil
-		}
-
-		delete(cfg.Markers, userKey) // !am mark clear
+	matches := m.re.FindStringSubmatch(text.Original) // !am mark clear <имя маркера> или !am mark clear
+	if len(matches) < 1 || len(matches) > 2 {
+		return NonParametr
 	}
-	return nil
+
+	userKey := username + "_" + m.stream.ChannelID()
+	userMarkers, ok := cfg.Markers[userKey]
+	if !ok {
+		return &ports.AnswerType{
+			Text:    []string{"маркер не найден!"},
+			IsReply: true,
+		}
+	}
+
+	if len(matches) == 2 {
+		delete(userMarkers, strings.TrimSpace(matches[1]))
+		return Success
+	}
+
+	delete(cfg.Markers, userKey)
+	return Success
 }
 
 type ListMarker struct {
+	re       *regexp.Regexp
 	stream   ports.StreamPort
 	api      ports.APIPort
 	fs       ports.FileServerPort
@@ -142,27 +152,22 @@ func (m *ListMarker) handleMarkersList(cfg *config.Config, text *ports.MessageTe
 		return nil
 	}
 
-	words := text.Words()
-	if len(words) > 3 { // !am mark list <имя маркера>
-		name := text.Tail(3)
+	matches := m.re.FindStringSubmatch(text.Original) // !am mark list <имя маркера> или !am mark list
+	if len(matches) < 1 || len(matches) > 2 {
+		return NonParametr
+	}
+
+	if len(matches) == 2 {
+		name := strings.TrimSpace(matches[1])
 		markers, ok := userMarkers[name]
 		if !ok || len(markers) == 0 {
 			return &ports.AnswerType{Text: []string{"маркеры не найдены!"}, IsReply: true}
 		}
-		if len(markers) == 1 {
-			vods, err := m.api.GetUrlVOD(markers)
-			if err != nil {
-				return UnknownError
-			}
-			return &ports.AnswerType{
-				Text:    []string{formatMarker(markers[0], vods)},
-				IsReply: true,
-			}
-		}
+
 		if err := processMarkers(name, markers); err != nil {
 			return UnknownError
 		}
-	} else { // !am mark list
+	} else {
 		for name, markers := range userMarkers {
 			if err := processMarkers(name, markers); err != nil {
 				return UnknownError

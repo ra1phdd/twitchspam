@@ -32,10 +32,11 @@ type RegexPort interface {
 }
 
 type OptionsPort interface {
-	ParseAll(words *[]string, opts map[string]struct{}) map[string]bool
+	ParseAll(input string, opts map[string]struct{}) (string, map[string]bool)
 	Parse(words *[]string, opt string) *bool
 	MergeMword(dst config.MwordOptions, src map[string]bool) config.MwordOptions
 	MergeExcept(dst config.ExceptOptions, src map[string]bool, isDefault bool) config.ExceptOptions
+	MergeTimer(dst config.TimerOptions, src map[string]bool) config.TimerOptions
 	ExceptToString(opts config.ExceptOptions) string
 	MwordToString(opts config.MwordOptions) string
 }

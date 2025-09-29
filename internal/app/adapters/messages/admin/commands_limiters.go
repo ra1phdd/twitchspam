@@ -67,7 +67,7 @@ func (c *AddCommandLimiter) handleCommandLimiterAdd(cfg *config.Config, text *po
 		added = append(added, key)
 	}
 
-	return buildResponse(added, "добавлены", notFound, "не найдены", "команды не указаны")
+	return buildResponse("команды не указаны", RespArg{Items: added, Name: "добавлены"}, RespArg{Items: notFound, Name: "не найдены"})
 }
 
 type SetCommandLimiter struct {
@@ -124,7 +124,7 @@ func (c *SetCommandLimiter) handleCommandLimiterSet(cfg *config.Config, text *po
 		edited = append(edited, key)
 	}
 
-	return buildResponse(edited, "изменены", notFound, "не найдены", "лимитеры не указаны")
+	return buildResponse("команды не указаны", RespArg{Items: edited, Name: "изменены"}, RespArg{Items: notFound, Name: "не найдены"})
 }
 
 type DelCommandLimiter struct {
@@ -161,5 +161,5 @@ func (c *DelCommandLimiter) handleCommandLimiterDel(cfg *config.Config, text *po
 		removed = append(removed, key)
 	}
 
-	return buildResponse(removed, "удалены", notFound, "не найдены", "лимитеры не указаны")
+	return buildResponse("команды не указаны", RespArg{Items: removed, Name: "удалены"}, RespArg{Items: notFound, Name: "не найдены"})
 }

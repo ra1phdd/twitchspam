@@ -80,9 +80,9 @@ func (a *Admin) buildCommandTree() ports.Command {
 			"game":   &Game{re: regexp.MustCompile(`(?i)^!am\s+game\s+(.+)$`), stream: a.stream},
 			"al": &CompositeCommand{
 				subcommands: map[string]ports.Command{
+					"list": &ListAlias{fs: a.fs},
 					"add":  &AddAlias{re: regexp.MustCompile(`(?i)^!am\s+al(?:\s+add)?\s+(.+)\s+from\s+(.+)$`), template: a.template},
 					"del":  &DelAlias{re: regexp.MustCompile(`(?i)^!am\s+al\s+del\s+(.+)$`), template: a.template},
-					"list": &ListAlias{fs: a.fs},
 				},
 				defaultCmd: &AddAlias{re: regexp.MustCompile(`(?i)^!am\s+al(?:\s+add)?\s+(.+)\s+from\s+(.+)$`), template: a.template},
 				cursor:     2,
@@ -158,13 +158,13 @@ func (a *Admin) buildCommandTree() ports.Command {
 					"aliases": &AliasesCommand{re: regexp.MustCompile(`(?i)^!am\s+cmd\s+aliases\s+(.+)$`)},
 					"timer": &CompositeCommand{
 						subcommands: map[string]ports.Command{
-							"on":  &OnOffCommandTimer{template: a.template, timers: a.timers, t: timer},
-							"off": &OnOffCommandTimer{template: a.template, timers: a.timers, t: timer},
-							"add": &AddCommandTimer{template: a.template, t: timer},
-							"set": &SetCommandTimer{template: a.template, timers: a.timers, t: timer},
-							"del": &DelCommandTimer{template: a.template, timers: a.timers},
+							"on":  &OnOffCommandTimer{re: regexp.MustCompile(`(?i)^!am\s+cmd\s+timer\s+on\s+(.+)$`), template: a.template, timers: a.timers, t: timer},
+							"off": &OnOffCommandTimer{re: regexp.MustCompile(`(?i)^!am\s+cmd\s+timer\s+off\s+(.+)$`), template: a.template, timers: a.timers, t: timer},
+							"add": &AddCommandTimer{re: regexp.MustCompile(`(?i)^!am\s+cmd\s+timer(?:\s+add)?\s+(\d+)\s+(\d+)\s+(.+)$`), template: a.template, t: timer},
+							"set": &SetCommandTimer{re: regexp.MustCompile(`(?i)^!am\s+cmd\s+timer\s+set(?:\s+(int|count)\s+(\d+))?\s+(.+)$`), template: a.template, timers: a.timers, t: timer},
+							"del": &DelCommandTimer{re: regexp.MustCompile(`(?i)^!am\s+cmd\s+timer\s+del\s+(.+)$`), template: a.template, timers: a.timers},
 						},
-						defaultCmd: &AddCommandTimer{template: a.template, t: timer},
+						defaultCmd: &AddCommandTimer{re: regexp.MustCompile(`(?i)^!am\s+cmd\s+timer(?:\s+add)?\s+(\d+)\s+(\d+)\s+(.+)$`), template: a.template, t: timer},
 						cursor:     3,
 					},
 					"lim": &CompositeCommand{
@@ -182,54 +182,55 @@ func (a *Admin) buildCommandTree() ports.Command {
 			},
 			"ex": &CompositeCommand{
 				subcommands: map[string]ports.Command{
-					"add":  &AddExcept{template: a.template, typeExcept: "default"},
-					"set":  &SetExcept{template: a.template, typeExcept: "default"},
-					"del":  &DelExcept{typeExcept: "default"},
 					"list": &ListExcept{template: a.template, fs: a.fs, typeExcept: "default"},
-					"on":   &OnOffExcept{template: a.template, typeExcept: "default"},
-					"off":  &OnOffExcept{template: a.template, typeExcept: "default"},
+					"add":  &AddExcept{re: regexp.MustCompile(`(?i)^!am\s+ex(?:\s+add)?\s+(\d+)\s+([^ ]+)\s+(?:(re)\s+(\S+)\s+(.+)|(.+))$`), template: a.template, typeExcept: "default"},
+					"set":  &SetExcept{re: regexp.MustCompile(`(?i)^!am\s+ex\s+set(?:\s+(ml|p)(?:\s+(\d+|[^ ]+))?\s+(.+)|\s+(.+))$`), template: a.template, typeExcept: "default"},
+					"del":  &DelExcept{re: regexp.MustCompile(`(?i)^!am\s+ex\s+del\s+(.+)$`), typeExcept: "default"},
+					"on":   &OnOffExcept{re: regexp.MustCompile(`(?i)^!am\s+ex\s+on\s+(.+)$`), template: a.template, typeExcept: "default"},
+					"off":  &OnOffExcept{re: regexp.MustCompile(`(?i)^!am\s+ex\s+off\s+(.+)$`), template: a.template, typeExcept: "default"},
 				},
-				defaultCmd: &AddExcept{template: a.template, typeExcept: "default"},
+				defaultCmd: &AddExcept{re: regexp.MustCompile(`(?i)^!am\s+ex(?:\s+add)?\s+(\d+)\s+([^ ]+)\s+(?:(re)\s+(\S+)\s+(.+)|(.+))$`), template: a.template, typeExcept: "default"},
 				cursor:     2,
 			},
 			"emx": &CompositeCommand{
 				subcommands: map[string]ports.Command{
-					"add":  &AddExcept{template: a.template, typeExcept: "emote"},
-					"set":  &SetExcept{template: a.template, typeExcept: "emote"},
-					"del":  &DelExcept{typeExcept: "emote"},
 					"list": &ListExcept{template: a.template, fs: a.fs, typeExcept: "emote"},
-					"on":   &OnOffExcept{template: a.template, typeExcept: "emote"},
-					"off":  &OnOffExcept{template: a.template, typeExcept: "emote"},
+					"add":  &AddExcept{re: regexp.MustCompile(`(?i)^!am\s+emx(?:\s+add)?\s+(\d+)\s+([^ ]+)\s+(?:(re)\s+(\S+)\s+(.+)|(.+))$`), template: a.template, typeExcept: "emote"},
+					"set":  &SetExcept{re: regexp.MustCompile(`(?i)^!am\s+emx\s+set(?:\s+(ml|p)(?:\s+(\d+|[^ ]+))?\s+(.+)|\s+(.+))$`), template: a.template, typeExcept: "emote"},
+					"del":  &DelExcept{re: regexp.MustCompile(`(?i)^!am\s+emx\s+del\s+(.+)$`), typeExcept: "emote"},
+					"on":   &OnOffExcept{re: regexp.MustCompile(`(?i)^!am\s+emx\s+on\s+(.+)$`), template: a.template, typeExcept: "emote"},
+					"off":  &OnOffExcept{re: regexp.MustCompile(`(?i)^!am\s+emx\s+off\s+(.+)$`), template: a.template, typeExcept: "emote"},
 				},
-				defaultCmd: &AddExcept{template: a.template, typeExcept: "emote"},
+				defaultCmd: &AddExcept{re: regexp.MustCompile(`(?i)^!am\s+emx(?:\s+add)?\s+(\d+)\s+([^ ]+)\s+(?:(re)\s+(\S+)\s+(.+)|(.+))$`), template: a.template, typeExcept: "emote"},
 				cursor:     2,
 			},
 			"mark": &CompositeCommand{
 				subcommands: map[string]ports.Command{
-					"add":   &AddMarker{log: a.log, stream: a.stream, api: a.api, username: ""},
-					"clear": &ClearMarker{stream: a.stream, username: ""},
-					"list":  &ListMarker{stream: a.stream, api: a.api, fs: a.fs, username: ""},
+					"add":   &AddMarker{re: regexp.MustCompile(`(?i)^!am\s+mark(?:\s+add)?\s+(\S+)$`), log: a.log, stream: a.stream, api: a.api},
+					"clear": &ClearMarker{re: regexp.MustCompile(`(?i)^!am\s+mark\s+clear(?:\s+(\S+))?$`), stream: a.stream},
+					"list":  &ListMarker{re: regexp.MustCompile(`(?i)^!am\s+mark\s+list(?:\s+(\S+))?$`), stream: a.stream, api: a.api, fs: a.fs},
 				},
-				defaultCmd: &AddMarker{log: a.log, stream: a.stream, api: a.api, username: ""},
+				defaultCmd: &AddMarker{re: regexp.MustCompile(`(?i)^!am\s+mark(?:\s+add)?\s+(\S+)$`), log: a.log, stream: a.stream, api: a.api},
 				cursor:     2,
 			},
 			"mw": &CompositeCommand{
 				subcommands: map[string]ports.Command{
-					"add":  &AddMword{template: a.template},
-					"del":  &DelMword{template: a.template},
+					"add":  &AddMword{re: regexp.MustCompile(`(?i)^!am\s+mw(?:\s+add)?\s+([^ ]+)\s+(?:(re)\s+(\S+)\s+(.+)|(.+))$`), template: a.template},
+					"set":  &SetMword{re: regexp.MustCompile(`(?i)^!am\s+mw\s+set(?:\s+([^ ]+)\s+)?(.+)$`), template: a.template},
+					"del":  &DelMword{re: regexp.MustCompile(`(?i)^!am\s+mw\s+del\s+(.+)$`), template: a.template},
 					"list": &ListMword{template: a.template, fs: a.fs},
 				},
-				defaultCmd: &AddMword{template: a.template},
+				defaultCmd: &AddMword{re: regexp.MustCompile(`(?i)^!am\s+mw(?:\s+add)?\s+([^ ]+)\s+(?:(re)\s+(\S+)\s+(.+)|(.+))$`), template: a.template},
 				cursor:     2,
 			},
 			"mwg": &CompositeCommand{
 				subcommands: map[string]ports.Command{
-					"on":     &OnOffMwordGroup{template: a.template},
-					"off":    &OnOffMwordGroup{template: a.template},
-					"create": &CreateMwordGroup{template: a.template},
-					"set":    &SetMwordGroup{template: a.template},
-					"add":    &AddMwordGroup{template: a.template},
-					"del":    &DelMwordGroup{template: a.template},
+					"on":     &OnOffMwordGroup{re: regexp.MustCompile(`(?i)^!am\s+mwg\s+on\s+(.+)$`), template: a.template},
+					"off":    &OnOffMwordGroup{re: regexp.MustCompile(`(?i)^!am\s+mwg\s+off\s+(.+)$`), template: a.template},
+					"create": &CreateMwordGroup{re: regexp.MustCompile(`(?i)^!am\s+mwg\s+create\s+(\S+)\s+(.+)$`), template: a.template},
+					"set":    &SetMwordGroup{re: regexp.MustCompile(`(?i)^!am\s+mwg\s+set\s+(\S+)(?:\s+(.+))?$`), template: a.template},
+					"add":    &AddMwordGroup{re: regexp.MustCompile(`(?i)^!am\s+mwg(?:\s+add)?\s+(\S+)\s+(?:(re)\s+(\S+)\s+(.+)|(.+))$`), template: a.template},
+					"del":    &DelMwordGroup{re: regexp.MustCompile(`(?i)^!am\s+mwg\s+del\s+(\S+)(?:\s+(.+))?$`), template: a.template},
 					"list":   &ListMwordGroup{template: a.template, fs: a.fs},
 				},
 				cursor: 2,
@@ -295,44 +296,25 @@ func (c *CompositeCommand) Execute(cfg *config.Config, text *ports.MessageText) 
 	return NotFoundCmd
 }
 
-func mergeTimerOptions(dst config.TimerOptions, src map[string]bool) config.TimerOptions {
-	if _, ok := src["-noa"]; ok {
-		dst.IsAnnounce = false
-	}
-
-	if _, ok := src["-a"]; ok {
-		dst.IsAnnounce = true
-	}
-
-	if _, ok := src["-online"]; ok {
-		dst.IsAlways = false
-	}
-
-	if _, ok := src["-always"]; ok {
-		dst.IsAlways = true
-	}
-
-	return dst
+type RespArg struct {
+	Items []string
+	Name  string
 }
 
-func buildResponse(arg1 []string, nameArg1 string, arg2 []string, nameArg2, err string) *ports.AnswerType {
+func buildResponse(errMsg string, args ...RespArg) *ports.AnswerType {
 	var msgParts []string
-	if len(arg1) > 0 {
-		msgParts = append(msgParts, fmt.Sprintf("%s: %s", nameArg1, strings.Join(arg1, ", ")))
-	}
-	if len(arg2) > 0 {
-		msgParts = append(msgParts, fmt.Sprintf("%s: %s", nameArg2, strings.Join(arg2, ", ")))
+
+	for _, a := range args {
+		if len(a.Items) > 0 {
+			msgParts = append(msgParts, fmt.Sprintf("%s: %s", a.Name, strings.Join(a.Items, ", ")))
+		}
 	}
 
 	if len(msgParts) == 0 {
 		return &ports.AnswerType{
-			Text:    []string{err + "!"},
+			Text:    []string{errMsg + "!"},
 			IsReply: true,
 		}
-	}
-
-	if len(arg2) == 0 {
-		return nil
 	}
 
 	return &ports.AnswerType{

@@ -94,11 +94,11 @@ type Mword struct {
 }
 
 type MwordGroup struct {
-	Enabled     bool             `json:"enabled"`
-	Punishments []Punishment     `json:"punishments"`
-	Options     MwordOptions     `json:"options"`
-	Words       []string         `json:"words"`
-	Regexp      []*regexp.Regexp `json:"regexp"`
+	Enabled     bool                      `json:"enabled"`
+	Punishments []Punishment              `json:"punishments"`
+	Options     MwordOptions              `json:"options"`
+	Words       []string                  `json:"words"`
+	Regexp      map[string]*regexp.Regexp `json:"regexp"`
 }
 
 type Markers struct {

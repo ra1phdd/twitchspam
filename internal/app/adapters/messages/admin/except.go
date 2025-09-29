@@ -11,6 +11,7 @@ import (
 )
 
 type AddExcept struct {
+	re         *regexp.Regexp
 	template   ports.TemplatePort
 	typeExcept string
 }
@@ -20,21 +21,16 @@ func (e *AddExcept) Execute(cfg *config.Config, text *ports.MessageText) *ports.
 }
 
 func (e *AddExcept) handleExceptAdd(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
-	words := text.Words()
-	opts := e.template.Options().ParseAll(&words, template.SpamExceptOptions) // ParseOptions удаляет опции из слайса words
+	textWithoutOpts, opts := e.template.Options().ParseAll(text.Original, template.ExceptOptions)
 
-	idx := 2 // id параметра, с которого начинаются аргументы команды
-	if words[2] == "add" {
-		idx = 3
-	}
-
-	// !am ex <кол-во сообщений> <наказания через запятую> <слова/фразы через запятую или regex>
-	// или !am ex add <кол-во сообщений> <наказания через запятую> <слова/фразы через запятую или regex>
-	if len(words) < idx+3 {
+	// !am ex (add) <кол-во сообщений> <наказания через запятую> <слова/фразы через запятую>
+	// или !am ex (add) <кол-во сообщений> <наказания через запятую> re <name> <regex>
+	matches := e.re.FindStringSubmatch(textWithoutOpts)
+	if len(matches) < 4 {
 		return NonParametr
 	}
 
-	messageLimit, err := strconv.Atoi(words[idx])
+	messageLimit, err := strconv.Atoi(strings.TrimSpace(matches[1]))
 	if err != nil {
 		return &ports.AnswerType{
 			Text:    []string{"не указан лимит сообщений!"},
@@ -43,7 +39,7 @@ func (e *AddExcept) handleExceptAdd(cfg *config.Config, text *ports.MessageText)
 	}
 
 	var punishments []config.Punishment
-	for _, pa := range strings.Split(words[idx+1], ",") {
+	for _, pa := range strings.Split(strings.TrimSpace(matches[2]), ",") {
 		pa = strings.TrimSpace(pa)
 		if pa == "" {
 			continue
@@ -73,8 +69,13 @@ func (e *AddExcept) handleExceptAdd(cfg *config.Config, text *ports.MessageText)
 		exSettings = cfg.Spam.SettingsEmotes.Exceptions
 	}
 
-	if _, ok := opts["-regex"]; ok {
-		re, err := regexp.Compile(strings.Join(words[idx+2:], " "))
+	if strings.ToLower(strings.TrimSpace(matches[3])) == "re" {
+		if len(matches) < 6 {
+			return NonParametr
+		}
+		name, reStr := strings.TrimSpace(matches[4]), strings.TrimSpace(matches[5])
+
+		re, err := regexp.Compile(reStr)
 		if err != nil {
 			return &ports.AnswerType{
 				Text:    []string{"неверное регулярное выражение!"},
@@ -82,44 +83,42 @@ func (e *AddExcept) handleExceptAdd(cfg *config.Config, text *ports.MessageText)
 			}
 		}
 
-		optsMerged := e.template.Options().MergeExcept(config.ExceptOptions{}, opts, e.typeExcept != "emote")
-		if except, ok := exSettings[strings.Join(words[idx+2:], " ")]; ok {
-			optsMerged = e.template.Options().MergeExcept(except.Options, opts, e.typeExcept != "emote")
-		}
-
-		exSettings[strings.Join(words[idx+2:], " ")] = &config.ExceptionsSettings{
+		exSettings[name] = &config.ExceptionsSettings{
 			MessageLimit: messageLimit,
 			Punishments:  punishments,
 			Regexp:       re,
-			Options:      optsMerged,
+			Options:      e.template.Options().MergeExcept(config.ExceptOptions{}, opts, e.typeExcept != "emote"),
 		}
 
-		return nil
+		return Success
 	}
 
-	for _, word := range strings.Split(strings.Join(words[idx+2:], " "), ",") {
+	var added, exists []string
+	for _, word := range strings.Split(strings.TrimSpace(matches[3]), ",") {
 		word = strings.TrimSpace(word)
 		if word == "" {
 			continue
 		}
 
-		optsMerged := e.template.Options().MergeExcept(config.ExceptOptions{}, opts, e.typeExcept != "emote")
-		if except, ok := exSettings[word]; ok {
-			optsMerged = e.template.Options().MergeExcept(except.Options, opts, e.typeExcept != "emote")
+		if _, ok := exSettings[word]; ok {
+			exists = append(exists, word)
+			continue
 		}
 
 		exSettings[word] = &config.ExceptionsSettings{
 			Enabled:      true,
 			MessageLimit: messageLimit,
 			Punishments:  punishments,
-			Options:      optsMerged,
+			Options:      e.template.Options().MergeExcept(config.ExceptOptions{}, opts, e.typeExcept != "emote"),
 		}
+		added = append(added, word)
 	}
 
-	return nil
+	return buildResponse("исключения не указаны", RespArg{Items: added, Name: "добавлены"}, RespArg{Items: exists, Name: "уже существуют"})
 }
 
 type SetExcept struct {
+	re         *regexp.Regexp
 	template   ports.TemplatePort
 	typeExcept string
 }
@@ -129,8 +128,15 @@ func (e *SetExcept) Execute(cfg *config.Config, text *ports.MessageText) *ports.
 }
 
 func (e *SetExcept) handleExceptSet(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
-	words := text.Words()                                                     // !am ex set ml/p <параметр 1> <слова или фразы>
-	opts := e.template.Options().ParseAll(&words, template.SpamExceptOptions) // ParseOptions удаляет опции из слайса words
+	textWithoutOpts, opts := e.template.Options().ParseAll(text.Original, template.ExceptOptions)
+
+	// !am ex set ml <значение> <слова или фразы через запятую>
+	// или !am ex set p <наказания через запятую> <слова или фразы через запятую>
+	// или !am ex set <слова или фразы через запятую>
+	matches := e.re.FindStringSubmatch(textWithoutOpts)
+	if len(matches) != 4 {
+		return NonParametr
+	}
 
 	cmds := map[string]func(exWord *config.ExceptionsSettings, param string) *ports.AnswerType{
 		"ml": func(exWord *config.ExceptionsSettings, param string) *ports.AnswerType {
@@ -140,7 +146,7 @@ func (e *SetExcept) handleExceptSet(cfg *config.Config, text *ports.MessageText)
 			}
 
 			exWord.MessageLimit = value
-			return nil
+			return Success
 		},
 		"p": func(exWord *config.ExceptionsSettings, param string) *ports.AnswerType {
 			var punishments []config.Punishment
@@ -167,7 +173,7 @@ func (e *SetExcept) handleExceptSet(cfg *config.Config, text *ports.MessageText)
 			}
 
 			exWord.Punishments = punishments
-			return nil
+			return Success
 		},
 	}
 
@@ -176,46 +182,34 @@ func (e *SetExcept) handleExceptSet(cfg *config.Config, text *ports.MessageText)
 		exSettings = cfg.Spam.SettingsEmotes.Exceptions
 	}
 
-	var updated, notFound []string
-	processWord := func(exSettings map[string]*config.ExceptionsSettings, word string) *ports.AnswerType {
-		exWord, ok := exSettings[word]
-		if !ok {
+	var edited, notFound []string
+	for _, word := range strings.Split(strings.TrimSpace(matches[3]), ",") {
+		word = strings.TrimSpace(word)
+		if word == "" {
+			continue
+		}
+
+		if _, ok := exSettings[word]; !ok {
 			notFound = append(notFound, word)
-			return nil
+			continue
 		}
-		exWord.Options = e.template.Options().MergeExcept(exWord.Options, opts, e.typeExcept != "emote")
 
-		if cmd, ok := cmds[words[3]]; ok {
-			if out := cmd(exWord, words[4]); out != nil {
-				return out
+		exSettings[word].Options = e.template.Options().MergeExcept(exSettings[word].Options, opts, e.typeExcept != "emote")
+
+		if strings.TrimSpace(matches[1]) == "" {
+			answer := cmds[strings.TrimSpace(matches[1])](exSettings[word], strings.TrimSpace(matches[2]))
+			if answer != Success {
+				return answer
 			}
-			updated = append(updated, word)
 		}
-		return nil
+		edited = append(edited, word)
 	}
 
-	if regex, ok := exSettings[text.Tail(5)]; ok {
-		if out := processWord(exSettings, text.Tail(5)); out != nil {
-			return out
-		}
-		_ = regex
-	} else {
-		for _, word := range strings.Split(words[5], ",") {
-			word = strings.TrimSpace(word)
-			if word == "" {
-				continue
-			}
-
-			if out := processWord(exSettings, word); out != nil {
-				return out
-			}
-		}
-	}
-
-	return buildResponse(updated, "изменены", notFound, "не найдены", "исключения не указаны")
+	return buildResponse("исключения не указаны", RespArg{Items: edited, Name: "изменены"}, RespArg{Items: notFound, Name: "не найдены"})
 }
 
 type DelExcept struct {
+	re         *regexp.Regexp
 	typeExcept string
 }
 
@@ -224,8 +218,8 @@ func (e *DelExcept) Execute(cfg *config.Config, text *ports.MessageText) *ports.
 }
 
 func (e *DelExcept) handleExceptDel(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
-	words := text.Words()
-	if len(words) < 4 { // !am ex del <слова/фразы через запятую или regex>
+	matches := e.re.FindStringSubmatch(text.Original) // !am ex del <слова/фразы через запятую или regex>
+	if len(matches) != 2 {
 		return NonParametr
 	}
 
@@ -235,26 +229,21 @@ func (e *DelExcept) handleExceptDel(cfg *config.Config, text *ports.MessageText)
 	}
 
 	var removed, notFound []string
-	if _, ok := exSettings[text.Tail(3)]; ok {
-		delete(exSettings, text.Tail(3))
-		removed = append(removed, text.Tail(3))
-	} else {
-		for _, word := range strings.Split(words[3], ",") {
-			word = strings.TrimSpace(word)
-			if word == "" {
-				continue
-			}
+	for _, word := range strings.Split(strings.TrimSpace(matches[1]), ",") {
+		word = strings.TrimSpace(word)
+		if word == "" {
+			continue
+		}
 
-			if _, ok := exSettings[word]; ok {
-				delete(exSettings, word)
-				removed = append(removed, word)
-			} else {
-				notFound = append(notFound, word)
-			}
+		if _, ok := exSettings[word]; ok {
+			delete(exSettings, word)
+			removed = append(removed, word)
+		} else {
+			notFound = append(notFound, word)
 		}
 	}
 
-	return buildResponse(removed, "удалены", notFound, "не найдены", "исключения не указаны")
+	return buildResponse("исключения не указаны", RespArg{Items: removed, Name: "удалены"}, RespArg{Items: notFound, Name: "не найдены"})
 }
 
 type ListExcept struct {
@@ -281,6 +270,7 @@ func (e *ListExcept) handleExceptList(cfg *config.Config) *ports.AnswerType {
 }
 
 type OnOffExcept struct {
+	re         *regexp.Regexp
 	template   ports.TemplatePort
 	typeExcept string
 }
@@ -290,10 +280,8 @@ func (e *OnOffExcept) Execute(cfg *config.Config, text *ports.MessageText) *port
 }
 
 func (e *OnOffExcept) handleExceptOnOff(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
-	words := text.Words()
-	opts := e.template.Options().ParseAll(&words, template.SpamExceptOptions)
-
-	if len(words) < 4 { // !am ex on/off <команды через запятую>
+	matches := e.re.FindStringSubmatch(text.Original) // !am ex on/off <слова/фразы через запятую>
+	if len(matches) != 3 {
 		return NonParametr
 	}
 
@@ -302,21 +290,10 @@ func (e *OnOffExcept) handleExceptOnOff(cfg *config.Config, text *ports.MessageT
 		exSettings = cfg.Spam.SettingsEmotes.Exceptions
 	}
 
-	if _, ok := opts["-regex"]; ok {
-		except, ok := exSettings[strings.Join(words[3:], " ")]
-		if !ok {
-			return &ports.AnswerType{
-				Text:    []string{"исключение не найдено"},
-				IsReply: true,
-			}
-		}
-
-		except.Enabled = words[2] == "on"
-		return nil
-	}
+	state := strings.ToLower(strings.TrimSpace(matches[1]))
 
 	var edited, notFound []string
-	for _, key := range strings.Split(words[3], ",") {
+	for _, key := range strings.Split(strings.TrimSpace(matches[2]), ",") {
 		key = strings.TrimSpace(key)
 		if key == "" {
 			continue
@@ -328,9 +305,9 @@ func (e *OnOffExcept) handleExceptOnOff(cfg *config.Config, text *ports.MessageT
 			continue
 		}
 
-		except.Enabled = words[2] == "on"
+		except.Enabled = state == "on"
 		edited = append(edited, key)
 	}
 
-	return buildResponse(edited, "изменены", notFound, "не найдены", "исключения не указаны")
+	return buildResponse("исключения не указаны", RespArg{Items: edited, Name: "изменены"}, RespArg{Items: notFound, Name: "не найдены"})
 }

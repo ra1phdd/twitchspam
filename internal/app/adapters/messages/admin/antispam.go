@@ -483,7 +483,7 @@ func (a *AddAntispam) handleAdd(cfg *config.Config, text *ports.MessageText) *po
 		}
 	}
 
-	return buildResponse(added, "добавлены в список", alreadyExists, "уже есть в списке", "пользователи не указаны")
+	return buildResponse("пользователи не указаны", RespArg{Items: added, Name: "добавлены в список"}, RespArg{Items: alreadyExists, Name: "уже есть в списке"})
 }
 
 type DelAntispam struct {
@@ -515,5 +515,5 @@ func (a *DelAntispam) handleDel(cfg *config.Config, text *ports.MessageText) *po
 		}
 	}
 
-	return buildResponse(removed, "удалены из списка", notFound, "не найдены", "пользователи не указаны")
+	return buildResponse("пользователи не указаны", RespArg{Items: removed, Name: "удалены"}, RespArg{Items: notFound, Name: "не найдены"})
 }
