@@ -3,6 +3,7 @@ package admin
 import (
 	"fmt"
 	"github.com/shirou/gopsutil/cpu"
+	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
@@ -44,39 +45,41 @@ func (o *OnOff) Execute(cfg *config.Config, _ *ports.MessageText) *ports.AnswerT
 
 func (o *OnOff) handleOnOff(cfg *config.Config, enabled bool) *ports.AnswerType {
 	cfg.Enabled = enabled
-	return nil
+	return Success
 }
 
-type Category struct {
+type Game struct {
+	re     *regexp.Regexp
 	stream ports.StreamPort
 }
 
-func (c *Category) Execute(_ *config.Config, text *ports.MessageText) *ports.AnswerType {
-	return c.handleCategory(text)
+func (g *Game) Execute(_ *config.Config, text *ports.MessageText) *ports.AnswerType {
+	return g.handleGame(text)
 }
 
-func (c *Category) handleCategory(text *ports.MessageText) *ports.AnswerType {
-	words := text.Words()
-	if len(words) < 3 { // !am game <игра>
+func (g *Game) handleGame(text *ports.MessageText) *ports.AnswerType {
+	matches := g.re.FindStringSubmatch(text.Lower()) // !am game <игра>
+	if len(matches) != 2 {
 		return NonParametr
 	}
 
-	if !c.stream.IsLive() {
+	if !g.stream.IsLive() {
 		return &ports.AnswerType{
 			Text:    []string{"стрим выключен!"},
 			IsReply: true,
 		}
 	}
 
-	if c.stream.Category() != "Games + Demos" {
+	if g.stream.Category() != "Games + Demos" {
 		return &ports.AnswerType{
 			Text:    []string{"работает только при категории Games + Demos!"},
 			IsReply: true,
 		}
 	}
 
-	c.stream.SetCategory(text.Tail(2))
-	return nil
+	gameName := strings.TrimSpace(matches[1])
+	g.stream.SetCategory(gameName)
+	return Success
 }
 
 type Status struct{}
@@ -86,7 +89,7 @@ func (s *Status) Execute(cfg *config.Config, _ *ports.MessageText) *ports.Answer
 }
 
 func (s *Status) handleStatus(cfg *config.Config) *ports.AnswerType {
-	if !cfg.Enabled {
+	if !cfg.Enabled { // !am status
 		return &ports.AnswerType{
 			Text:    []string{"бот выключен!"},
 			IsReply: true,
@@ -110,41 +113,45 @@ func (r *Reset) Execute(cfg *config.Config, _ *ports.MessageText) *ports.AnswerT
 }
 
 func (r *Reset) handleReset(cfg *config.Config) *ports.AnswerType {
-	cfg.Spam = r.manager.GetDefault().Spam
-	return nil
+	cfg.Spam = r.manager.GetDefault().Spam // !am reset
+	return Success
 }
 
-type Say struct{}
+type Say struct {
+	re *regexp.Regexp
+}
 
 func (s *Say) Execute(_ *config.Config, text *ports.MessageText) *ports.AnswerType {
 	return s.handleSay(text)
 }
 
 func (s *Say) handleSay(text *ports.MessageText) *ports.AnswerType {
-	words := text.Words()
-	if len(words) < 3 { // !am say <текст>
+	matches := s.re.FindStringSubmatch(text.Lower()) // !am say <текст>
+	if len(matches) != 2 {
 		return NonParametr
 	}
 
 	return &ports.AnswerType{
-		Text:    []string{text.Tail(2)},
+		Text:    []string{strings.TrimSpace(matches[1])},
 		IsReply: false,
 	}
 }
 
-type Spam struct{}
+type Spam struct {
+	re *regexp.Regexp
+}
 
 func (s *Spam) Execute(_ *config.Config, text *ports.MessageText) *ports.AnswerType {
 	return s.handleSpam(text)
 }
 
-func (a *Spam) handleSpam(text *ports.MessageText) *ports.AnswerType {
-	words := text.Words()
-	if len(words) < 4 { // !am spam <кол-во раз> <текст>
+func (s *Spam) handleSpam(text *ports.MessageText) *ports.AnswerType {
+	matches := s.re.FindStringSubmatch(text.Lower()) // !am spam <кол-во> <текст>
+	if len(matches) != 3 {
 		return NonParametr
 	}
 
-	count, err := strconv.Atoi(words[2])
+	count, err := strconv.Atoi(strings.TrimSpace(matches[1]))
 	if err != nil || count <= 0 {
 		return &ports.AnswerType{
 			Text:    []string{"кол-во повторов не указано или указано неверно!"},
@@ -156,7 +163,7 @@ func (a *Spam) handleSpam(text *ports.MessageText) *ports.AnswerType {
 		count = 100
 	}
 
-	msg := text.Tail(3)
+	msg := strings.TrimSpace(matches[2])
 	answers := make([]string, count)
 	for i := range answers {
 		answers[i] = msg

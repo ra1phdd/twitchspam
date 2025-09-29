@@ -3,6 +3,7 @@ package admin
 import (
 	"fmt"
 	"log/slog"
+	"regexp"
 	"strings"
 	"time"
 	"twitchspam/internal/app/infrastructure/config"
@@ -73,25 +74,26 @@ func (a *Admin) buildCommandTree() ports.Command {
 			"on":     &OnOff{enabled: true},
 			"off":    &OnOff{enabled: false},
 			"status": &Status{},
-			"say":    &Say{},
-			"spam":   &Spam{},
+			"say":    &Say{re: regexp.MustCompile(`(?i)^!am\s+say\s+(.+)$`)},
+			"spam":   &Spam{re: regexp.MustCompile(`(?i)^!am\s+spam\s+(\d+)\s+(.+)$`)},
 			"reset":  &Reset{manager: a.manager},
-			"game":   &Category{stream: a.stream},
-			"alias": &CompositeCommand{
+			"game":   &Game{re: regexp.MustCompile(`(?i)^!am\s+game\s+(.+)$`), stream: a.stream},
+			"al": &CompositeCommand{
 				subcommands: map[string]ports.Command{
-					"add":  &AddAlias{template: a.template},
-					"del":  &DelAlias{template: a.template},
+					"add":  &AddAlias{re: regexp.MustCompile(`(?i)^!am\s+al(?:\s+add)?\s+(.+)\s+from\s+(.+)$`), template: a.template},
+					"del":  &DelAlias{re: regexp.MustCompile(`(?i)^!am\s+al\s+del\s+(.+)$`), template: a.template},
 					"list": &ListAlias{fs: a.fs},
 				},
-				cursor: 2,
+				defaultCmd: &AddAlias{re: regexp.MustCompile(`(?i)^!am\s+al(?:\s+add)?\s+(.+)\s+from\s+(.+)$`), template: a.template},
+				cursor:     2,
 			},
 			"alg": &CompositeCommand{
 				subcommands: map[string]ports.Command{
-					"on":     &OnOffAliasGroup{template: a.template},
-					"off":    &OnOffAliasGroup{template: a.template},
-					"create": &CreateAliasGroup{template: a.template},
-					"add":    &AddAliasGroup{template: a.template},
-					"del":    &DelAliasGroup{template: a.template},
+					"on":     &OnOffAliasGroup{re: regexp.MustCompile(`(?i)^!am\s+alg\s+on\s+(\S+)$`), template: a.template},
+					"off":    &OnOffAliasGroup{re: regexp.MustCompile(`(?i)^!am\s+alg\s+off\s+(\S+)$`), template: a.template},
+					"create": &CreateAliasGroup{re: regexp.MustCompile(`(?i)^!am\s+alg\s+create\s+(\S+)\s+(.+)$`), template: a.template},
+					"add":    &AddAliasGroup{re: regexp.MustCompile(`(?i)^!am\s+alg\s+add\s+(\S+)\s+(.+)$`), template: a.template},
+					"del":    &DelAliasGroup{re: regexp.MustCompile(`(?i)^!am\s+alg\s+del\s+(\S+)(?:\s+(.+))?$`), template: a.template},
 				},
 				cursor: 2,
 			},
@@ -105,39 +107,39 @@ func (a *Admin) buildCommandTree() ports.Command {
 			},
 			"online": &ModeAntispam{mode: "online"},
 			"always": &ModeAntispam{mode: "always"},
-			"time":   &TimeAntispam{template: a.template},
-			"add":    &AddAntispam{},
-			"del":    &DelAntispam{},
-			"sim":    &SimAntispam{template: a.template, typeSpam: "default"},
-			"msg":    &MsgAntispam{template: a.template, typeSpam: "default"},
-			"p":      &PunishmentsAntispam{template: a.template, typeSpam: "default"},
-			"rp":     &ResetPunishmentsAntispam{template: a.template, typeSpam: "default"},
-			"mwlen":  &MaxLenAntispam{template: a.template, typeSpam: "default"},
-			"mwp":    &MaxPunishmentAntispam{template: a.template, typeSpam: "default"},
-			"mg":     &MinGapAntispam{template: a.template, typeSpam: "default"},
+			"time":   &TimeAntispam{re: regexp.MustCompile(`(?i)^!am\s+time\s+([0-9]+)$`), template: a.template},
+			"add":    &AddAntispam{re: regexp.MustCompile(`(?i)^!am\s+add\s+(.+)$`)},
+			"del":    &DelAntispam{re: regexp.MustCompile(`(?i)^!am\s+del\s+(.+)$`)},
+			"sim":    &SimAntispam{re: regexp.MustCompile(`(?i)^!am\s+sim\s+([0-9]*\.?[0-9]+)$`), template: a.template, typeSpam: "default"},
+			"msg":    &MsgAntispam{re: regexp.MustCompile(`(?i)^!am\s+msg\s+([0-9]+)$`), template: a.template, typeSpam: "default"},
+			"p":      &PunishmentsAntispam{re: regexp.MustCompile(`(?i)^!am\s+p\s+(.+)$`), template: a.template, typeSpam: "default"},
+			"rp":     &ResetPunishmentsAntispam{re: regexp.MustCompile(`(?i)^!am\s+rp\s+([0-9]+)$`), template: a.template, typeSpam: "default"},
+			"mlen":   &MaxLenAntispam{re: regexp.MustCompile(`(?i)^!am\s+mlen\s+([0-9]+)$`), template: a.template, typeSpam: "default"},
+			"mp":     &MaxPunishmentAntispam{re: regexp.MustCompile(`(?i)^!am\s+mp\s+(.+)$`), template: a.template, typeSpam: "default"},
+			"mg":     &MinGapAntispam{re: regexp.MustCompile(`(?i)^!am\s+mg\s+([0-9]+)$`), template: a.template, typeSpam: "default"},
 			"vip": &CompositeCommand{
 				subcommands: map[string]ports.Command{
-					"on":    &OnOffAntispam{enabled: true, typeSpam: "vip"},
-					"off":   &OnOffAntispam{enabled: false, typeSpam: "vip"},
-					"sim":   &SimAntispam{template: a.template, typeSpam: "vip"},
-					"msg":   &MsgAntispam{template: a.template, typeSpam: "vip"},
-					"p":     &PunishmentsAntispam{template: a.template, typeSpam: "vip"},
-					"rp":    &ResetPunishmentsAntispam{template: a.template, typeSpam: "vip"},
-					"mwlen": &MaxLenAntispam{template: a.template, typeSpam: "vip"},
-					"mwp":   &MaxPunishmentAntispam{template: a.template, typeSpam: "vip"},
-					"mg":    &MinGapAntispam{template: a.template, typeSpam: "vip"},
+					"on":   &OnOffAntispam{enabled: true, typeSpam: "vip"},
+					"off":  &OnOffAntispam{enabled: false, typeSpam: "vip"},
+					"sim":  &SimAntispam{re: regexp.MustCompile(`(?i)^!am\s+vip\s+sim\s+([0-9]*\.?[0-9]+)$`), template: a.template, typeSpam: "vip"},
+					"msg":  &MsgAntispam{re: regexp.MustCompile(`(?i)^!am\s+vip\s+msg\s+([0-9]+)$`), template: a.template, typeSpam: "vip"},
+					"p":    &PunishmentsAntispam{re: regexp.MustCompile(`(?i)^!am\s+vip\s+p\s+(.+)$`), template: a.template, typeSpam: "vip"},
+					"rp":   &ResetPunishmentsAntispam{re: regexp.MustCompile(`(?i)^!am\s+vip\s+rp\s+([0-9]+)$`), template: a.template, typeSpam: "vip"},
+					"mlen": &MaxLenAntispam{re: regexp.MustCompile(`(?i)^!am\s+vip\s+mlen\s+([0-9]+)$`), template: a.template, typeSpam: "vip"},
+					"mp":   &MaxPunishmentAntispam{re: regexp.MustCompile(`(?i)^!am\s+vip\s+mp\s+(.+)$`), template: a.template, typeSpam: "vip"},
+					"mg":   &MinGapAntispam{re: regexp.MustCompile(`(?i)^!am\s+vip\s+mg\s+([0-9]+)$`), template: a.template, typeSpam: "vip"},
 				},
 				cursor: 2,
 			},
 			"emote": &CompositeCommand{
 				subcommands: map[string]ports.Command{
-					"on":    &OnOffAntispam{enabled: true, typeSpam: "emote"},
-					"off":   &OnOffAntispam{enabled: false, typeSpam: "emote"},
-					"msg":   &MsgAntispam{template: a.template, typeSpam: "emote"},
-					"p":     &PunishmentsAntispam{template: a.template, typeSpam: "emote"},
-					"rp":    &ResetPunishmentsAntispam{template: a.template, typeSpam: "emote"},
-					"melen": &MaxLenAntispam{template: a.template, typeSpam: "emote"},
-					"mep":   &MaxPunishmentAntispam{template: a.template, typeSpam: "emote"},
+					"on":   &OnOffAntispam{enabled: true, typeSpam: "emote"},
+					"off":  &OnOffAntispam{enabled: false, typeSpam: "emote"},
+					"msg":  &MsgAntispam{re: regexp.MustCompile(`(?i)^!am\s+emote\s+msg\s+([0-9]+)$`), template: a.template, typeSpam: "emote"},
+					"p":    &PunishmentsAntispam{re: regexp.MustCompile(`(?i)^!am\s+emote\s+p\s+(.+)$`), template: a.template, typeSpam: "emote"},
+					"rp":   &ResetPunishmentsAntispam{re: regexp.MustCompile(`(?i)^!am\s+emote\s+rp\s+([0-9]+)$`), template: a.template, typeSpam: "emote"},
+					"mlen": &MaxLenAntispam{re: regexp.MustCompile(`(?i)^!am\s+emote\s+mlen\s+([0-9]+)$`), template: a.template, typeSpam: "emote"},
+					"mp":   &MaxPunishmentAntispam{re: regexp.MustCompile(`(?i)^!am\s+emote\s+mp\s+(.+)$`), template: a.template, typeSpam: "emote"},
 				},
 				cursor: 2,
 			},
@@ -145,15 +147,15 @@ func (a *Admin) buildCommandTree() ports.Command {
 				subcommands: map[string]ports.Command{
 					"on":    &OnOffAutomod{enabled: true},
 					"off":   &OnOffAutomod{enabled: false},
-					"delay": &DelayAutomod{template: a.template},
+					"delay": &DelayAutomod{re: regexp.MustCompile(`(?i)^!am\s+mod\s+delay\s+(\d+)$`), template: a.template},
 				},
 			},
 			"cmd": &CompositeCommand{
 				subcommands: map[string]ports.Command{
-					"add":     &AddCommand{},
-					"del":     &DelCommand{},
 					"list":    &ListCommand{fs: a.fs},
-					"aliases": &AliasesCommand{},
+					"add":     &AddCommand{re: regexp.MustCompile(`(?i)^!am\s+cmd(?:\s+add)?\s+(.+)$`)},
+					"del":     &DelCommand{re: regexp.MustCompile(`(?i)^!am\s+cmd\s+del\s+(.+)$`)},
+					"aliases": &AliasesCommand{re: regexp.MustCompile(`(?i)^!am\s+cmd\s+aliases\s+(.+)$`)},
 					"timer": &CompositeCommand{
 						subcommands: map[string]ports.Command{
 							"on":  &OnOffCommandTimer{template: a.template, timers: a.timers, t: timer},
@@ -167,15 +169,16 @@ func (a *Admin) buildCommandTree() ports.Command {
 					},
 					"lim": &CompositeCommand{
 						subcommands: map[string]ports.Command{
-							"add": &AddCommandLimiter{},
-							"set": &SetCommandLimiter{},
-							"del": &DelCommandLimiter{},
+							"add": &AddCommandLimiter{re: regexp.MustCompile(`(?i)^!am\s+cmd\s+lim(?:\s+add)?\s+(\d+)\s+(\d+)\s+(.+)$`)},
+							"set": &SetCommandLimiter{re: regexp.MustCompile(`(?i)^!am\s+cmd\s+lim\s+set\s+(\d+)\s+(\d+)\s+(.+)$`)},
+							"del": &DelCommandLimiter{re: regexp.MustCompile(`(?i)^!am\s+cmd\s+lim\s+del\s+(.+)$`)},
 						},
-						defaultCmd: &AddCommandLimiter{},
+						defaultCmd: &AddCommandLimiter{re: regexp.MustCompile(`(?i)^!am\s+cmd\s+lim(?:\s+add)?\s+(\d+)\s+(\d+)\s+(.+)$`)},
 						cursor:     3,
 					},
 				},
-				cursor: 2,
+				defaultCmd: &AddCommand{re: regexp.MustCompile(`(?i)^!am\s+cmd(?:\s+add)?\s+(.+)$`)},
+				cursor:     2,
 			},
 			"ex": &CompositeCommand{
 				subcommands: map[string]ports.Command{
@@ -237,12 +240,17 @@ func (a *Admin) buildCommandTree() ports.Command {
 	}
 }
 
+var Success = &ports.AnswerType{
+	Text:    []string{"успешно!"},
+	IsReply: true,
+}
+
 func (a *Admin) FindMessages(msg *ports.ChatMessage) *ports.AnswerType {
 	if !(msg.Chatter.IsBroadcaster || msg.Chatter.IsMod) || !strings.HasPrefix(msg.Message.Text.Original, "!am") {
 		return nil
 	}
 
-	words := msg.Message.Text.Words()
+	words := msg.Message.Text.WordsLower()
 	if len(words) < 2 {
 		return NotFoundCmd
 	}
@@ -264,10 +272,7 @@ func (a *Admin) FindMessages(msg *ports.ChatMessage) *ports.AnswerType {
 	if result != nil {
 		return result
 	}
-	return &ports.AnswerType{
-		Text:    []string{"успешно!"},
-		IsReply: true,
-	}
+	return Success
 }
 
 func (c *CompositeCommand) Execute(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {

@@ -2,12 +2,67 @@ package admin
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 	"twitchspam/internal/app/infrastructure/config"
 	"twitchspam/internal/app/ports"
 )
 
+var (
+	aliasDenied = &ports.AnswerType{
+		Text:    []string{"нельзя добавить алиас на эту команду!"},
+		IsReply: true,
+	}
+	incorrectSyntax = &ports.AnswerType{
+		Text:    []string{"некорректный синтаксис!"},
+		IsReply: true,
+	}
+	notFoundAliasGroup = &ports.AnswerType{
+		Text:    []string{"группа алиасов не найдена!"},
+		IsReply: true,
+	}
+	existsAliasGroup = &ports.AnswerType{
+		Text:    []string{"группа алиасов уже существует!"},
+		IsReply: true,
+	}
+)
+
+// Одиночные алиасы
+
+type ListAlias struct {
+	fs ports.FileServerPort
+}
+
+func (a *ListAlias) Execute(cfg *config.Config, _ *ports.MessageText) *ports.AnswerType {
+	return a.handleAliasesList(cfg)
+}
+
+func (a *ListAlias) handleAliasesList(cfg *config.Config) *ports.AnswerType {
+	aliases := make(map[string]string) // !am al list
+	for k, v := range cfg.Aliases {
+		aliases[k] = v
+	}
+
+	for _, als := range cfg.AliasGroups {
+		if len(als.Aliases) == 0 {
+			continue
+		}
+
+		var alias []string
+		for key := range als.Aliases {
+			alias = append(alias, key)
+		}
+		aliases[strings.Join(alias, ", ")] = als.Original
+	}
+
+	return buildList(aliases, "алиасы", "алиасы не найдены!",
+		func(alias, original string) string {
+			return fmt.Sprintf("- %s → %s", alias, original)
+		}, a.fs)
+}
+
 type AddAlias struct {
+	re       *regexp.Regexp
 	template ports.TemplatePort
 }
 
@@ -16,53 +71,50 @@ func (a *AddAlias) Execute(cfg *config.Config, text *ports.MessageText) *ports.A
 }
 
 func (a *AddAlias) handleAliasesAdd(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
-	words := text.Words()
-	if len(words) < 6 { // !am alias add <алиас> from <оригинальная команда>
-		return NonParametr
+	matches := a.re.FindStringSubmatch(text.Original) // !am al add <алиасы через запятую> from <оригинальная команда>
+	if len(matches) != 3 {
+		return incorrectSyntax
 	}
 
-	var fromIndex = -1
-	for i, arg := range words {
-		if arg == "from" {
-			fromIndex = i
-			break
-		}
+	aliases := strings.TrimSpace(matches[1])
+	original := strings.TrimSpace(matches[2])
+
+	if aliases == "" || original == "" {
+		return incorrectSyntax
 	}
 
-	if fromIndex == -1 || fromIndex == 0 || fromIndex == len(words)-1 {
-		return &ports.AnswerType{
-			Text:    []string{"некорректный синтаксис!"},
-			IsReply: true,
-		}
-	}
-
-	alias := strings.Join(words[3:fromIndex], " ")
-	original := strings.Join(words[fromIndex+1:], " ")
-
+	// алиас может ссылаться только на команду, а не на текст
+	// при этом сам алиас может быть текстом, пример - "что за игра"
 	if !strings.HasPrefix(original, "!") {
 		original = "!" + original
-	}
-
-	if strings.Contains(alias, "!am alias") || alias == original {
-		return &ports.AnswerType{
-			Text:    []string{"нельзя добавить алиас на эту команду!"},
-			IsReply: true,
-		}
 	}
 
 	if cfg.Aliases[original] != "" {
 		original = cfg.Aliases[original]
 	}
 
-	cfg.Aliases[alias] = original
+	for _, alias := range strings.Split(aliases, ",") {
+		alias = strings.TrimSpace(alias)
+		if alias == "" {
+			continue
+		}
+
+		if strings.Contains(alias, "!am al ") || strings.Contains(alias, "!am alg ") || alias == original {
+			return aliasDenied
+		}
+
+		cfg.Aliases[alias] = original
+	}
+
 	a.template.Aliases().Update(cfg.Aliases, cfg.AliasGroups)
 	return &ports.AnswerType{
-		Text:    []string{fmt.Sprintf("алиас `%s` добавлен для команды `%s`!", alias, original)},
+		Text:    []string{fmt.Sprintf("алиасы `%s` добавлены для команды `%s`!", aliases, original)},
 		IsReply: true,
 	}
 }
 
 type DelAlias struct {
+	re       *regexp.Regexp
 	template ports.TemplatePort
 }
 
@@ -71,47 +123,170 @@ func (a *DelAlias) Execute(cfg *config.Config, text *ports.MessageText) *ports.A
 }
 
 func (a *DelAlias) handleAliasesDel(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
-	words := text.Words()
-	if len(words) < 4 { // !am alias del <алиас>
+	matches := a.re.FindStringSubmatch(text.Original) // !am al del <алиасы через запятую>
+	if len(matches) != 2 {
 		return NonParametr
 	}
 
-	alias := text.Tail(3)
-	if _, ok := cfg.Aliases[alias]; !ok {
-		return &ports.AnswerType{
-			Text:    []string{"алиас не найден!"},
-			IsReply: true,
+	var removed, notFound []string
+	for _, alias := range strings.Split(strings.TrimSpace(matches[1]), ",") {
+		alias = strings.TrimSpace(alias)
+		if alias == "" {
+			continue
+		}
+
+		if _, ok := cfg.Aliases[alias]; ok {
+			delete(cfg.Aliases, alias)
+			removed = append(removed, alias)
+		} else {
+			notFound = append(notFound, alias)
 		}
 	}
 
-	delete(cfg.Aliases, alias)
 	a.template.Aliases().Update(cfg.Aliases, cfg.AliasGroups)
+	return buildResponse(removed, "удалены", notFound, "не найдены", "алиасы не указаны")
+}
+
+// Группы алиасов
+
+type CreateAliasGroup struct {
+	re       *regexp.Regexp
+	template ports.TemplatePort
+}
+
+func (a *CreateAliasGroup) Execute(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+	return a.handleAlgCreate(cfg, text)
+}
+
+func (a *CreateAliasGroup) handleAlgCreate(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+	matches := a.re.FindStringSubmatch(text.Original) // !am alg create <название_группы> <оригинальная команда>
+	if len(matches) != 3 {
+		return incorrectSyntax
+	}
+
+	groupName := strings.TrimSpace(matches[1])
+	if _, exists := cfg.AliasGroups[groupName]; exists {
+		return existsAliasGroup
+	}
+
+	original := strings.TrimSpace(matches[2])
+	if !strings.HasPrefix(original, "!") {
+		original = "!" + original
+	}
+
+	cfg.AliasGroups[groupName] = &config.AliasGroups{
+		Aliases:  make(map[string]struct{}),
+		Original: original,
+	}
+	a.template.Aliases().Update(cfg.Aliases, cfg.AliasGroups)
+
 	return &ports.AnswerType{
-		Text:    []string{fmt.Sprintf("алиас `%s` удален!", alias)},
+		Text:    []string{fmt.Sprintf("группа алиасов `%s` создана!", groupName)},
 		IsReply: true,
 	}
 }
 
-type ListAlias struct {
-	fs ports.FileServerPort
+type AddAliasGroup struct {
+	re       *regexp.Regexp
+	template ports.TemplatePort
 }
 
-func (a *ListAlias) Execute(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
-	return a.handleAliasesList(cfg, text)
+func (a *AddAliasGroup) Execute(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+	return a.handleAlgAdd(cfg, text)
 }
 
-func (a *ListAlias) handleAliasesList(cfg *config.Config, _ *ports.MessageText) *ports.AnswerType {
-	aliases := cfg.Aliases
-	for _, als := range cfg.AliasGroups {
-		var alias []string
-		for key := range als.Aliases {
-			alias = append(alias, key)
-		}
-		aliases[strings.Join(alias, ", ")] = als.Original
+func (a *AddAliasGroup) handleAlgAdd(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+	matches := a.re.FindStringSubmatch(text.Original) // !am alg add <название_группы> <алиасы через запятую>
+	if len(matches) != 3 {
+		return incorrectSyntax
 	}
 
-	return buildList(cfg.Aliases, "алиасы", "алиасы не найдены!",
-		func(alias, original string) string {
-			return fmt.Sprintf("- %s → %s", alias, original)
-		}, a.fs)
+	groupName := strings.TrimSpace(matches[1])
+	group, exists := cfg.AliasGroups[groupName]
+	if !exists {
+		return notFoundAliasGroup
+	}
+
+	aliases := strings.Split(strings.TrimSpace(matches[2]), ",")
+	for _, alias := range aliases {
+		alias = strings.TrimSpace(alias)
+		if alias == "" {
+			continue
+		}
+
+		if strings.Contains(alias, "!am al ") || strings.Contains(alias, "!am alg ") || alias == group.Original {
+			return aliasDenied
+		}
+
+		cfg.AliasGroups[groupName].Aliases[alias] = struct{}{}
+	}
+
+	a.template.Aliases().Update(cfg.Aliases, cfg.AliasGroups)
+	return Success
+}
+
+type DelAliasGroup struct {
+	re       *regexp.Regexp
+	template ports.TemplatePort
+}
+
+func (a *DelAliasGroup) Execute(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+	return a.handleAlgDel(cfg, text)
+}
+
+func (a *DelAliasGroup) handleAlgDel(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+	matches := a.re.FindStringSubmatch(text.Original) // !am alg del <название_группы> <алиасы через запятую или ничего для удаления группы>
+	if len(matches) < 2 {
+		return incorrectSyntax
+	}
+
+	groupName := strings.TrimSpace(matches[1])
+	group, exists := cfg.AliasGroups[groupName]
+	if !exists {
+		return notFoundAliasGroup
+	}
+	defer a.template.Aliases().Update(cfg.Aliases, cfg.AliasGroups)
+
+	if len(matches) < 3 || strings.TrimSpace(matches[2]) == "" {
+		delete(cfg.AliasGroups, groupName)
+		return Success
+	}
+
+	var removed, notFound []string
+	for _, w := range strings.Split(strings.TrimSpace(matches[2]), ",") {
+		if _, ok := group.Aliases[w]; ok {
+			delete(cfg.AliasGroups[groupName].Aliases, w)
+			removed = append(removed, w)
+		} else {
+			notFound = append(notFound, w)
+		}
+	}
+
+	return buildResponse(removed, "удалены", notFound, "не найдены", "алиасы не указаны")
+}
+
+type OnOffAliasGroup struct {
+	re       *regexp.Regexp
+	template ports.TemplatePort
+}
+
+func (a *OnOffAliasGroup) Execute(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+	return a.handleAlgOnOff(cfg, text)
+}
+
+func (a *OnOffAliasGroup) handleAlgOnOff(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+	matches := a.re.FindStringSubmatch(text.Original) // !am alg on/off <название_группы>
+	if len(matches) != 3 {
+		return incorrectSyntax
+	}
+
+	state := strings.TrimSpace(matches[1])
+	groupName := strings.TrimSpace(matches[2])
+
+	if _, exists := cfg.AliasGroups[groupName]; !exists {
+		return notFoundAliasGroup
+	}
+
+	cfg.AliasGroups[groupName].Enabled = state == "on"
+	return Success
 }
