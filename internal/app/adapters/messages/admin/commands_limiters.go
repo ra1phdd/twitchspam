@@ -2,6 +2,7 @@ package admin
 
 import (
 	"golang.org/x/time/rate"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -9,28 +10,23 @@ import (
 	"twitchspam/internal/app/ports"
 )
 
-type AddCommandLimiter struct{}
+type AddCommandLimiter struct {
+	re *regexp.Regexp
+}
 
 func (c *AddCommandLimiter) Execute(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
 	return c.handleCommandLimiterAdd(cfg, text)
 }
 
 func (c *AddCommandLimiter) handleCommandLimiterAdd(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
-	words := text.Words()
-
-	idx := 3 // id параметра, с которого начинаются аргументы команды
-	if words[3] == "add" {
-		idx = 4
-	}
-
-	// !am cmd lim <команды через запятую> <кол-во запросов> <интервал в секундах>
-	// или !am cmd lim add <команды через запятую> <кол-во запросов> <интервал в секундах>
-	if len(words) < idx+3 {
+	// !am cmd lim <кол-во запросов> <интервал в секундах> <команды через запятую>
+	// или !am cmd lim add <кол-во запросов> <интервал в секундах> <команды через запятую>
+	matches := c.re.FindStringSubmatch(text.Original)
+	if len(matches) != 4 {
 		return NonParametr
 	}
 
-	cmds := strings.Split(words[idx], ",")
-	requests, err := strconv.Atoi(words[idx+1])
+	requests, err := strconv.Atoi(strings.TrimSpace(matches[1]))
 	if err != nil || requests <= 0 {
 		return &ports.AnswerType{
 			Text:    []string{"не указано корректное количество запросов!"},
@@ -38,7 +34,7 @@ func (c *AddCommandLimiter) handleCommandLimiterAdd(cfg *config.Config, text *po
 		}
 	}
 
-	seconds, err := strconv.Atoi(words[idx+2])
+	seconds, err := strconv.Atoi(strings.TrimSpace(matches[2]))
 	if err != nil || seconds <= 0 {
 		return &ports.AnswerType{
 			Text:    []string{"не указан корректный интервал!"},
@@ -47,7 +43,7 @@ func (c *AddCommandLimiter) handleCommandLimiterAdd(cfg *config.Config, text *po
 	}
 
 	var added, notFound []string
-	for _, key := range cmds {
+	for _, key := range strings.Split(strings.TrimSpace(matches[3]), ",") {
 		key = strings.TrimSpace(key)
 		if key == "" {
 			continue
@@ -74,56 +70,21 @@ func (c *AddCommandLimiter) handleCommandLimiterAdd(cfg *config.Config, text *po
 	return buildResponse(added, "добавлены", notFound, "не найдены", "команды не указаны")
 }
 
-type DelCommandLimiter struct{}
-
-func (c *DelCommandLimiter) Execute(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
-	return c.handleCommandLimiterDel(cfg, text)
+type SetCommandLimiter struct {
+	re *regexp.Regexp
 }
-
-func (c *DelCommandLimiter) handleCommandLimiterDel(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
-	words := text.Words()
-	if len(words) < 5 { // !am cmd lim del <команды через запятую>
-		return NonParametr
-	}
-
-	var removed, notFound []string
-	for _, key := range strings.Split(words[4], ",") {
-		key = strings.TrimSpace(key)
-		if key == "" {
-			continue
-		}
-		if !strings.HasPrefix(key, "!") {
-			key = "!" + key
-		}
-
-		cmd, ok := cfg.Commands[key]
-		if !ok {
-			notFound = append(notFound, key)
-			continue
-		}
-
-		cmd.Limiter = nil
-		removed = append(removed, key)
-	}
-
-	return buildResponse(removed, "удалены", notFound, "не найдены", "лимитеры не указаны")
-}
-
-type SetCommandLimiter struct{}
 
 func (c *SetCommandLimiter) Execute(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
 	return c.handleCommandLimiterSet(cfg, text)
 }
 
 func (c *SetCommandLimiter) handleCommandLimiterSet(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
-	words := text.Words()
-
-	if len(words) < 7 { // !am cmd lim set <команды через запятую> <кол-во запросов> <интервал>
+	matches := c.re.FindStringSubmatch(text.Original) // !am cmd lim set <кол-во запросов> <интервал в секундах> <команды через запятую>
+	if len(matches) != 4 {
 		return NonParametr
 	}
 
-	cmds := strings.Split(words[4], ",")
-	requests, err := strconv.Atoi(words[5])
+	requests, err := strconv.Atoi(strings.TrimSpace(matches[1]))
 	if err != nil || requests <= 0 {
 		return &ports.AnswerType{
 			Text:    []string{"не указано корректное количество запросов!"},
@@ -131,7 +92,7 @@ func (c *SetCommandLimiter) handleCommandLimiterSet(cfg *config.Config, text *po
 		}
 	}
 
-	seconds, err := strconv.Atoi(words[6])
+	seconds, err := strconv.Atoi(strings.TrimSpace(matches[2]))
 	if err != nil || seconds <= 0 {
 		return &ports.AnswerType{
 			Text:    []string{"не указан корректный интервал!"},
@@ -140,7 +101,7 @@ func (c *SetCommandLimiter) handleCommandLimiterSet(cfg *config.Config, text *po
 	}
 
 	var edited, notFound []string
-	for _, key := range cmds {
+	for _, key := range strings.Split(strings.TrimSpace(matches[3]), ",") {
 		key = strings.TrimSpace(key)
 		if key == "" {
 			continue
@@ -164,4 +125,41 @@ func (c *SetCommandLimiter) handleCommandLimiterSet(cfg *config.Config, text *po
 	}
 
 	return buildResponse(edited, "изменены", notFound, "не найдены", "лимитеры не указаны")
+}
+
+type DelCommandLimiter struct {
+	re *regexp.Regexp
+}
+
+func (c *DelCommandLimiter) Execute(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+	return c.handleCommandLimiterDel(cfg, text)
+}
+
+func (c *DelCommandLimiter) handleCommandLimiterDel(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+	matches := c.re.FindStringSubmatch(text.Original) // !am cmd lim del <команды через запятую>
+	if len(matches) != 2 {
+		return NonParametr
+	}
+
+	var removed, notFound []string
+	for _, key := range strings.Split(strings.TrimSpace(matches[1]), ",") {
+		key = strings.TrimSpace(key)
+		if key == "" {
+			continue
+		}
+		if !strings.HasPrefix(key, "!") {
+			key = "!" + key
+		}
+
+		cmd, ok := cfg.Commands[key]
+		if !ok {
+			notFound = append(notFound, key)
+			continue
+		}
+
+		cmd.Limiter = nil
+		removed = append(removed, key)
+	}
+
+	return buildResponse(removed, "удалены", notFound, "не найдены", "лимитеры не указаны")
 }

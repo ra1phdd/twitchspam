@@ -1,6 +1,8 @@
 package admin
 
 import (
+	"regexp"
+	"strings"
 	"twitchspam/internal/app/infrastructure/config"
 	"twitchspam/internal/app/ports"
 )
@@ -14,11 +16,12 @@ func (a *OnOffAutomod) Execute(cfg *config.Config, _ *ports.MessageText) *ports.
 }
 
 func (a *OnOffAutomod) handleOnOffAutomod(cfg *config.Config) *ports.AnswerType {
-	cfg.Automod.Enabled = a.enabled
-	return nil
+	cfg.Automod.Enabled = a.enabled // !am mod on/off
+	return Success
 }
 
 type DelayAutomod struct {
+	re       *regexp.Regexp
 	template ports.TemplatePort
 }
 
@@ -27,15 +30,16 @@ func (a *DelayAutomod) Execute(cfg *config.Config, text *ports.MessageText) *por
 }
 
 func (a *DelayAutomod) handleDelayAutomod(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
-	words := text.Words()
-	if len(words) < 4 { // !am mod delay <значение>
+	matches := a.re.FindStringSubmatch(text.Original) // !am mod delay <число>
+	if len(matches) != 2 {
 		return NonParametr
 	}
 
-	if val, ok := a.template.Parser().ParseIntArg(words[3], 0, 10); ok {
+	if val, ok := a.template.Parser().ParseIntArg(strings.TrimSpace(matches[1]), 0, 10); ok {
 		cfg.Automod.Delay = val
-		return nil
+		return Success
 	}
+
 	return &ports.AnswerType{
 		Text:    []string{"значение задержки срабатывания на автомод должно быть от 0 до 10!"},
 		IsReply: true,

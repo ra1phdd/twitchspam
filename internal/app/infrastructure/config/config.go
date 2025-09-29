@@ -82,6 +82,7 @@ type ExceptionsSettings struct {
 }
 
 type AliasGroups struct {
+	Enabled  bool                `json:"enabled"`
 	Aliases  map[string]struct{} `json:"aliases"`
 	Original string              `json:"original"`
 }
