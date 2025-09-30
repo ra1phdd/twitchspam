@@ -26,7 +26,7 @@ func (e *AddExcept) handleExceptAdd(cfg *config.Config, text *ports.MessageText)
 	// !am ex (add) <кол-во сообщений> <наказания через запятую> <слова/фразы через запятую>
 	// или !am ex (add) <кол-во сообщений> <наказания через запятую> re <name> <regex>
 	matches := e.re.FindStringSubmatch(textWithoutOpts)
-	if len(matches) < 4 {
+	if len(matches) < 7 {
 		return NonParametr
 	}
 
@@ -70,9 +70,6 @@ func (e *AddExcept) handleExceptAdd(cfg *config.Config, text *ports.MessageText)
 	}
 
 	if strings.ToLower(strings.TrimSpace(matches[3])) == "re" {
-		if len(matches) < 6 {
-			return NonParametr
-		}
 		name, reStr := strings.TrimSpace(matches[4]), strings.TrimSpace(matches[5])
 
 		re, err := regexp.Compile(reStr)
@@ -94,7 +91,7 @@ func (e *AddExcept) handleExceptAdd(cfg *config.Config, text *ports.MessageText)
 	}
 
 	var added, exists []string
-	for _, word := range strings.Split(strings.TrimSpace(matches[3]), ",") {
+	for _, word := range strings.Split(strings.TrimSpace(matches[6]), ",") {
 		word = strings.TrimSpace(word)
 		if word == "" {
 			continue
@@ -196,9 +193,9 @@ func (e *SetExcept) handleExceptSet(cfg *config.Config, text *ports.MessageText)
 
 		exSettings[word].Options = e.template.Options().MergeExcept(exSettings[word].Options, opts, e.typeExcept != "emote")
 
-		if strings.TrimSpace(matches[1]) == "" {
+		if strings.TrimSpace(matches[1]) != "" {
 			answer := cmds[strings.TrimSpace(matches[1])](exSettings[word], strings.TrimSpace(matches[2]))
-			if answer != Success {
+			if answer != nil && answer != Success {
 				return answer
 			}
 		}

@@ -470,7 +470,7 @@ func (a *AddAntispam) handleAdd(cfg *config.Config, text *ports.MessageText) *po
 
 	var added, alreadyExists []string
 	for _, user := range strings.Split(strings.TrimSpace(matches[1]), ",") {
-		user = strings.TrimSpace(user)
+		user = strings.TrimPrefix(strings.TrimSpace(user), "@")
 		if user == "" {
 			continue
 		}
@@ -502,7 +502,7 @@ func (a *DelAntispam) handleDel(cfg *config.Config, text *ports.MessageText) *po
 
 	var removed, notFound []string
 	for _, user := range strings.Split(strings.TrimSpace(matches[1]), ",") {
-		user = strings.TrimSpace(user)
+		user = strings.TrimPrefix(strings.TrimSpace(user), "@")
 		if user == "" {
 			continue
 		}

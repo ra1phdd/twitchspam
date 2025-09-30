@@ -79,11 +79,16 @@ func (m *ClearMarker) SetUsername(username string) {
 
 func (m *ClearMarker) handleMarkersClear(cfg *config.Config, text *ports.MessageText, username string) *ports.AnswerType {
 	matches := m.re.FindStringSubmatch(text.Original) // !am mark clear <имя маркера> или !am mark clear
-	if len(matches) < 1 || len(matches) > 2 {
+	if len(matches) != 2 {
 		return NonParametr
 	}
 
 	userKey := username + "_" + m.stream.ChannelID()
+	if matches[1] == "" {
+		delete(cfg.Markers, userKey)
+		return Success
+	}
+
 	userMarkers, ok := cfg.Markers[userKey]
 	if !ok {
 		return &ports.AnswerType{
@@ -92,12 +97,7 @@ func (m *ClearMarker) handleMarkersClear(cfg *config.Config, text *ports.Message
 		}
 	}
 
-	if len(matches) == 2 {
-		delete(userMarkers, strings.TrimSpace(matches[1]))
-		return Success
-	}
-
-	delete(cfg.Markers, userKey)
+	delete(userMarkers, strings.TrimSpace(matches[1]))
 	return Success
 }
 

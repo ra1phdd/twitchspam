@@ -12,7 +12,8 @@ func NewOptions() *OptionsTemplate {
 }
 
 var ExceptOptions = map[string]struct{}{
-	"-regex":  {},
+	"-sub": {}, "-nosub": {},
+	"-vip": {}, "-novip": {},
 	"-repeat": {}, "-norepeat": {},
 	"-oneword": {}, "-nooneword": {},
 	"-contains": {}, "-nocontains": {},
@@ -20,7 +21,6 @@ var ExceptOptions = map[string]struct{}{
 }
 
 var MwordOptions = map[string]struct{}{
-	"-regex": {},
 	"-first": {}, "-nofirst": {},
 	"-sub": {}, "-nosub": {},
 	"-vip": {}, "-novip": {},
