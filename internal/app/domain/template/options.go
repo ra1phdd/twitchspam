@@ -32,8 +32,19 @@ var MwordOptions = map[string]struct{}{
 
 var TimersOptions = map[string]struct{}{
 	"-a": {}, "-noa": {},
-	"-online": {}, "-always": {},
+	"-always": {}, "-online": {},
 }
+
+var CommandOptions = map[string]struct{}{
+	"-private": {}, "-public": {},
+	"-always": {}, "-online": {}, "-offline": {},
+}
+
+const (
+	AlwaysCommandMode = iota
+	OnlineCommandMode
+	OfflineCommandMode
+)
 
 func (ot *OptionsTemplate) ParseAll(input string, opts map[string]struct{}) (string, map[string]bool) {
 	words := strings.Fields(input)
@@ -52,15 +63,24 @@ func (ot *OptionsTemplate) ParseAll(input string, opts map[string]struct{}) (str
 	return strings.Join(clean, " "), founds
 }
 
-func (ot *OptionsTemplate) MergeMword(dst config.MwordOptions, src map[string]bool) config.MwordOptions {
-	if _, ok := src["-nofirst"]; ok {
-		dst.IsFirst = false
+func (ot *OptionsTemplate) MergeExcept(dst config.ExceptOptions, src map[string]bool, isDefault bool) config.ExceptOptions {
+	if isDefault && dst == (config.ExceptOptions{}) { // значение по умолчанию
+		dst.OneWord = true
+		dst.NoVip = true
 	}
 
-	if _, ok := src["-first"]; ok {
-		dst.IsFirst = true
+	return ot.mergeExcept(dst, src)
+}
+
+func (ot *OptionsTemplate) MergeEmoteExcept(dst config.ExceptOptions, src map[string]bool, isDefault bool) config.ExceptOptions {
+	if isDefault && dst == (config.ExceptOptions{}) { // значение по умолчанию
+		dst.NoVip = true
 	}
 
+	return ot.mergeExcept(dst, src)
+}
+
+func (ot *OptionsTemplate) mergeExcept(dst config.ExceptOptions, src map[string]bool) config.ExceptOptions {
 	if _, ok := src["-nosub"]; ok {
 		dst.NoSub = true
 	}
@@ -112,10 +132,13 @@ func (ot *OptionsTemplate) MergeMword(dst config.MwordOptions, src map[string]bo
 	return dst
 }
 
-func (ot *OptionsTemplate) MergeExcept(dst config.ExceptOptions, src map[string]bool, isDefault bool) config.ExceptOptions {
-	if isDefault && dst == (config.ExceptOptions{}) { // значение по умолчанию
-		dst.OneWord = true
-		dst.NoVip = true
+func (ot *OptionsTemplate) MergeMword(dst config.MwordOptions, src map[string]bool) config.MwordOptions {
+	if _, ok := src["-nofirst"]; ok {
+		dst.IsFirst = false
+	}
+
+	if _, ok := src["-first"]; ok {
+		dst.IsFirst = true
 	}
 
 	if _, ok := src["-nosub"]; ok {
@@ -184,6 +207,30 @@ func (ot *OptionsTemplate) MergeTimer(dst config.TimerOptions, src map[string]bo
 
 	if _, ok := src["-always"]; ok {
 		dst.IsAlways = true
+	}
+
+	return dst
+}
+
+func (ot *OptionsTemplate) MergeCommand(dst config.CommandOptions, src map[string]bool) config.CommandOptions {
+	if _, ok := src["-public"]; ok {
+		dst.IsPrivate = false
+	}
+
+	if _, ok := src["-private"]; ok {
+		dst.IsPrivate = true
+	}
+
+	if _, ok := src["-always"]; ok {
+		dst.Mode = AlwaysCommandMode
+	}
+
+	if _, ok := src["-online"]; ok {
+		dst.Mode = OnlineCommandMode
+	}
+
+	if _, ok := src["-offline"]; ok {
+		dst.Mode = OfflineCommandMode
 	}
 
 	return dst
@@ -274,6 +321,46 @@ func (ot *OptionsTemplate) MwordToString(opts config.MwordOptions) string {
 				return "-vip"
 			}
 			return "-novip"
+		}(),
+	}
+	return strings.Join(result, " ")
+}
+
+func (ot *OptionsTemplate) TimerToString(opts config.TimerOptions) string {
+	result := []string{
+		func() string {
+			if opts.IsAnnounce {
+				return "-a"
+			}
+			return "-noa"
+		}(),
+		func() string {
+			if opts.IsAlways {
+				return "-always"
+			}
+			return "-online"
+		}(),
+	}
+	return strings.Join(result, " ")
+}
+
+func (ot *OptionsTemplate) CommandToString(opts config.CommandOptions) string {
+	result := []string{
+		func() string {
+			if opts.IsPrivate {
+				return "-private"
+			}
+			return "-public"
+		}(),
+		func() string {
+			switch opts.Mode {
+			case OnlineCommandMode:
+				return "-online"
+			case OfflineCommandMode:
+				return "-offline"
+			default:
+				return "-always"
+			}
 		}(),
 	}
 	return strings.Join(result, " ")

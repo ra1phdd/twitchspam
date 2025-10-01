@@ -29,16 +29,13 @@ func (m *AddMarker) SetUsername(username string) {
 
 func (m *AddMarker) handleMarkersAdd(cfg *config.Config, text *ports.MessageText, username string) *ports.AnswerType {
 	if !m.stream.IsLive() {
-		return &ports.AnswerType{
-			Text:    []string{"стрим выключен!"},
-			IsReply: true,
-		}
+		return streamOff
 	}
 
 	// !am mark <имя маркера> или !am mark add <имя маркера>
 	matches := m.re.FindStringSubmatch(text.Original)
 	if len(matches) != 2 {
-		return NonParametr
+		return nonParametr
 	}
 
 	userKey := username + "_" + m.stream.ChannelID()
@@ -49,7 +46,7 @@ func (m *AddMarker) handleMarkersAdd(cfg *config.Config, text *ports.MessageText
 	live, err := m.api.GetLiveStream()
 	if err != nil {
 		m.log.Error("Failed to get live stream", err, slog.String("channelID", m.stream.ChannelID()))
-		return UnknownError
+		return unknownError
 	}
 
 	marker := &config.Markers{
@@ -60,7 +57,7 @@ func (m *AddMarker) handleMarkersAdd(cfg *config.Config, text *ports.MessageText
 
 	markerName := strings.TrimSpace(matches[1])
 	cfg.Markers[userKey][markerName] = append(cfg.Markers[userKey][markerName], marker)
-	return Success
+	return success
 }
 
 type ClearMarker struct {
@@ -80,13 +77,13 @@ func (m *ClearMarker) SetUsername(username string) {
 func (m *ClearMarker) handleMarkersClear(cfg *config.Config, text *ports.MessageText, username string) *ports.AnswerType {
 	matches := m.re.FindStringSubmatch(text.Original) // !am mark clear <имя маркера> или !am mark clear
 	if len(matches) != 2 {
-		return NonParametr
+		return nonParametr
 	}
 
 	userKey := username + "_" + m.stream.ChannelID()
 	if matches[1] == "" {
 		delete(cfg.Markers, userKey)
-		return Success
+		return success
 	}
 
 	userMarkers, ok := cfg.Markers[userKey]
@@ -98,7 +95,7 @@ func (m *ClearMarker) handleMarkersClear(cfg *config.Config, text *ports.Message
 	}
 
 	delete(userMarkers, strings.TrimSpace(matches[1]))
-	return Success
+	return success
 }
 
 type ListMarker struct {
@@ -154,7 +151,7 @@ func (m *ListMarker) handleMarkersList(cfg *config.Config, text *ports.MessageTe
 
 	matches := m.re.FindStringSubmatch(text.Original) // !am mark list <имя маркера> или !am mark list
 	if len(matches) < 1 || len(matches) > 2 {
-		return NonParametr
+		return nonParametr
 	}
 
 	if len(matches) == 2 {
@@ -165,12 +162,12 @@ func (m *ListMarker) handleMarkersList(cfg *config.Config, text *ports.MessageTe
 		}
 
 		if err := processMarkers(name, markers); err != nil {
-			return UnknownError
+			return unknownError
 		}
 	} else {
 		for name, markers := range userMarkers {
 			if err := processMarkers(name, markers); err != nil {
-				return UnknownError
+				return unknownError
 			}
 			parts = append(parts, "")
 		}
@@ -179,7 +176,7 @@ func (m *ListMarker) handleMarkersList(cfg *config.Config, text *ports.MessageTe
 	msg := strings.Join(parts, "\n")
 	key, err := m.fs.UploadToHaste(msg)
 	if err != nil {
-		return UnknownError
+		return unknownError
 	}
 
 	return &ports.AnswerType{

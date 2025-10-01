@@ -38,8 +38,8 @@ func (m *AddMword) handleMwAdd(cfg *config.Config, text *ports.MessageText) *por
 	// !am mw (add) <наказания через запятую> <слова/фразы через запятую>
 	// или !am mw (add) <наказания через запятую> re <name> <regex>
 	matches := m.re.FindStringSubmatch(textWithoutOpts)
-	if len(matches) < 3 {
-		return NonParametr
+	if len(matches) != 6 {
+		return nonParametr
 	}
 
 	var punishments []config.Punishment
@@ -51,26 +51,21 @@ func (m *AddMword) handleMwAdd(cfg *config.Config, text *ports.MessageText) *por
 
 		p, err := m.template.Punishment().Parse(pa, false)
 		if err != nil {
-			return &ports.AnswerType{
-				Text:    []string{fmt.Sprintf("не удалось распарсить наказания (%s)!", pa)},
-				IsReply: true,
-			}
+			return errorPunishmentParse
 		}
 		punishments = append(punishments, p)
 	}
 
-	if strings.HasPrefix(strings.ToLower(strings.TrimSpace(matches[3])), "re") {
-		if len(matches) < 5 {
-			return NonParametr
-		}
+	if len(punishments) == 0 {
+		return invalidPunishmentFormat
+	}
+
+	if strings.ToLower(strings.TrimSpace(matches[2])) == "re" {
 		name, reStr := strings.TrimSpace(matches[3]), strings.TrimSpace(matches[4])
 
 		re, err := regexp.Compile(reStr)
 		if err != nil {
-			return &ports.AnswerType{
-				Text:    []string{"неверное регулярное выражение!"},
-				IsReply: true,
-			}
+			return invalidRegex
 		}
 
 		cfg.Mword[name] = &config.Mword{
@@ -79,11 +74,11 @@ func (m *AddMword) handleMwAdd(cfg *config.Config, text *ports.MessageText) *por
 			Options:     m.template.Options().MergeMword(config.MwordOptions{}, opts),
 		}
 
-		return Success
+		return success
 	}
 
 	var added, exists []string
-	for _, word := range strings.Split(strings.TrimSpace(matches[3]), ",") {
+	for _, word := range strings.Split(strings.TrimSpace(matches[5]), ",") {
 		word = strings.TrimSpace(word)
 		if word == "" {
 			continue
@@ -110,17 +105,17 @@ type SetMword struct {
 }
 
 func (m *SetMword) Execute(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
-	return m.handleMwordSet(cfg, text)
+	return m.handleMwSet(cfg, text)
 }
 
-func (m *SetMword) handleMwordSet(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
-	textWithoutOpts, opts := m.template.Options().ParseAll(text.Original, template.ExceptOptions)
+func (m *SetMword) handleMwSet(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+	textWithoutOpts, opts := m.template.Options().ParseAll(text.Original, template.MwordOptions)
 
 	// или !am mw set <наказания через запятую> <слова или фразы через запятую>
 	// или !am mw set <слова или фразы через запятую>
 	matches := m.re.FindStringSubmatch(textWithoutOpts)
 	if len(matches) != 3 {
-		return NonParametr
+		return nonParametr
 	}
 
 	var punishments []config.Punishment
@@ -132,10 +127,7 @@ func (m *SetMword) handleMwordSet(cfg *config.Config, text *ports.MessageText) *
 
 		p, err := m.template.Punishment().Parse(pa, false)
 		if err != nil {
-			return &ports.AnswerType{
-				Text:    []string{fmt.Sprintf("не удалось распарсить наказания (%s)!", pa)},
-				IsReply: true,
-			}
+			return errorPunishmentParse
 		}
 		punishments = append(punishments, p)
 	}
@@ -175,7 +167,7 @@ func (m *DelMword) Execute(cfg *config.Config, text *ports.MessageText) *ports.A
 func (m *DelMword) handleMwDel(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
 	matches := m.re.FindStringSubmatch(text.Original) // !am mw del <слова/фразы через запятую или regex>
 	if len(matches) != 2 {
-		return NonParametr
+		return nonParametr
 	}
 
 	var removed, notFound []string
@@ -208,8 +200,13 @@ func (m *ListMword) Execute(cfg *config.Config, _ *ports.MessageText) *ports.Ans
 func (m *ListMword) handleMwList(cfg *config.Config) *ports.AnswerType {
 	return buildList(cfg.Mword, "мворды", "мворды не найдены!",
 		func(word string, mw *config.Mword) string {
+			if mw.Regexp != nil {
+				return fmt.Sprintf("- `%s` (название мворда: %s, наказания: %s)",
+					mw.Regexp.String(), word, strings.Join(m.template.Punishment().FormatAll(mw.Punishments), ", "))
+			}
+
 			return fmt.Sprintf("- %s (наказания: %s)",
-				word, m.template.Punishment().FormatAll(mw.Punishments))
+				word, strings.Join(m.template.Punishment().FormatAll(mw.Punishments), ", "))
 		}, m.fs)
 }
 
@@ -229,7 +226,7 @@ func (m *CreateMwordGroup) handleMwgCreate(cfg *config.Config, text *ports.Messa
 
 	matches := m.re.FindStringSubmatch(textWithoutOpts) // !am mwg create <название_группы> <наказания через запятую>
 	if len(matches) != 3 {
-		return NonParametr
+		return nonParametr
 	}
 
 	groupName := strings.TrimSpace(matches[1])
@@ -239,14 +236,20 @@ func (m *CreateMwordGroup) handleMwgCreate(cfg *config.Config, text *ports.Messa
 
 	var punishments []config.Punishment
 	for _, pa := range strings.Split(strings.TrimSpace(matches[2]), ",") {
+		pa = strings.TrimSpace(pa)
+		if pa == "" {
+			continue
+		}
+
 		p, err := m.template.Punishment().Parse(pa, false)
 		if err != nil {
-			return &ports.AnswerType{
-				Text:    []string{fmt.Sprintf("не удалось распарсить наказания (%s)!", pa)},
-				IsReply: true,
-			}
+			return errorPunishmentParse
 		}
 		punishments = append(punishments, p)
+	}
+
+	if len(punishments) == 0 {
+		return invalidPunishmentFormat
 	}
 
 	cfg.MwordGroup[groupName] = &config.MwordGroup{
@@ -255,7 +258,7 @@ func (m *CreateMwordGroup) handleMwgCreate(cfg *config.Config, text *ports.Messa
 		Options:     m.template.Options().MergeMword(config.MwordOptions{}, opts),
 		Regexp:      make(map[string]*regexp.Regexp),
 	}
-	return Success
+	return success
 }
 
 type AddMwordGroup struct {
@@ -271,8 +274,8 @@ func (m *AddMwordGroup) handleMwgAdd(cfg *config.Config, text *ports.MessageText
 	// !am mwg add <название_группы> <слова/фразы через запятую>
 	// или !am mwg add <название_группы> re <name> <regex>
 	matches := m.re.FindStringSubmatch(text.Original)
-	if len(matches) < 3 {
-		return NonParametr
+	if len(matches) != 6 {
+		return nonParametr
 	}
 
 	groupName := strings.TrimSpace(matches[1])
@@ -282,24 +285,21 @@ func (m *AddMwordGroup) handleMwgAdd(cfg *config.Config, text *ports.MessageText
 
 	if strings.ToLower(strings.TrimSpace(matches[2])) == "re" {
 		if len(matches) < 5 {
-			return NonParametr
+			return nonParametr
 		}
 		name, reStr := strings.TrimSpace(matches[3]), strings.TrimSpace(matches[4])
 
 		re, err := regexp.Compile(reStr)
 		if err != nil {
-			return &ports.AnswerType{
-				Text:    []string{"неверное регулярное выражение!"},
-				IsReply: true,
-			}
+			return invalidRegex
 		}
 
 		cfg.MwordGroup[groupName].Regexp[name] = re
-		return Success
+		return success
 	}
 
 	var added, exists []string
-	for _, word := range strings.Split(strings.TrimSpace(matches[2]), ",") {
+	for _, word := range strings.Split(strings.TrimSpace(matches[5]), ",") {
 		word = strings.TrimSpace(word)
 		if word == "" {
 			continue
@@ -327,37 +327,39 @@ func (m *SetMwordGroup) Execute(cfg *config.Config, text *ports.MessageText) *po
 }
 
 func (m *SetMwordGroup) handleMwgSet(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
-	textWithoutOpts, opts := m.template.Options().ParseAll(text.Original, template.ExceptOptions)
+	textWithoutOpts, opts := m.template.Options().ParseAll(text.Original, template.MwordOptions)
 
 	// !am mwg set <название_группы> <наказания через запятую>
 	// или !am mwg set <название_группы>
 	matches := m.re.FindStringSubmatch(textWithoutOpts)
-	if len(matches) < 2 {
-		return NonParametr
+	if len(matches) != 3 {
+		return nonParametr
 	}
 
 	groupName := strings.TrimSpace(matches[1])
-	if _, exists := cfg.MwordGroup[groupName]; exists {
-		return existsMwordGroup
+	if _, exists := cfg.MwordGroup[groupName]; !exists {
+		return notFoundMwordGroup
 	}
 	cfg.MwordGroup[groupName].Options = m.template.Options().MergeMword(cfg.MwordGroup[groupName].Options, opts)
 
-	if len(matches) == 3 {
-		var punishments []config.Punishment
-		for _, pa := range strings.Split(strings.TrimSpace(matches[2]), ",") {
-			p, err := m.template.Punishment().Parse(pa, false)
-			if err != nil {
-				return &ports.AnswerType{
-					Text:    []string{fmt.Sprintf("не удалось распарсить наказания (%s)!", pa)},
-					IsReply: true,
-				}
-			}
-			punishments = append(punishments, p)
+	var punishments []config.Punishment
+	for _, pa := range strings.Split(strings.TrimSpace(matches[2]), ",") {
+		pa = strings.TrimSpace(pa)
+		if pa == "" {
+			continue
 		}
 
+		p, err := m.template.Punishment().Parse(pa, false)
+		if err != nil {
+			return errorPunishmentParse
+		}
+		punishments = append(punishments, p)
+	}
+
+	if len(punishments) != 0 {
 		cfg.MwordGroup[groupName].Punishments = punishments
 	}
-	return Success
+	return success
 }
 
 type DelMwordGroup struct {
@@ -373,7 +375,7 @@ func (m *DelMwordGroup) handleMwgDel(cfg *config.Config, text *ports.MessageText
 	// !am mwg del <название_группы> <слова/фразы через запятую или ничего для all>
 	matches := m.re.FindStringSubmatch(text.Original)
 	if len(matches) != 3 {
-		return NonParametr
+		return nonParametr
 	}
 
 	groupName := strings.TrimSpace(matches[1])
@@ -383,7 +385,7 @@ func (m *DelMwordGroup) handleMwgDel(cfg *config.Config, text *ports.MessageText
 
 	if strings.TrimSpace(matches[2]) == "" {
 		delete(cfg.MwordGroup, groupName)
-		return Success
+		return success
 	}
 
 	var removed, notFound []string
@@ -429,7 +431,7 @@ func (m *OnOffMwordGroup) Execute(cfg *config.Config, text *ports.MessageText) *
 func (m *OnOffMwordGroup) handleMwgOnOff(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
 	matches := m.re.FindStringSubmatch(text.Original) // !am mwg on/off <название_группы>
 	if len(matches) != 3 {
-		return NonParametr
+		return nonParametr
 	}
 
 	groupName := strings.TrimSpace(matches[2])
@@ -440,7 +442,7 @@ func (m *OnOffMwordGroup) handleMwgOnOff(cfg *config.Config, text *ports.Message
 	}
 
 	cfg.MwordGroup[groupName].Enabled = state == "on"
-	return Success
+	return success
 }
 
 type ListMwordGroup struct {
@@ -459,11 +461,21 @@ func (m *ListMwordGroup) handleMwgList(cfg *config.Config) *ports.AnswerType {
 			for _, pattern := range mwg.Regexp {
 				re = append(re, pattern.String())
 			}
+
+			if len(re) == 0 {
+				re = append(re, "отсутствуют")
+			}
+
+			words := mwg.Words
+			if len(words) == 0 {
+				words = append(words, "отсутствуют")
+			}
+
 			return fmt.Sprintf("%s\n- включено: %v\n- наказания: %s\n- слова: %s\n- регулярные выражения: %s\n\n",
 				name,
 				mwg.Enabled,
 				strings.Join(m.template.Punishment().FormatAll(mwg.Punishments), ", "),
-				strings.Join(mwg.Words, ", "),
+				strings.Join(words, ", "),
 				strings.Join(re, ", "),
 			)
 		}, m.fs)

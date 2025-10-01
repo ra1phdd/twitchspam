@@ -12,16 +12,80 @@ import (
 )
 
 var (
-	NotFoundCmd = &ports.AnswerType{
+	success = &ports.AnswerType{
+		Text:    []string{"успешно!"},
+		IsReply: true,
+	}
+	notFoundCmd = &ports.AnswerType{
 		Text:    []string{"команда не найдена!"},
 		IsReply: true,
 	}
-	NonParametr = &ports.AnswerType{
+	nonParametr = &ports.AnswerType{
 		Text:    []string{"не указан один из параметров!"},
 		IsReply: true,
 	}
-	UnknownError = &ports.AnswerType{
+	unknownError = &ports.AnswerType{
 		Text:    []string{"неизвестная ошибка!"},
+		IsReply: true,
+	}
+	invalidRegex = &ports.AnswerType{
+		Text:    []string{"неверное регулярное выражение!"},
+		IsReply: true,
+	}
+	errorPunishmentParse = &ports.AnswerType{
+		Text:    []string{"не удалось распарсить наказания!"},
+		IsReply: true,
+	}
+	errorPunishmentCopy = &ports.AnswerType{
+		Text:    []string{"невозможно скопировать наказания!"},
+		IsReply: true,
+	}
+	invalidPunishmentFormat = &ports.AnswerType{
+		Text:    []string{"наказания не указаны!"},
+		IsReply: true,
+	}
+	invalidMessageLimitFormat = &ports.AnswerType{
+		Text:    []string{"лимит сообщений не указан или указан неверно!"},
+		IsReply: true,
+	}
+	invalidMessageLimitValue = &ports.AnswerType{
+		Text:    []string{"значение лимита сообщений должно быть от 2 до 15!"},
+		IsReply: true,
+	}
+	aliasDenied = &ports.AnswerType{
+		Text:    []string{"нельзя добавить алиас на эту команду!"},
+		IsReply: true,
+	}
+	incorrectSyntax = &ports.AnswerType{
+		Text:    []string{"некорректный синтаксис!"},
+		IsReply: true,
+	}
+	notFoundAliasGroup = &ports.AnswerType{
+		Text:    []string{"группа алиасов не найдена!"},
+		IsReply: true,
+	}
+	existsAliasGroup = &ports.AnswerType{
+		Text:    []string{"группа алиасов уже существует!"},
+		IsReply: true,
+	}
+	invalidValueRequest = &ports.AnswerType{
+		Text:    []string{"не указано корректное количество запросов!"},
+		IsReply: true,
+	}
+	invalidValueInterval = &ports.AnswerType{
+		Text:    []string{"не указан корректный интервал!"},
+		IsReply: true,
+	}
+	invalidMessageFormat = &ports.AnswerType{
+		Text:    []string{"кол-во сообщений не указано или указано неверно!"},
+		IsReply: true,
+	}
+	invalidValueRepeats = &ports.AnswerType{
+		Text:    []string{"кол-во повторов не указано или указано неверно!"},
+		IsReply: true,
+	}
+	streamOff = &ports.AnswerType{
+		Text:    []string{"стрим выключен!"},
 		IsReply: true,
 	}
 )
@@ -84,7 +148,8 @@ func (a *Admin) buildCommandTree() ports.Command {
 					"off":  &OnOffAntispam{enabled: false, typeSpam: "default"},
 					"info": &InfoAntispam{template: a.template, fs: a.fs},
 				},
-				cursor: 2,
+				defaultCmd: &PauseAntispam{re: regexp.MustCompile(`(?i)^!am\s+as\s+(.+)$`), template: a.template},
+				cursor:     2,
 			},
 			"online": &ModeAntispam{mode: "online"},
 			"always": &ModeAntispam{mode: "always"},
@@ -167,12 +232,12 @@ func (a *Admin) buildCommandTree() ports.Command {
 			},
 			"mw": &CompositeCommand{
 				subcommands: map[string]ports.Command{
-					"add":  &AddMword{re: regexp.MustCompile(`(?i)^!am\s+mw(?:\s+add)?\s+([^ ]+)\s+(?:(re)\s+(\S+)\s+(.+)|(.+))$`), template: a.template},
-					"set":  &SetMword{re: regexp.MustCompile(`(?i)^!am\s+mw\s+set(?:\s+([^ ]+)\s+)?(.+)$`), template: a.template},
+					"add":  &AddMword{re: regexp.MustCompile(`(?i)^!am\s+mw(?:\s+add)?\s+(\S+)\s*(?:(re)\s+(\S+)\s+(.+)|(.+))$`), template: a.template},
+					"set":  &SetMword{re: regexp.MustCompile(`(?i)^!am\s+mw\s+set\s+(?:([^ ]+)\s+)?(.+)$`), template: a.template},
 					"del":  &DelMword{re: regexp.MustCompile(`(?i)^!am\s+mw\s+del\s+(.+)$`), template: a.template},
 					"list": &ListMword{template: a.template, fs: a.fs},
 				},
-				defaultCmd: &AddMword{re: regexp.MustCompile(`(?i)^!am\s+mw(?:\s+add)?\s+([^ ]+)\s+(?:(re)\s+(\S+)\s+(.+)|(.+))$`), template: a.template},
+				defaultCmd: &AddMword{re: regexp.MustCompile(`(?i)^!am\s+mw(?:\s+add)?\s+(\S+)\s*(?:(re)\s+(\S+)\s+(.+)|(.+))$`), template: a.template},
 				cursor:     2,
 			},
 			"mwg": &CompositeCommand{
@@ -181,7 +246,7 @@ func (a *Admin) buildCommandTree() ports.Command {
 					"off":    &OnOffMwordGroup{re: regexp.MustCompile(`(?i)^!am\s+mwg\s+(off)\s+(.+)$`), template: a.template},
 					"create": &CreateMwordGroup{re: regexp.MustCompile(`(?i)^!am\s+mwg\s+create\s+(\S+)\s+(.+)$`), template: a.template},
 					"set":    &SetMwordGroup{re: regexp.MustCompile(`(?i)^!am\s+mwg\s+set\s+(\S+)(?:\s+(.+))?$`), template: a.template},
-					"add":    &AddMwordGroup{re: regexp.MustCompile(`(?i)^!am\s+mwg(?:\s+add)?\s+(\S+)\s+(?:(re)\s+(\S+)\s+(.+)|(.+))$`), template: a.template},
+					"add":    &AddMwordGroup{re: regexp.MustCompile(`(?i)^!am\s+mwg(?:\s+add)?\s+(\S+)\s*(?:(re)\s+(\S+)\s+(.+)|(.+))$`), template: a.template},
 					"del":    &DelMwordGroup{re: regexp.MustCompile(`(?i)^!am\s+mwg\s+del\s+(\S+)(?:\s+(.+))?$`), template: a.template},
 					"list":   &ListMwordGroup{template: a.template, fs: a.fs},
 				},
@@ -191,7 +256,8 @@ func (a *Admin) buildCommandTree() ports.Command {
 			"cmd": &CompositeCommand{
 				subcommands: map[string]ports.Command{
 					"list":    &ListCommand{fs: a.fs},
-					"add":     &AddCommand{re: regexp.MustCompile(`(?i)^!am\s+cmd(?:\s+add)?\s+(.+)$`)},
+					"add":     &AddCommand{re: regexp.MustCompile(`(?i)^!am\s+cmd(?:\s+add)?\s+(\S+)\s+(.+)$`), template: a.template},
+					"set":     &SetCommand{re: regexp.MustCompile(`(?i)^!am\s+cmd\s+set\s+(.+)$`), template: a.template},
 					"del":     &DelCommand{re: regexp.MustCompile(`(?i)^!am\s+cmd\s+del\s+(.+)$`)},
 					"aliases": &AliasesCommand{re: regexp.MustCompile(`(?i)^!am\s+cmd\s+aliases\s+(.+)$`)},
 					"timer": &CompositeCommand{
@@ -199,7 +265,7 @@ func (a *Admin) buildCommandTree() ports.Command {
 							"on":  &OnOffCommandTimer{re: regexp.MustCompile(`(?i)^!am\s+cmd\s+timer\s+(on)\s+(.+)$`), template: a.template, timers: a.timers, t: timer},
 							"off": &OnOffCommandTimer{re: regexp.MustCompile(`(?i)^!am\s+cmd\s+timer\s+(off)\s+(.+)$`), template: a.template, timers: a.timers, t: timer},
 							"add": &AddCommandTimer{re: regexp.MustCompile(`(?i)^!am\s+cmd\s+timer(?:\s+add)?\s+(.+)\s+(.+)\s+(.+)$`), template: a.template, t: timer},
-							"set": &SetCommandTimer{re: regexp.MustCompile(`(?i)^!am\s+cmd\s+timer\s+set(?:\s+(int|count)\s+(.+))?\s+(.+)$`), template: a.template, timers: a.timers, t: timer},
+							"set": &SetCommandTimer{re: regexp.MustCompile(`(?i)^!am\s+cmd\s+timer\s+set(?:\s+(\d*)\s+(\d*)\s+)?(.+)$`), template: a.template, timers: a.timers, t: timer},
 							"del": &DelCommandTimer{re: regexp.MustCompile(`(?i)^!am\s+cmd\s+timer\s+del\s+(.+)$`), template: a.template, timers: a.timers},
 						},
 						defaultCmd: &AddCommandTimer{re: regexp.MustCompile(`(?i)^!am\s+cmd\s+timer(?:\s+add)?\s+(.+)\s+(.+)\s+(.+)$`), template: a.template, t: timer},
@@ -215,7 +281,7 @@ func (a *Admin) buildCommandTree() ports.Command {
 						cursor:     3,
 					},
 				},
-				defaultCmd: &AddCommand{re: regexp.MustCompile(`(?i)^!am\s+cmd(?:\s+add)?\s+(.+)$`)},
+				defaultCmd: &AddCommand{re: regexp.MustCompile(`(?i)^!am\s+cmd(?:\s+add)?\s+(.+)$`), template: a.template},
 				cursor:     2,
 			},
 			"al": &CompositeCommand{
@@ -242,11 +308,6 @@ func (a *Admin) buildCommandTree() ports.Command {
 	}
 }
 
-var Success = &ports.AnswerType{
-	Text:    []string{"успешно!"},
-	IsReply: true,
-}
-
 func (a *Admin) FindMessages(msg *ports.ChatMessage) *ports.AnswerType {
 	if !(msg.Chatter.IsBroadcaster || msg.Chatter.IsMod) || !strings.HasPrefix(msg.Message.Text.Lower(), "!am") {
 		return nil
@@ -254,7 +315,7 @@ func (a *Admin) FindMessages(msg *ports.ChatMessage) *ports.AnswerType {
 
 	words := msg.Message.Text.WordsLower()
 	if len(words) < 2 {
-		return NotFoundCmd
+		return notFoundCmd
 	}
 
 	// дикий костыль, не смотреть - есть шанс лишиться зрения
@@ -268,13 +329,13 @@ func (a *Admin) FindMessages(msg *ports.ChatMessage) *ports.AnswerType {
 		result = a.root.Execute(cfg, &msg.Message.Text)
 	}); err != nil {
 		a.log.Error("Failed update config", err, slog.String("msg", msg.Message.Text.Original))
-		return UnknownError
+		return unknownError
 	}
 
 	if result != nil {
 		return result
 	}
-	return Success
+	return success
 }
 
 func (c *CompositeCommand) Execute(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
@@ -283,7 +344,7 @@ func (c *CompositeCommand) Execute(cfg *config.Config, text *ports.MessageText) 
 		if c.defaultCmd != nil {
 			return c.defaultCmd.Execute(cfg, text)
 		}
-		return NotFoundCmd
+		return notFoundCmd
 	}
 
 	cmdName := words[c.cursor]
@@ -294,7 +355,7 @@ func (c *CompositeCommand) Execute(cfg *config.Config, text *ports.MessageText) 
 	if c.defaultCmd != nil {
 		return c.defaultCmd.Execute(cfg, text)
 	}
-	return NotFoundCmd
+	return notFoundCmd
 }
 
 type RespArg struct {
@@ -319,7 +380,7 @@ func buildResponse(errMsg string, args ...RespArg) *ports.AnswerType {
 	}
 
 	return &ports.AnswerType{
-		Text:    []string{strings.Join(msgParts, " • ") + "!"},
+		Text:    []string{strings.Join(msgParts, " • ") + "."},
 		IsReply: true,
 	}
 }
@@ -347,7 +408,7 @@ func buildList[T any](
 
 	key, err := fs.UploadToHaste(msg)
 	if err != nil {
-		return UnknownError
+		return unknownError
 	}
 
 	return &ports.AnswerType{

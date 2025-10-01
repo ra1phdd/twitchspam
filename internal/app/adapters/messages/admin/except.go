@@ -27,15 +27,16 @@ func (e *AddExcept) handleExceptAdd(cfg *config.Config, text *ports.MessageText)
 	// или !am ex (add) <кол-во сообщений> <наказания через запятую> re <name> <regex>
 	matches := e.re.FindStringSubmatch(textWithoutOpts)
 	if len(matches) < 7 {
-		return NonParametr
+		return nonParametr
 	}
 
 	messageLimit, err := strconv.Atoi(strings.TrimSpace(matches[1]))
 	if err != nil {
-		return &ports.AnswerType{
-			Text:    []string{"не указан лимит сообщений!"},
-			IsReply: true,
-		}
+		return invalidMessageLimitFormat
+	}
+
+	if messageLimit < 2 || messageLimit > 15 {
+		return invalidMessageLimitValue
 	}
 
 	var punishments []config.Punishment
@@ -47,10 +48,7 @@ func (e *AddExcept) handleExceptAdd(cfg *config.Config, text *ports.MessageText)
 
 		p, err := e.template.Punishment().Parse(pa, true)
 		if err != nil {
-			return &ports.AnswerType{
-				Text:    []string{fmt.Sprintf("не удалось распарсить наказания (%s)!", pa)},
-				IsReply: true,
-			}
+			return errorPunishmentParse
 		}
 
 		if p.Action == "inherit" {
@@ -64,9 +62,15 @@ func (e *AddExcept) handleExceptAdd(cfg *config.Config, text *ports.MessageText)
 		punishments = append(punishments, p)
 	}
 
+	if len(punishments) == 0 {
+		return invalidPunishmentFormat
+	}
+
 	exSettings := cfg.Spam.Exceptions
+	fn := e.template.Options().MergeExcept
 	if e.typeExcept == "emote" {
 		exSettings = cfg.Spam.SettingsEmotes.Exceptions
+		fn = e.template.Options().MergeEmoteExcept
 	}
 
 	if strings.ToLower(strings.TrimSpace(matches[3])) == "re" {
@@ -74,20 +78,17 @@ func (e *AddExcept) handleExceptAdd(cfg *config.Config, text *ports.MessageText)
 
 		re, err := regexp.Compile(reStr)
 		if err != nil {
-			return &ports.AnswerType{
-				Text:    []string{"неверное регулярное выражение!"},
-				IsReply: true,
-			}
+			return invalidRegex
 		}
 
 		exSettings[name] = &config.ExceptionsSettings{
 			MessageLimit: messageLimit,
 			Punishments:  punishments,
 			Regexp:       re,
-			Options:      e.template.Options().MergeExcept(config.ExceptOptions{}, opts, e.typeExcept != "emote"),
+			Options:      fn(config.ExceptOptions{}, opts, e.typeExcept != "emote"),
 		}
 
-		return Success
+		return success
 	}
 
 	var added, exists []string
@@ -132,18 +133,27 @@ func (e *SetExcept) handleExceptSet(cfg *config.Config, text *ports.MessageText)
 	// или !am ex set <слова или фразы через запятую>
 	matches := e.re.FindStringSubmatch(textWithoutOpts)
 	if len(matches) != 4 {
-		return NonParametr
+		return nonParametr
 	}
 
 	cmds := map[string]func(exWord *config.ExceptionsSettings, param string) *ports.AnswerType{
 		"ml": func(exWord *config.ExceptionsSettings, param string) *ports.AnswerType {
-			value, err := strconv.Atoi(param)
+			messageLimit, err := strconv.Atoi(param)
 			if err != nil {
-				return NonParametr
+				return nonParametr
 			}
 
-			exWord.MessageLimit = value
-			return Success
+			if messageLimit == 0 {
+				exWord.Enabled = false
+				return success
+			}
+
+			if messageLimit < 2 || messageLimit > 15 {
+				return invalidMessageLimitValue
+			}
+
+			exWord.MessageLimit = messageLimit
+			return success
 		},
 		"p": func(exWord *config.ExceptionsSettings, param string) *ports.AnswerType {
 			var punishments []config.Punishment
@@ -169,14 +179,20 @@ func (e *SetExcept) handleExceptSet(cfg *config.Config, text *ports.MessageText)
 				punishments = append(punishments, p)
 			}
 
+			if len(punishments) == 0 {
+				return invalidPunishmentFormat
+			}
+
 			exWord.Punishments = punishments
-			return Success
+			return success
 		},
 	}
 
 	exSettings := cfg.Spam.Exceptions
+	fn := e.template.Options().MergeExcept
 	if e.typeExcept == "emote" {
 		exSettings = cfg.Spam.SettingsEmotes.Exceptions
+		fn = e.template.Options().MergeEmoteExcept
 	}
 
 	var edited, notFound []string
@@ -191,11 +207,11 @@ func (e *SetExcept) handleExceptSet(cfg *config.Config, text *ports.MessageText)
 			continue
 		}
 
-		exSettings[word].Options = e.template.Options().MergeExcept(exSettings[word].Options, opts, e.typeExcept != "emote")
+		exSettings[word].Options = fn(exSettings[word].Options, opts, e.typeExcept != "emote")
 
 		if strings.TrimSpace(matches[1]) != "" {
 			answer := cmds[strings.TrimSpace(matches[1])](exSettings[word], strings.TrimSpace(matches[2]))
-			if answer != nil && answer != Success {
+			if answer != nil && answer != success {
 				return answer
 			}
 		}
@@ -217,7 +233,7 @@ func (e *DelExcept) Execute(cfg *config.Config, text *ports.MessageText) *ports.
 func (e *DelExcept) handleExceptDel(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
 	matches := e.re.FindStringSubmatch(text.Original) // !am ex del <слова/фразы через запятую или regex>
 	if len(matches) != 2 {
-		return NonParametr
+		return nonParametr
 	}
 
 	exSettings := cfg.Spam.Exceptions
@@ -279,7 +295,7 @@ func (e *OnOffExcept) Execute(cfg *config.Config, text *ports.MessageText) *port
 func (e *OnOffExcept) handleExceptOnOff(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
 	matches := e.re.FindStringSubmatch(text.Original) // !am ex on/off <слова/фразы через запятую>
 	if len(matches) != 3 {
-		return NonParametr
+		return nonParametr
 	}
 
 	exSettings := cfg.Spam.Exceptions

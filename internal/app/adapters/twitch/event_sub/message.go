@@ -12,7 +12,7 @@ func (es *EventSub) checkMessage(msgEvent ChatMessageEvent) {
 		es.stream.Stats().AddMessage(msg.Chatter.Username)
 	}
 
-	if !strings.HasPrefix(msg.Message.Text.Original, "!am alias") {
+	if !strings.HasPrefix(msg.Message.Text.Original, "!am al ") && !strings.HasPrefix(msg.Message.Text.Original, "!am alg ") {
 		text, ok := es.template.Aliases().Replace(msg.Message.Text.Words())
 		if ok {
 			msg.Message.Text.ReplaceOriginal(text)
@@ -36,15 +36,15 @@ func (es *EventSub) checkMessage(msgEvent ChatMessageEvent) {
 	action := es.checker.Check(msg)
 	switch action.Type {
 	case checker.Ban:
-		es.log.Warn("Banword in phrase", slog.String("username", msg.Chatter.Username), slog.String("text", msg.Message.Text.Original))
+		es.log.Warn("Ban user", slog.String("username", msg.Chatter.Username), slog.String("text", msg.Message.Text.Original))
 		es.api.BanUser(msg.Chatter.UserID, action.Reason)
 	case checker.Timeout:
-		es.log.Warn("Spam is found", slog.String("username", msg.Chatter.Username), slog.String("text", msg.Message.Text.Original), slog.Int("duration", int(action.Duration.Seconds())))
+		es.log.Warn("Timeout user", slog.String("username", msg.Chatter.Username), slog.String("text", msg.Message.Text.Original), slog.Int("duration", int(action.Duration.Seconds())))
 		if es.cfg.Spam.SettingsDefault.Enabled {
 			es.api.TimeoutUser(msg.Chatter.UserID, int(action.Duration.Seconds()), action.Reason)
 		}
 	case checker.Delete:
-		es.log.Warn("Muteword in phrase", slog.String("username", msg.Chatter.Username), slog.String("text", msg.Message.Text.Original))
+		es.log.Warn("Delete message", slog.String("username", msg.Chatter.Username), slog.String("text", msg.Message.Text.Original))
 		if err := es.api.DeleteChatMessage(msg.Message.ID); err != nil {
 			es.log.Error("Failed to delete message on chat", err)
 		}

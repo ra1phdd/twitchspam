@@ -16,7 +16,7 @@ func (t *ListTimers) Execute(cfg *config.Config, _ *ports.MessageText) *ports.An
 }
 
 func (t *ListTimers) handleTimersList(cfg *config.Config) *ports.AnswerType {
-	var timers map[string]*config.Timers
+	timers := make(map[string]*config.Timers)
 	for _, cmd := range cfg.Commands {
 		if cmd.Timer == nil {
 			continue
@@ -26,7 +26,7 @@ func (t *ListTimers) handleTimersList(cfg *config.Config) *ports.AnswerType {
 
 	return buildList(timers, "таймеры", "таймеры не найдены!",
 		func(key string, timer *config.Timers) string {
-			options := make([]string, 0, 2)
+			options := make([]string, 2)
 			options[0] = map[bool]string{true: "-a", false: "-noa"}[timer.Options.IsAnnounce]
 			options[1] = map[bool]string{true: "-always", false: "-online"}[timer.Options.IsAlways]
 

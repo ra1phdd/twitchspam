@@ -8,25 +8,6 @@ import (
 	"twitchspam/internal/app/ports"
 )
 
-var (
-	aliasDenied = &ports.AnswerType{
-		Text:    []string{"нельзя добавить алиас на эту команду!"},
-		IsReply: true,
-	}
-	incorrectSyntax = &ports.AnswerType{
-		Text:    []string{"некорректный синтаксис!"},
-		IsReply: true,
-	}
-	notFoundAliasGroup = &ports.AnswerType{
-		Text:    []string{"группа алиасов не найдена!"},
-		IsReply: true,
-	}
-	existsAliasGroup = &ports.AnswerType{
-		Text:    []string{"группа алиасов уже существует!"},
-		IsReply: true,
-	}
-)
-
 // Одиночные алиасы
 
 type ListAlias struct {
@@ -125,7 +106,7 @@ func (a *DelAlias) Execute(cfg *config.Config, text *ports.MessageText) *ports.A
 func (a *DelAlias) handleAliasesDel(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
 	matches := a.re.FindStringSubmatch(text.Original) // !am al del <алиасы через запятую>
 	if len(matches) != 2 {
-		return NonParametr
+		return nonParametr
 	}
 
 	var removed, notFound []string
@@ -222,7 +203,7 @@ func (a *AddAliasGroup) handleAlgAdd(cfg *config.Config, text *ports.MessageText
 	}
 
 	a.template.Aliases().Update(cfg.Aliases, cfg.AliasGroups)
-	return Success
+	return success
 }
 
 type DelAliasGroup struct {
@@ -249,7 +230,7 @@ func (a *DelAliasGroup) handleAlgDel(cfg *config.Config, text *ports.MessageText
 
 	if len(matches) < 3 || strings.TrimSpace(matches[2]) == "" {
 		delete(cfg.AliasGroups, groupName)
-		return Success
+		return success
 	}
 
 	var removed, notFound []string
@@ -288,5 +269,6 @@ func (a *OnOffAliasGroup) handleAlgOnOff(cfg *config.Config, text *ports.Message
 	}
 
 	cfg.AliasGroups[groupName].Enabled = state == "on"
-	return Success
+	a.template.Aliases().Update(cfg.Aliases, cfg.AliasGroups)
+	return success
 }

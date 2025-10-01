@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"twitchspam/internal/app/domain/template"
 	"twitchspam/internal/app/infrastructure/config"
 	"twitchspam/internal/app/ports"
 	"twitchspam/pkg/logger"
@@ -51,7 +52,7 @@ func (u *User) FindMessages(msg *ports.ChatMessage) *ports.AnswerType {
 }
 
 func (u *User) handleStats(msg *ports.ChatMessage) *ports.AnswerType {
-	if !strings.HasPrefix(msg.Message.Text.Original, "!stats") {
+	if !strings.HasPrefix(msg.Message.Text.Lower(), "!stats") {
 		return nil
 	}
 
@@ -86,7 +87,7 @@ func (u *User) handleCommands(msg *ports.ChatMessage) *ports.AnswerType {
 		replyUsername = msg.Reply.ParentChatter.Username
 	}
 
-	words := msg.Message.Text.WordsLower()
+	words := msg.Message.Text.Words()
 	for _, word := range words {
 		word = strings.TrimSpace(word)
 		if word == "" {
@@ -94,16 +95,25 @@ func (u *User) handleCommands(msg *ports.ChatMessage) *ports.AnswerType {
 		}
 
 		if strings.HasPrefix(word, "@") && replyUsername == "" {
-			replyUsername = strings.TrimPrefix(word, "@")
+			replyUsername = strings.TrimSuffix(strings.TrimPrefix(word, "@"), ",")
 		}
 
 		cfg := u.manager.Get()
-		if link, ok := cfg.Commands[word]; ok {
-			if !u.allowUser(msg.Chatter.Username) || !u.allowCommand(word, link.Limiter) {
+		if cmd, ok := cfg.Commands[strings.ToLower(word)]; ok {
+			if cmd.Options.IsPrivate && !(msg.Chatter.IsBroadcaster || msg.Chatter.IsMod) {
 				return nil
 			}
 
-			text = u.template.Placeholders().ReplaceAll(link.Text, words)
+			if (cmd.Options.Mode == template.OnlineCommandMode && !u.stream.IsLive()) ||
+				(cmd.Options.Mode == template.OfflineCommandMode && u.stream.IsLive()) {
+				return nil
+			}
+
+			if !u.allowUser(msg.Chatter.Username) || !u.allowCommand(word, cmd.Limiter) {
+				return nil
+			}
+
+			text = u.template.Placeholders().ReplaceAll(cmd.Text, words)
 			if text == "" {
 				return nil
 			}
@@ -125,8 +135,8 @@ func (u *User) handleCommands(msg *ports.ChatMessage) *ports.AnswerType {
 	}
 }
 
-func (u *User) ensureUserLimiter(username string, limiter *config.Limiter) {
-	if limiter == nil {
+func (u *User) ensureUserLimiter(username string, limiter config.Limiter) {
+	if limiter.Requests == 0 || limiter.Per == 0 {
 		return
 	}
 
@@ -140,8 +150,13 @@ func (u *User) ensureUserLimiter(username string, limiter *config.Limiter) {
 func (u *User) allowUser(username string) bool {
 	u.muLimiter.Lock()
 	defer u.muLimiter.Unlock()
+
 	limiter, ok := u.usersLimiter[username]
-	return ok && limiter.Allow()
+	if !ok {
+		return false
+	}
+
+	return limiter.Allow()
 }
 
 func (u *User) allowCommand(command string, limiter *config.Limiter) bool {
