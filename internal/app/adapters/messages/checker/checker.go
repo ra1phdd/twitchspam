@@ -201,7 +201,7 @@ func (c *Checker) checkSpam(msg *ports.ChatMessage) *ports.CheckerAction {
 		settings = c.cfg.Spam.SettingsVIP
 	}
 
-	if !settings.Enabled {
+	if !settings.Enabled || !c.template.SpamPause().CanProcess() {
 		return nil
 	}
 
@@ -314,15 +314,11 @@ func (c *Checker) handleEmotes(msg *ports.ChatMessage, countSpam int) *ports.Che
 
 func (c *Checker) handleEmotesExceptions(msg *ports.ChatMessage, countSpam int) *ports.CheckerAction {
 	for word, ex := range c.cfg.Spam.SettingsEmotes.Exceptions {
-		if !ex.Enabled {
-			continue
-		}
-
 		if !c.matchExceptRule(msg, word, ex.Regexp, ex.Options) {
 			continue
 		}
 
-		if countSpam < ex.MessageLimit {
+		if !ex.Enabled || countSpam < ex.MessageLimit {
 			return &ports.CheckerAction{Type: None}
 		}
 
@@ -341,15 +337,11 @@ func (c *Checker) handleEmotesExceptions(msg *ports.ChatMessage, countSpam int) 
 
 func (c *Checker) handleExceptions(msg *ports.ChatMessage, countSpam int) *ports.CheckerAction {
 	for word, ex := range c.cfg.Spam.Exceptions {
-		if !ex.Enabled {
-			continue
-		}
-
 		if !c.matchExceptRule(msg, word, ex.Regexp, ex.Options) {
 			continue
 		}
 
-		if countSpam < ex.MessageLimit {
+		if !ex.Enabled || countSpam < ex.MessageLimit {
 			return &ports.CheckerAction{Type: None}
 		}
 

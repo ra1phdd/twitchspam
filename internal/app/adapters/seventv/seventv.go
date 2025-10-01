@@ -81,7 +81,7 @@ func (sv *SevenTV) EmoteStats(words []string) (count int, onlyEmotes bool) {
 	}
 
 	total := emoteChars + textChars
-	if total > 0 && float64(count)/float64(total) >= sv.cfg.Spam.SettingsEmotes.EmoteThreshold {
+	if total > 0 && float64(emoteChars)/float64(total) >= sv.cfg.Spam.SettingsEmotes.EmoteThreshold {
 		onlyEmotes = true
 	}
 

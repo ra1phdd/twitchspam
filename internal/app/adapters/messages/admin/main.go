@@ -45,7 +45,7 @@ func (o *OnOff) Execute(cfg *config.Config, _ *ports.MessageText) *ports.AnswerT
 
 func (o *OnOff) handleOnOff(cfg *config.Config, enabled bool) *ports.AnswerType {
 	cfg.Enabled = enabled
-	return Success
+	return success
 }
 
 type Game struct {
@@ -60,14 +60,11 @@ func (g *Game) Execute(_ *config.Config, text *ports.MessageText) *ports.AnswerT
 func (g *Game) handleGame(text *ports.MessageText) *ports.AnswerType {
 	matches := g.re.FindStringSubmatch(text.Lower()) // !am game <игра>
 	if len(matches) != 2 {
-		return NonParametr
+		return nonParametr
 	}
 
 	if !g.stream.IsLive() {
-		return &ports.AnswerType{
-			Text:    []string{"стрим выключен!"},
-			IsReply: true,
-		}
+		return streamOff
 	}
 
 	if g.stream.Category() != "Games + Demos" {
@@ -79,7 +76,7 @@ func (g *Game) handleGame(text *ports.MessageText) *ports.AnswerType {
 
 	gameName := strings.TrimSpace(matches[1])
 	g.stream.SetCategory(gameName)
-	return Success
+	return success
 }
 
 type Status struct{}
@@ -114,7 +111,7 @@ func (r *Reset) Execute(cfg *config.Config, _ *ports.MessageText) *ports.AnswerT
 
 func (r *Reset) handleReset(cfg *config.Config) *ports.AnswerType {
 	cfg.Spam = r.manager.GetDefault().Spam // !am reset
-	return Success
+	return success
 }
 
 type Say struct {
@@ -128,7 +125,7 @@ func (s *Say) Execute(_ *config.Config, text *ports.MessageText) *ports.AnswerTy
 func (s *Say) handleSay(text *ports.MessageText) *ports.AnswerType {
 	matches := s.re.FindStringSubmatch(text.Lower()) // !am say <текст>
 	if len(matches) != 2 {
-		return NonParametr
+		return nonParametr
 	}
 
 	return &ports.AnswerType{
@@ -148,15 +145,12 @@ func (s *Spam) Execute(_ *config.Config, text *ports.MessageText) *ports.AnswerT
 func (s *Spam) handleSpam(text *ports.MessageText) *ports.AnswerType {
 	matches := s.re.FindStringSubmatch(text.Lower()) // !am spam <кол-во> <текст>
 	if len(matches) != 3 {
-		return NonParametr
+		return nonParametr
 	}
 
 	count, err := strconv.Atoi(strings.TrimSpace(matches[1]))
 	if err != nil || count <= 0 {
-		return &ports.AnswerType{
-			Text:    []string{"кол-во повторов не указано или указано неверно!"},
-			IsReply: true,
-		}
+		return invalidValueRepeats
 	}
 
 	if count > 100 {

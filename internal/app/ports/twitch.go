@@ -117,52 +117,7 @@ func (m *MessageText) Words() []string {
 		return *m.words
 	}
 
-	var (
-		words     []string
-		buf       strings.Builder
-		inMention bool
-	)
-
-	for _, r := range m.Original {
-		if r == '@' && !inMention {
-			inMention = true
-			if buf.Len() > 0 {
-				words = append(words, strings.TrimSpace(buf.String()))
-				buf.Reset()
-			}
-			buf.WriteRune(r)
-			continue
-		}
-
-		if inMention {
-			// пока в упоминании, останавливаем по пробелу или запятой
-			if r == ' ' || r == ',' {
-				words = append(words, buf.String())
-				buf.Reset()
-				inMention = false
-				if r != ' ' {
-					continue
-				}
-			} else {
-				buf.WriteRune(r)
-				continue
-			}
-		} else {
-			if r == ' ' {
-				if buf.Len() > 0 {
-					words = append(words, strings.TrimSpace(buf.String()))
-					buf.Reset()
-				}
-				continue
-			}
-			buf.WriteRune(r)
-		}
-	}
-
-	if buf.Len() > 0 {
-		words = append(words, buf.String())
-	}
-
+	words := strings.Fields(m.Original)
 	m.words = &words
 	return words
 }
@@ -195,17 +150,4 @@ func (m *MessageText) WordsLowerNorm() []string {
 		m.wordsLowerNorm = &wln
 	}
 	return *m.wordsLowerNorm
-}
-
-func (m *MessageText) Tail(n int) string {
-	words := m.Words()
-	if n >= len(words) {
-		return ""
-	}
-
-	idx := strings.Index(m.Original, words[n])
-	if idx == -1 {
-		return ""
-	}
-	return strings.TrimSpace(m.Original[idx:])
 }

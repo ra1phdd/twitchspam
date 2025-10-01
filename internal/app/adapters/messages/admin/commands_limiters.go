@@ -23,27 +23,21 @@ func (c *AddCommandLimiter) handleCommandLimiterAdd(cfg *config.Config, text *po
 	// или !am cmd lim add <кол-во запросов> <интервал в секундах> <команды через запятую>
 	matches := c.re.FindStringSubmatch(text.Original)
 	if len(matches) != 4 {
-		return NonParametr
+		return nonParametr
 	}
 
 	requests, err := strconv.Atoi(strings.TrimSpace(matches[1]))
-	if err != nil || requests <= 0 {
-		return &ports.AnswerType{
-			Text:    []string{"не указано корректное количество запросов!"},
-			IsReply: true,
-		}
+	if err != nil || requests < 1 || requests > 15 {
+		return invalidValueRequest
 	}
 
 	seconds, err := strconv.Atoi(strings.TrimSpace(matches[2]))
-	if err != nil || seconds <= 0 {
-		return &ports.AnswerType{
-			Text:    []string{"не указан корректный интервал!"},
-			IsReply: true,
-		}
+	if err != nil || seconds < 1 || seconds > 3600 {
+		return invalidValueInterval
 	}
 
 	var added, notFound []string
-	for _, key := range strings.Split(strings.TrimSpace(matches[3]), ",") {
+	for _, key := range strings.Split(strings.ToLower(strings.TrimSpace(matches[3])), ",") {
 		key = strings.TrimSpace(key)
 		if key == "" {
 			continue
@@ -67,7 +61,7 @@ func (c *AddCommandLimiter) handleCommandLimiterAdd(cfg *config.Config, text *po
 		added = append(added, key)
 	}
 
-	return buildResponse(added, "добавлены", notFound, "не найдены", "команды не указаны")
+	return buildResponse("команды не указаны", RespArg{Items: added, Name: "добавлены"}, RespArg{Items: notFound, Name: "не найдены"})
 }
 
 type SetCommandLimiter struct {
@@ -81,27 +75,21 @@ func (c *SetCommandLimiter) Execute(cfg *config.Config, text *ports.MessageText)
 func (c *SetCommandLimiter) handleCommandLimiterSet(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
 	matches := c.re.FindStringSubmatch(text.Original) // !am cmd lim set <кол-во запросов> <интервал в секундах> <команды через запятую>
 	if len(matches) != 4 {
-		return NonParametr
+		return nonParametr
 	}
 
 	requests, err := strconv.Atoi(strings.TrimSpace(matches[1]))
-	if err != nil || requests <= 0 {
-		return &ports.AnswerType{
-			Text:    []string{"не указано корректное количество запросов!"},
-			IsReply: true,
-		}
+	if err != nil || requests <= 0 || requests > 15 {
+		return invalidValueRequest
 	}
 
 	seconds, err := strconv.Atoi(strings.TrimSpace(matches[2]))
-	if err != nil || seconds <= 0 {
-		return &ports.AnswerType{
-			Text:    []string{"не указан корректный интервал!"},
-			IsReply: true,
-		}
+	if err != nil || seconds <= 0 || seconds > 3600 {
+		return invalidValueInterval
 	}
 
 	var edited, notFound []string
-	for _, key := range strings.Split(strings.TrimSpace(matches[3]), ",") {
+	for _, key := range strings.Split(strings.ToLower(strings.TrimSpace(matches[3])), ",") {
 		key = strings.TrimSpace(key)
 		if key == "" {
 			continue
@@ -124,7 +112,7 @@ func (c *SetCommandLimiter) handleCommandLimiterSet(cfg *config.Config, text *po
 		edited = append(edited, key)
 	}
 
-	return buildResponse(edited, "изменены", notFound, "не найдены", "лимитеры не указаны")
+	return buildResponse("команды не указаны", RespArg{Items: edited, Name: "изменены"}, RespArg{Items: notFound, Name: "не найдены"})
 }
 
 type DelCommandLimiter struct {
@@ -138,11 +126,11 @@ func (c *DelCommandLimiter) Execute(cfg *config.Config, text *ports.MessageText)
 func (c *DelCommandLimiter) handleCommandLimiterDel(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
 	matches := c.re.FindStringSubmatch(text.Original) // !am cmd lim del <команды через запятую>
 	if len(matches) != 2 {
-		return NonParametr
+		return nonParametr
 	}
 
 	var removed, notFound []string
-	for _, key := range strings.Split(strings.TrimSpace(matches[1]), ",") {
+	for _, key := range strings.Split(strings.ToLower(strings.TrimSpace(matches[1])), ",") {
 		key = strings.TrimSpace(key)
 		if key == "" {
 			continue
@@ -161,5 +149,5 @@ func (c *DelCommandLimiter) handleCommandLimiterDel(cfg *config.Config, text *po
 		removed = append(removed, key)
 	}
 
-	return buildResponse(removed, "удалены", notFound, "не найдены", "лимитеры не указаны")
+	return buildResponse("команды не указаны", RespArg{Items: removed, Name: "удалены"}, RespArg{Items: notFound, Name: "не найдены"})
 }

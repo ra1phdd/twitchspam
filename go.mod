@@ -14,6 +14,7 @@ require (
 )
 
 require (
+	github.com/fsnotify/fsnotify v1.9.0 // indirect
 	github.com/go-ole/go-ole v1.2.6 // indirect
 	github.com/mfonda/simhash v0.0.0-20151007195837-79f94a1100d6 // indirect
 	github.com/samber/lo v1.51.0 // indirect

@@ -16,13 +16,21 @@ func (t *ListTimers) Execute(cfg *config.Config, _ *ports.MessageText) *ports.An
 }
 
 func (t *ListTimers) handleTimersList(cfg *config.Config) *ports.AnswerType {
-	return buildList(cfg.Commands, "таймеры", "таймеры не найдены!",
-		func(key string, cmd *config.Commands) string {
-			options := make([]string, 0, 2)
-			options[0] = map[bool]string{true: "-a", false: "-noa"}[cmd.Timer.Options.IsAnnounce]
-			options[1] = map[bool]string{true: "-always", false: "-online"}[cmd.Timer.Options.IsAlways]
+	timers := make(map[string]*config.Timers)
+	for _, cmd := range cfg.Commands {
+		if cmd.Timer == nil {
+			continue
+		}
+		timers[cmd.Text] = cmd.Timer
+	}
+
+	return buildList(timers, "таймеры", "таймеры не найдены!",
+		func(key string, timer *config.Timers) string {
+			options := make([]string, 2)
+			options[0] = map[bool]string{true: "-a", false: "-noa"}[timer.Options.IsAnnounce]
+			options[1] = map[bool]string{true: "-always", false: "-online"}[timer.Options.IsAlways]
 
 			return fmt.Sprintf("- %s (включен: %v, интервал: %s, кол-во сообщений: %d, опции: %s)",
-				key, cmd.Timer.Enabled, cmd.Timer.Interval, cmd.Timer.Count, strings.Join(options, " "))
+				key, timer.Enabled, timer.Interval, timer.Count, strings.Join(options, " "))
 		}, t.fs)
 }

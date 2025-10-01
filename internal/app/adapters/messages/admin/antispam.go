@@ -4,9 +4,36 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"time"
 	"twitchspam/internal/app/infrastructure/config"
 	"twitchspam/internal/app/ports"
 )
+
+type PauseAntispam struct {
+	re       *regexp.Regexp
+	template ports.TemplatePort
+}
+
+func (a *PauseAntispam) Execute(_ *config.Config, text *ports.MessageText) *ports.AnswerType {
+	return a.handleAntiSpamPause(text)
+}
+
+func (a *PauseAntispam) handleAntiSpamPause(text *ports.MessageText) *ports.AnswerType {
+	matches := a.re.FindStringSubmatch(text.Original) // !am as <значение>
+	if len(matches) != 2 {
+		return nonParametr
+	}
+
+	if val, ok := a.template.Parser().ParseIntArg(strings.TrimSpace(matches[1]), 1, 3600); ok {
+		a.template.SpamPause().Pause(time.Duration(val) * time.Second)
+		return success
+	}
+
+	return &ports.AnswerType{
+		Text:    []string{"значение паузы должно быть от 1 до 3600!"},
+		IsReply: true,
+	}
+}
 
 type OnOffAntispam struct {
 	enabled  bool
@@ -26,10 +53,10 @@ func (a *OnOffAntispam) handleAntiSpamOnOff(cfg *config.Config) *ports.AnswerTyp
 
 	if target, ok := targetMap[a.typeSpam]; ok {
 		*target = a.enabled
-		return Success
+		return success
 	}
 
-	return NotFoundCmd
+	return notFoundCmd
 }
 
 type InfoAntispam struct {
@@ -118,7 +145,7 @@ func (a *InfoAntispam) handleAntiSpamInfo(cfg *config.Config) *ports.AnswerType 
 
 	key, err := a.fs.UploadToHaste(msg)
 	if err != nil {
-		return UnknownError
+		return unknownError
 	}
 
 	return &ports.AnswerType{
@@ -137,7 +164,7 @@ func (a *ModeAntispam) Execute(cfg *config.Config, _ *ports.MessageText) *ports.
 
 func (a *ModeAntispam) handleAntispamMode(cfg *config.Config, mode string) *ports.AnswerType {
 	cfg.Spam.Mode = mode
-	return Success
+	return success
 }
 
 type SimAntispam struct {
@@ -158,12 +185,12 @@ func (a *SimAntispam) handleSim(cfg *config.Config, text *ports.MessageText, typ
 
 	matches := a.re.FindStringSubmatch(text.Original) // !am sim <значение> или !am vip sim <значение>
 	if len(matches) != 2 {
-		return NonParametr
+		return nonParametr
 	}
 
 	if val, ok := a.template.Parser().ParseFloatArg(strings.TrimSpace(matches[1]), 0.1, 1); ok {
 		*target = val
-		return Success
+		return success
 	}
 
 	return &ports.AnswerType{
@@ -193,18 +220,15 @@ func (a *MsgAntispam) handleMsg(cfg *config.Config, text *ports.MessageText) *po
 
 	matches := a.re.FindStringSubmatch(text.Original) // !am msg <значение> или !am vip/emote msg <значение>
 	if len(matches) != 2 {
-		return NonParametr
+		return nonParametr
 	}
 
 	if val, ok := a.template.Parser().ParseIntArg(strings.TrimSpace(matches[1]), 2, 15); ok {
 		*target = val
-		return Success
+		return success
 	}
 
-	return &ports.AnswerType{
-		Text:    []string{"значение лимита сообщений должно быть от 2 до 15!"},
-		IsReply: true,
-	}
+	return invalidMessageLimitValue
 }
 
 type PunishmentsAntispam struct {
@@ -228,7 +252,7 @@ func (a *PunishmentsAntispam) handlePunishments(cfg *config.Config, text *ports.
 
 	matches := a.re.FindStringSubmatch(text.Original) // !am p <наказания через запятую> или !am vip/emote p <наказания через запятую>
 	if len(matches) != 2 {
-		return NonParametr
+		return nonParametr
 	}
 
 	var punishments []config.Punishment
@@ -245,10 +269,7 @@ func (a *PunishmentsAntispam) handlePunishments(cfg *config.Config, text *ports.
 		allowInherit := a.typeSpam != "default"
 		p, err := a.template.Punishment().Parse(str, allowInherit)
 		if err != nil {
-			return &ports.AnswerType{
-				Text:    []string{fmt.Sprintf("не удалось распарсить наказание (%s)!", str)},
-				IsReply: true,
-			}
+			return errorPunishmentParse
 		}
 
 		if p.Action == "inherit" {
@@ -257,20 +278,17 @@ func (a *PunishmentsAntispam) handlePunishments(cfg *config.Config, text *ports.
 				break
 			}
 
-			return &ports.AnswerType{
-				Text:    []string{"невозможно скопировать наказания!"},
-				IsReply: true,
-			}
+			return errorPunishmentCopy
 		}
 		punishments = append(punishments, p)
 	}
 
 	if len(punishments) == 0 {
-		return NonParametr
+		return nonParametr
 	}
 
 	*target = punishments
-	return Success
+	return success
 }
 
 type ResetPunishmentsAntispam struct {
@@ -294,12 +312,12 @@ func (a *ResetPunishmentsAntispam) handleDurationResetPunishments(cfg *config.Co
 
 	matches := a.re.FindStringSubmatch(text.Original) // !am rp <значение> или !am vip/emote rp <значение>
 	if len(matches) != 2 {
-		return NonParametr
+		return nonParametr
 	}
 
 	if val, ok := a.template.Parser().ParseIntArg(strings.TrimSpace(matches[1]), 1, 86400); ok {
 		*target = val
-		return Success
+		return success
 	}
 
 	return &ports.AnswerType{
@@ -325,19 +343,19 @@ func (a *MaxLenAntispam) handleMaxLen(cfg *config.Config, text *ports.MessageTex
 		errMsg string
 	}{
 		"vip":     {&cfg.Spam.SettingsVIP.MaxWordLength, 500, "значение максимальной длины слова должно быть от 0 до 500!"},
-		"emote":   {&cfg.Spam.SettingsEmotes.MaxEmotesLength, 30, "значение максимального количества эмоутов должно быть от 0 до 30!"},
+		"emote":   {&cfg.Spam.SettingsEmotes.MaxEmotesLength, 50, "значение максимального количества эмоутов должно быть от 0 до 30!"},
 		"default": {&cfg.Spam.SettingsDefault.MaxWordLength, 500, "значение максимальной длины слова должно быть от 0 до 500!"},
 	}
 
 	if param, ok := params[a.typeSpam]; ok {
 		matches := a.re.FindStringSubmatch(text.Original) // !am mlen <значение> или !am vip/emote mlen <значение>
 		if len(matches) != 2 {
-			return NonParametr
+			return nonParametr
 		}
 
 		if val, ok := a.template.Parser().ParseIntArg(strings.TrimSpace(matches[1]), 0, param.max); ok {
 			*param.target = val
-			return Success
+			return success
 		}
 
 		return &ports.AnswerType{
@@ -346,7 +364,7 @@ func (a *MaxLenAntispam) handleMaxLen(cfg *config.Config, text *ports.MessageTex
 		}
 	}
 
-	return NotFoundCmd
+	return notFoundCmd
 }
 
 type MaxPunishmentAntispam struct {
@@ -370,15 +388,12 @@ func (a *MaxPunishmentAntispam) handleMaxPunishment(cfg *config.Config, text *po
 
 	matches := a.re.FindStringSubmatch(text.Original) // !am mp <наказание> или !am vip/emote mp <наказание>
 	if len(matches) != 2 {
-		return NonParametr
+		return nonParametr
 	}
 
 	p, err := a.template.Punishment().Parse(strings.TrimSpace(matches[1]), true)
 	if err != nil {
-		return &ports.AnswerType{
-			Text:    []string{fmt.Sprintf("не удалось распарсить наказание (%s)!", matches[1])},
-			IsReply: true,
-		}
+		return errorPunishmentParse
 	}
 
 	if p.Action == "inherit" {
@@ -393,7 +408,7 @@ func (a *MaxPunishmentAntispam) handleMaxPunishment(cfg *config.Config, text *po
 	}
 
 	*target = p
-	return Success
+	return success
 }
 
 type MinGapAntispam struct {
@@ -414,12 +429,12 @@ func (a *MinGapAntispam) handleMinGap(cfg *config.Config, text *ports.MessageTex
 
 	matches := a.re.FindStringSubmatch(text.Original) // !am mg <значение> или !am vip mg <значение>
 	if len(matches) != 2 {
-		return NonParametr
+		return nonParametr
 	}
 
 	if val, ok := a.template.Parser().ParseIntArg(strings.TrimSpace(matches[1]), 0, 15); ok {
 		*target = val
-		return nil
+		return success
 	}
 
 	return &ports.AnswerType{
@@ -440,12 +455,12 @@ func (a *TimeAntispam) Execute(cfg *config.Config, text *ports.MessageText) *por
 func (a *TimeAntispam) handleTime(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
 	matches := a.re.FindStringSubmatch(text.Original) // !am time <значение>
 	if len(matches) != 2 {
-		return NonParametr
+		return nonParametr
 	}
 
 	if val, ok := a.template.Parser().ParseIntArg(strings.TrimSpace(matches[1]), 1, 300); ok {
 		cfg.Spam.CheckWindowSeconds = val
-		return nil
+		return success
 	}
 
 	return &ports.AnswerType{
@@ -465,12 +480,12 @@ func (a *AddAntispam) Execute(cfg *config.Config, text *ports.MessageText) *port
 func (a *AddAntispam) handleAdd(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
 	matches := a.re.FindStringSubmatch(text.Original) // !am add <пользователи через запятую>
 	if len(matches) != 2 {
-		return NonParametr
+		return nonParametr
 	}
 
 	var added, alreadyExists []string
 	for _, user := range strings.Split(strings.TrimSpace(matches[1]), ",") {
-		user = strings.TrimSpace(user)
+		user = strings.TrimPrefix(strings.TrimSpace(user), "@")
 		if user == "" {
 			continue
 		}
@@ -483,7 +498,7 @@ func (a *AddAntispam) handleAdd(cfg *config.Config, text *ports.MessageText) *po
 		}
 	}
 
-	return buildResponse(added, "добавлены в список", alreadyExists, "уже есть в списке", "пользователи не указаны")
+	return buildResponse("пользователи не указаны", RespArg{Items: added, Name: "добавлены в список"}, RespArg{Items: alreadyExists, Name: "уже есть в списке"})
 }
 
 type DelAntispam struct {
@@ -497,12 +512,12 @@ func (a *DelAntispam) Execute(cfg *config.Config, text *ports.MessageText) *port
 func (a *DelAntispam) handleDel(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
 	matches := a.re.FindStringSubmatch(text.Original) // !am del <пользователи через запятую>
 	if len(matches) != 2 {
-		return NonParametr
+		return nonParametr
 	}
 
 	var removed, notFound []string
 	for _, user := range strings.Split(strings.TrimSpace(matches[1]), ",") {
-		user = strings.TrimSpace(user)
+		user = strings.TrimPrefix(strings.TrimSpace(user), "@")
 		if user == "" {
 			continue
 		}
@@ -515,5 +530,5 @@ func (a *DelAntispam) handleDel(cfg *config.Config, text *ports.MessageText) *po
 		}
 	}
 
-	return buildResponse(removed, "удалены из списка", notFound, "не найдены", "пользователи не указаны")
+	return buildResponse("пользователи не указаны", RespArg{Items: removed, Name: "удалены"}, RespArg{Items: notFound, Name: "не найдены"})
 }

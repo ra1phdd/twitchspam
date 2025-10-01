@@ -1,17 +1,19 @@
 package ports
 
 import (
+	"time"
 	"twitchspam/internal/app/infrastructure/config"
 )
 
 type TemplatePort interface {
+	CleanMessage(text string) string
 	Aliases() AliasesPort
 	Placeholders() PlaceholdersPort
 	Banwords() BanwordsPort
-	Regex() RegexPort
 	Options() OptionsPort
 	Parser() ParserPort
 	Punishment() PunishmentPort
+	SpamPause() SpamPausePort
 }
 
 type AliasesPort interface {
@@ -27,17 +29,17 @@ type BanwordsPort interface {
 	CheckMessage(textLower string, wordsOriginal []string) bool
 }
 
-type RegexPort interface {
-	MatchPhrase(words []string, phrase string) bool
-}
-
 type OptionsPort interface {
-	ParseAll(words *[]string, opts map[string]struct{}) map[string]bool
-	Parse(words *[]string, opt string) *bool
-	MergeMword(dst config.MwordOptions, src map[string]bool) config.MwordOptions
+	ParseAll(input string, opts map[string]struct{}) (string, map[string]bool)
 	MergeExcept(dst config.ExceptOptions, src map[string]bool, isDefault bool) config.ExceptOptions
+	MergeEmoteExcept(dst config.ExceptOptions, src map[string]bool, isDefault bool) config.ExceptOptions
+	MergeMword(dst config.MwordOptions, src map[string]bool) config.MwordOptions
+	MergeTimer(dst config.TimerOptions, src map[string]bool) config.TimerOptions
+	MergeCommand(dst config.CommandOptions, src map[string]bool) config.CommandOptions
 	ExceptToString(opts config.ExceptOptions) string
 	MwordToString(opts config.MwordOptions) string
+	TimerToString(opts config.TimerOptions) string
+	CommandToString(opts config.CommandOptions) string
 }
 
 type ParserPort interface {
@@ -49,4 +51,9 @@ type PunishmentPort interface {
 	Parse(punishment string, allowInherit bool) (config.Punishment, error)
 	FormatAll(punishments []config.Punishment) []string
 	Format(punishment config.Punishment) string
+}
+
+type SpamPausePort interface {
+	Pause(duration time.Duration)
+	CanProcess() bool
 }

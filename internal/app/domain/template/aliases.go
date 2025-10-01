@@ -27,6 +27,10 @@ func (at *AliasesTemplate) Update(newAliases map[string]string, newAliasGroups m
 	}
 
 	for _, alg := range newAliasGroups {
+		if !alg.Enabled {
+			continue
+		}
+
 		for alias := range alg.Aliases {
 			als[alias] = alg.Original
 		}

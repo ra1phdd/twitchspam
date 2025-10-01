@@ -17,7 +17,7 @@ func (a *OnOffAutomod) Execute(cfg *config.Config, _ *ports.MessageText) *ports.
 
 func (a *OnOffAutomod) handleOnOffAutomod(cfg *config.Config) *ports.AnswerType {
 	cfg.Automod.Enabled = a.enabled // !am mod on/off
-	return Success
+	return success
 }
 
 type DelayAutomod struct {
@@ -32,12 +32,12 @@ func (a *DelayAutomod) Execute(cfg *config.Config, text *ports.MessageText) *por
 func (a *DelayAutomod) handleDelayAutomod(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
 	matches := a.re.FindStringSubmatch(text.Original) // !am mod delay <число>
 	if len(matches) != 2 {
-		return NonParametr
+		return nonParametr
 	}
 
 	if val, ok := a.template.Parser().ParseIntArg(strings.TrimSpace(matches[1]), 0, 10); ok {
 		cfg.Automod.Delay = val
-		return Success
+		return success
 	}
 
 	return &ports.AnswerType{

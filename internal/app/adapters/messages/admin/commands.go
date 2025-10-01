@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"twitchspam/internal/app/domain/template"
 	"twitchspam/internal/app/infrastructure/config"
 	"twitchspam/internal/app/ports"
 )
@@ -24,7 +25,8 @@ func (c *ListCommand) handleCommandList(cfg *config.Config) *ports.AnswerType {
 }
 
 type AddCommand struct {
-	re *regexp.Regexp
+	re       *regexp.Regexp
+	template ports.TemplatePort
 }
 
 func (c *AddCommand) Execute(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
@@ -32,24 +34,64 @@ func (c *AddCommand) Execute(cfg *config.Config, text *ports.MessageText) *ports
 }
 
 func (c *AddCommand) handleCommandAdd(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
-	matches := c.re.FindStringSubmatch(text.Original) // !am cmd add <команда> <текст>
+	textWithoutOpts, opts := c.template.Options().ParseAll(text.Original, template.CommandOptions)
+
+	matches := c.re.FindStringSubmatch(textWithoutOpts) // !am cmd add <команда> <текст>
 	if len(matches) != 3 {
-		return NonParametr
+		return nonParametr
 	}
 
-	cmd := strings.TrimSpace(matches[1])
+	cmd := strings.ToLower(strings.TrimSpace(matches[1]))
 	if !strings.HasPrefix(cmd, "!") {
 		cmd = "!" + cmd
 	}
 
 	cfg.Commands[cmd] = &config.Commands{
-		Text: strings.TrimSpace(matches[2]),
+		Text:    strings.TrimSpace(matches[2]),
+		Options: c.template.Options().MergeCommand(config.CommandOptions{}, opts),
 	}
 
-	return &ports.AnswerType{
-		Text:    []string{"успешно!"},
-		IsReply: true,
+	return success
+}
+
+type SetCommand struct {
+	re       *regexp.Regexp
+	template ports.TemplatePort
+}
+
+func (c *SetCommand) Execute(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+	return c.handleCommandSet(cfg, text)
+}
+
+func (c *SetCommand) handleCommandSet(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+	textWithoutOpts, opts := c.template.Options().ParseAll(text.Original, template.CommandOptions)
+
+	matches := c.re.FindStringSubmatch(textWithoutOpts) // !am cmd set <команды через запятую>
+	if len(matches) != 2 {
+		return nonParametr
 	}
+
+	var edited, notFound []string
+	for _, word := range strings.Split(strings.TrimSpace(matches[1]), ",") {
+		word = strings.ToLower(strings.TrimSpace(word))
+		if word == "" {
+			continue
+		}
+
+		if !strings.HasPrefix(word, "!") {
+			word = "!" + word
+		}
+
+		if _, ok := cfg.Commands[word]; !ok {
+			notFound = append(notFound, word)
+			continue
+		}
+
+		cfg.Commands[word].Options = c.template.Options().MergeCommand(cfg.Commands[word].Options, opts)
+		edited = append(edited, word)
+	}
+
+	return buildResponse("команды не указаны", RespArg{Items: edited, Name: "изменены"}, RespArg{Items: notFound, Name: "не найдены"})
 }
 
 type DelCommand struct {
@@ -63,12 +105,12 @@ func (c *DelCommand) Execute(cfg *config.Config, text *ports.MessageText) *ports
 func (c *DelCommand) handleCommandDel(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
 	matches := c.re.FindStringSubmatch(text.Original) // !am cmd del <команды через запятую>
 	if len(matches) != 2 {
-		return NonParametr
+		return nonParametr
 	}
 
 	var removed, notFound []string
 	for _, cmd := range strings.Split(strings.TrimSpace(matches[1]), ",") {
-		cmd = strings.TrimSpace(cmd)
+		cmd = strings.ToLower(strings.TrimSpace(cmd))
 		if cmd == "" {
 			continue
 		}
@@ -91,7 +133,7 @@ func (c *DelCommand) handleCommandDel(cfg *config.Config, text *ports.MessageTex
 		removed = append(removed, cmd)
 	}
 
-	return buildResponse(removed, "удалены", notFound, "не найдены", "команды не указаны")
+	return buildResponse("команды не указаны", RespArg{Items: removed, Name: "удалены"}, RespArg{Items: notFound, Name: "не найдены"})
 }
 
 type AliasesCommand struct {
@@ -105,10 +147,10 @@ func (c *AliasesCommand) Execute(cfg *config.Config, text *ports.MessageText) *p
 func (c *AliasesCommand) handleCommandAliases(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
 	matches := c.re.FindStringSubmatch(text.Original) // !am cmd aliases <команда>
 	if len(matches) != 2 {
-		return NonParametr
+		return nonParametr
 	}
 
-	cmd := strings.TrimSpace(matches[1])
+	cmd := strings.ToLower(strings.TrimSpace(matches[1]))
 	if !strings.HasPrefix(cmd, "!") {
 		cmd = "!" + cmd
 	}
@@ -124,16 +166,13 @@ func (c *AliasesCommand) handleCommandAliases(cfg *config.Config, text *ports.Me
 		}
 	}
 
+	aliasesStr := strings.Join(aliases, ",")
 	if len(aliases) == 0 {
-		return &ports.AnswerType{
-			Text:    []string{fmt.Sprintf("команда: %s, алиасы: не найдены", cmd)},
-			IsReply: true,
-		}
+		aliasesStr = "не найдены"
 	}
 
-	msg := fmt.Sprintf("команда: %s, алиасы: %s", cmd, strings.Join(aliases, ","))
 	return &ports.AnswerType{
-		Text:    []string{msg},
+		Text:    []string{fmt.Sprintf("команда: %s, алиасы: %s", cmd, aliasesStr)},
 		IsReply: true,
 	}
 }

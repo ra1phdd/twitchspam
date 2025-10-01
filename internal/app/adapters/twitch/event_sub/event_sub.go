@@ -312,7 +312,7 @@ func (es *EventSub) convertMap(msgEvent ChatMessageEvent) *ports.ChatMessage {
 		Message: ports.Message{
 			ID: msgEvent.MessageID,
 			Text: ports.MessageText{
-				Original: msgEvent.Message.Text,
+				Original: es.template.CleanMessage(msgEvent.Message.Text),
 			},
 			EmoteOnly: emoteOnly,
 			Emotes:    emotes,
