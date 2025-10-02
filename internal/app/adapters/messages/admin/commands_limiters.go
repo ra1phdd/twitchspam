@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"twitchspam/internal/app/domain"
 	"twitchspam/internal/app/infrastructure/config"
 	"twitchspam/internal/app/ports"
 )
@@ -14,14 +15,14 @@ type AddCommandLimiter struct {
 	re *regexp.Regexp
 }
 
-func (c *AddCommandLimiter) Execute(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+func (c *AddCommandLimiter) Execute(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
 	return c.handleCommandLimiterAdd(cfg, text)
 }
 
-func (c *AddCommandLimiter) handleCommandLimiterAdd(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+func (c *AddCommandLimiter) handleCommandLimiterAdd(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
 	// !am cmd lim <кол-во запросов> <интервал в секундах> <команды через запятую>
 	// или !am cmd lim add <кол-во запросов> <интервал в секундах> <команды через запятую>
-	matches := c.re.FindStringSubmatch(text.Original)
+	matches := c.re.FindStringSubmatch(text.Text())
 	if len(matches) != 4 {
 		return nonParametr
 	}
@@ -68,12 +69,12 @@ type SetCommandLimiter struct {
 	re *regexp.Regexp
 }
 
-func (c *SetCommandLimiter) Execute(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+func (c *SetCommandLimiter) Execute(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
 	return c.handleCommandLimiterSet(cfg, text)
 }
 
-func (c *SetCommandLimiter) handleCommandLimiterSet(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
-	matches := c.re.FindStringSubmatch(text.Original) // !am cmd lim set <кол-во запросов> <интервал в секундах> <команды через запятую>
+func (c *SetCommandLimiter) handleCommandLimiterSet(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
+	matches := c.re.FindStringSubmatch(text.Text()) // !am cmd lim set <кол-во запросов> <интервал в секундах> <команды через запятую>
 	if len(matches) != 4 {
 		return nonParametr
 	}
@@ -119,12 +120,12 @@ type DelCommandLimiter struct {
 	re *regexp.Regexp
 }
 
-func (c *DelCommandLimiter) Execute(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+func (c *DelCommandLimiter) Execute(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
 	return c.handleCommandLimiterDel(cfg, text)
 }
 
-func (c *DelCommandLimiter) handleCommandLimiterDel(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
-	matches := c.re.FindStringSubmatch(text.Original) // !am cmd lim del <команды через запятую>
+func (c *DelCommandLimiter) handleCommandLimiterDel(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
+	matches := c.re.FindStringSubmatch(text.Text()) // !am cmd lim del <команды через запятую>
 	if len(matches) != 2 {
 		return nonParametr
 	}

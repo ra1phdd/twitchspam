@@ -146,10 +146,10 @@ func (sv *SevenTV) EmoteStats(words []string) (count int, onlyEmotes bool) {
 //			}
 //
 //			for _, em := range upd.Pushed {
-//				sv.log.Info("7TV: Emote added", slog.String("name", em.Name), slog.String("id", em.ID))
+//				sv.log.Info("7TV: SpamEmote added", slog.String("name", em.Name), slog.String("id", em.ID))
 //			}
 //			for _, em := range upd.Pulled {
-//				sv.log.Info("7TV: Emote removed", slog.String("name", em.Name), slog.String("id", em.ID))
+//				sv.log.Info("7TV: SpamEmote removed", slog.String("name", em.Name), slog.String("id", em.ID))
 //			}
 //		case "hello":
 //			sv.log.Info("Received Hello from 7TV")

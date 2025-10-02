@@ -1,5 +1,11 @@
 package storage
 
+import "twitchspam/internal/app/domain"
+
 type Message struct {
-	HashWords []uint64
+	UserID             string
+	MessageID          string
+	Text               domain.MessageText
+	HashWordsLowerNorm []uint64
+	IgnoreAntispam     bool
 }

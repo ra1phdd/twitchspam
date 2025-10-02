@@ -29,6 +29,8 @@ func (m *Manager) validate(cfg *Config) error {
 		return errors.New("app.mod_channels is required")
 	}
 
+	cfg.WindowSecs = 180
+
 	// limiter
 	if (cfg.Limiter.Requests != 0 && cfg.Limiter.Per == 0) || (cfg.Limiter.Requests == 0 && cfg.Limiter.Per != 0) {
 		return errors.New("limiter.requests and limiter.per must both be set or both be zero")
@@ -39,9 +41,6 @@ func (m *Manager) validate(cfg *Config) error {
 	// spam
 	if cfg.Spam.Mode != "online" && cfg.Spam.Mode != "always" {
 		return errors.New("spam.mode must be 'online' or 'always'")
-	}
-	if cfg.Spam.CheckWindowSeconds < 1 || cfg.Spam.CheckWindowSeconds > 300 {
-		return errors.New("spam.check_window_seconds must be 1..300")
 	}
 	if cfg.Spam.WhitelistUsers == nil {
 		cfg.Spam.WhitelistUsers = make(map[string]struct{})

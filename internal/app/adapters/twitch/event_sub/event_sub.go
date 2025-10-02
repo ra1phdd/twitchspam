@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 	admin2 "twitchspam/internal/app/adapters/messages/admin"
+	"twitchspam/internal/app/domain"
 	"twitchspam/internal/app/infrastructure/config"
 	"twitchspam/internal/app/ports"
 	"twitchspam/pkg/logger"
@@ -254,7 +255,7 @@ func (es *EventSub) subscribeEvent(eventType, version string, condition map[stri
 	return nil
 }
 
-func (es *EventSub) convertMap(msgEvent ChatMessageEvent) *ports.ChatMessage {
+func (es *EventSub) convertMap(msgEvent ChatMessageEvent) *domain.ChatMessage {
 	var isBroadcaster, isMod, isVip, isSubscriber bool
 	for _, badge := range msgEvent.Badges {
 		switch badge.SetID {
@@ -294,13 +295,13 @@ func (es *EventSub) convertMap(msgEvent ChatMessageEvent) *ports.ChatMessage {
 		emoteOnly = true
 	}
 
-	msg := &ports.ChatMessage{
-		Broadcaster: ports.Broadcaster{
+	msg := &domain.ChatMessage{
+		Broadcaster: domain.Broadcaster{
 			UserID:   msgEvent.BroadcasterUserID,
 			Login:    msgEvent.BroadcasterUserLogin,
 			Username: msgEvent.BroadcasterUserName,
 		},
-		Chatter: ports.Chatter{
+		Chatter: domain.Chatter{
 			UserID:        msgEvent.ChatterUserID,
 			Login:         msgEvent.ChatterUserLogin,
 			Username:      msgEvent.ChatterUserName,
@@ -309,9 +310,9 @@ func (es *EventSub) convertMap(msgEvent ChatMessageEvent) *ports.ChatMessage {
 			IsVip:         isVip,
 			IsSubscriber:  isSubscriber,
 		},
-		Message: ports.Message{
+		Message: domain.Message{
 			ID: msgEvent.MessageID,
-			Text: ports.MessageText{
+			Text: domain.MessageText{
 				Original: es.template.CleanMessage(msgEvent.Message.Text),
 			},
 			EmoteOnly: emoteOnly,
@@ -320,15 +321,15 @@ func (es *EventSub) convertMap(msgEvent ChatMessageEvent) *ports.ChatMessage {
 	}
 
 	if msgEvent.Reply != nil {
-		msg.Reply = &ports.Reply{
-			ParentChatter: ports.Chatter{
+		msg.Reply = &domain.Reply{
+			ParentChatter: domain.Chatter{
 				UserID:   msgEvent.Reply.ParentUserID,
 				Login:    msgEvent.Reply.ParentUserLogin,
 				Username: msgEvent.Reply.ParentUserName,
 			},
-			ParentMessage: ports.Message{
+			ParentMessage: domain.Message{
 				ID: msgEvent.Reply.ParentMessageID,
-				Text: ports.MessageText{
+				Text: domain.MessageText{
 					Original: msgEvent.Reply.ParentMessageBody,
 				},
 			},

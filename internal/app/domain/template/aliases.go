@@ -48,7 +48,7 @@ func (at *AliasesTemplate) Replace(parts []string) (string, bool) {
 		j := i
 
 		for j < len(parts) {
-			next, ok := cur.Children()[parts[j]]
+			next, ok := cur.Children()[strings.ToLower(parts[j])]
 			if !ok {
 				break
 			}

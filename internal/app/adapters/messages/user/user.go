@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"twitchspam/internal/app/domain"
 	"twitchspam/internal/app/domain/template"
 	"twitchspam/internal/app/infrastructure/config"
 	"twitchspam/internal/app/ports"
@@ -32,7 +33,7 @@ func New(log logger.Logger, manager *config.Manager, stream ports.StreamPort, te
 	}
 }
 
-func (u *User) FindMessages(msg *ports.ChatMessage) *ports.AnswerType {
+func (u *User) FindMessages(msg *domain.ChatMessage) *ports.AnswerType {
 	cfg := u.manager.Get()
 	u.ensureUserLimiter(msg.Chatter.Username, cfg.Limiter)
 
@@ -51,8 +52,8 @@ func (u *User) FindMessages(msg *ports.ChatMessage) *ports.AnswerType {
 	return nil
 }
 
-func (u *User) handleStats(msg *ports.ChatMessage) *ports.AnswerType {
-	if !strings.HasPrefix(msg.Message.Text.Lower(), "!stats") {
+func (u *User) handleStats(msg *domain.ChatMessage) *ports.AnswerType {
+	if !strings.HasPrefix(msg.Message.Text.Text(domain.Lower), "!stats") {
 		return nil
 	}
 
@@ -61,7 +62,7 @@ func (u *User) handleStats(msg *ports.ChatMessage) *ports.AnswerType {
 	}
 
 	target := msg.Chatter.Username
-	words := msg.Message.Text.WordsLower()
+	words := msg.Message.Text.Words(domain.Lower)
 
 	if len(words) > 1 {
 		switch words[1] {
@@ -81,7 +82,7 @@ func (u *User) handleStats(msg *ports.ChatMessage) *ports.AnswerType {
 	return u.stream.Stats().GetUserStats(target)
 }
 
-func (u *User) handleCommands(msg *ports.ChatMessage) *ports.AnswerType {
+func (u *User) handleCommands(msg *domain.ChatMessage) *ports.AnswerType {
 	var text, replyUsername string
 	if msg.Reply != nil {
 		replyUsername = msg.Reply.ParentChatter.Username

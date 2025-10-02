@@ -12,6 +12,7 @@ import (
 )
 
 type Stats struct {
+	fs ports.FileServerPort
 	mu sync.Mutex
 
 	startTime       time.Time
@@ -36,8 +37,8 @@ type CategoryInterval struct {
 	EndTime   time.Time
 }
 
-func NewStats() *Stats {
-	return &Stats{}
+func NewStats(fs ports.FileServerPort) *Stats {
+	return &Stats{fs: fs}
 }
 
 func (s *Stats) SetStartTime(t time.Time) {
@@ -239,36 +240,17 @@ func (s *Stats) GetUserStats(username string) *ports.AnswerType {
 		}
 	}
 
-	type kv struct {
-		Key   string
-		Value int
-	}
-
-	var pairs []kv
-	for k, v := range s.countMessages {
-		pairs = append(pairs, kv{k, v})
-	}
-
-	sort.Slice(pairs, func(i, j int) bool {
-		return pairs[i].Value > pairs[j].Value
-	})
-
 	username = strings.TrimPrefix(username, "@")
 	usernameLower := strings.ToLower(username)
 
-	position := -1
-	for i, p := range pairs {
-		if p.Key == username {
-			position = i + 1
-			break
+	position := 1
+	for _, v := range s.countMessages {
+		if v > s.countMessages[usernameLower] {
+			position++
 		}
 	}
 
-	msg := fmt.Sprintf("статистика %s - кол-во сообщений за стрим: %d", username, s.countMessages[usernameLower])
-	if position != -1 {
-		msg += fmt.Sprintf(" (топ-%d чаттер)", position)
-	}
-
+	msg := fmt.Sprintf("статистика %s - кол-во сообщений за стрим: %d (топ-%d чаттер)", username, s.countMessages[usernameLower], position)
 	if s.countBans[usernameLower] > 0 || s.countTimeouts[usernameLower] > 0 || s.countDeletes[usernameLower] > 0 {
 		msg += fmt.Sprintf(" • кол-во банов: %d • кол-во мутов: %d • кол-во удаленных сообщений: %d",
 			s.countBans[usernameLower], s.countTimeouts[usernameLower], s.countDeletes[usernameLower])
@@ -323,7 +305,7 @@ func (s *Stats) GetTopStats(count int) *ports.AnswerType {
 	})
 
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("топ-%d чаттеров по кол-ву сообщений за стрим:", count))
+	sb.WriteString(fmt.Sprintf("топ-%d чаттеров по кол-ву сообщений за стрим: ", count))
 
 	sep := ", "
 	if count > 5 {
@@ -337,8 +319,21 @@ func (s *Stats) GetTopStats(count int) *ports.AnswerType {
 		sb.WriteString(fmt.Sprintf("%s (%d)", pairs[i].Key, pairs[i].Val))
 	}
 
+	msg := sb.String()
+	if count > 5 {
+		key, err := s.fs.UploadToHaste(msg)
+		if err != nil {
+			return &ports.AnswerType{
+				Text:    []string{"неизвестная ошибка!"},
+				IsReply: true,
+			}
+		}
+
+		msg = s.fs.GetURL(key)
+	}
+
 	return &ports.AnswerType{
-		Text:    []string{sb.String()},
+		Text:    []string{msg},
 		IsReply: false,
 	}
 }

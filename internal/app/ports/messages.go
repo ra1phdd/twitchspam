@@ -2,22 +2,23 @@ package ports
 
 import (
 	"time"
+	"twitchspam/internal/app/domain"
 	"twitchspam/internal/app/infrastructure/config"
 )
 
 type CheckerPort interface {
-	Check(msg *ChatMessage) *CheckerAction
+	Check(msg *domain.ChatMessage) *CheckerAction
 	CheckBanwords(textLower string, wordsOriginal []string) *CheckerAction
 	CheckAds(text string, username string) *CheckerAction
-	CheckMwords(msg *ChatMessage) *CheckerAction
+	CheckMwords(msg *domain.ChatMessage) *CheckerAction
 }
 
 type CommandPort interface {
-	FindMessages(msg *ChatMessage) *AnswerType
+	FindMessages(msg *domain.ChatMessage) *AnswerType
 }
 
 type Command interface {
-	Execute(cfg *config.Config, text *MessageText) *AnswerType
+	Execute(cfg *config.Config, text *domain.MessageText) *AnswerType
 }
 
 type AnswerType struct {

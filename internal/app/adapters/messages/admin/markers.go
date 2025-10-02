@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"strings"
 	"time"
+	"twitchspam/internal/app/domain"
 	"twitchspam/internal/app/infrastructure/config"
 	"twitchspam/internal/app/ports"
 	"twitchspam/pkg/logger"
@@ -19,7 +20,7 @@ type AddMarker struct {
 	username string
 }
 
-func (m *AddMarker) Execute(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+func (m *AddMarker) Execute(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
 	return m.handleMarkersAdd(cfg, text, m.username)
 }
 
@@ -27,13 +28,13 @@ func (m *AddMarker) SetUsername(username string) {
 	m.username = username
 }
 
-func (m *AddMarker) handleMarkersAdd(cfg *config.Config, text *ports.MessageText, username string) *ports.AnswerType {
+func (m *AddMarker) handleMarkersAdd(cfg *config.Config, text *domain.MessageText, username string) *ports.AnswerType {
 	if !m.stream.IsLive() {
 		return streamOff
 	}
 
 	// !am mark <имя маркера> или !am mark add <имя маркера>
-	matches := m.re.FindStringSubmatch(text.Original)
+	matches := m.re.FindStringSubmatch(text.Text())
 	if len(matches) != 2 {
 		return nonParametr
 	}
@@ -66,7 +67,7 @@ type ClearMarker struct {
 	username string
 }
 
-func (m *ClearMarker) Execute(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+func (m *ClearMarker) Execute(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
 	return m.handleMarkersClear(cfg, text, m.username)
 }
 
@@ -74,8 +75,8 @@ func (m *ClearMarker) SetUsername(username string) {
 	m.username = username
 }
 
-func (m *ClearMarker) handleMarkersClear(cfg *config.Config, text *ports.MessageText, username string) *ports.AnswerType {
-	matches := m.re.FindStringSubmatch(text.Original) // !am mark clear <имя маркера> или !am mark clear
+func (m *ClearMarker) handleMarkersClear(cfg *config.Config, text *domain.MessageText, username string) *ports.AnswerType {
+	matches := m.re.FindStringSubmatch(text.Text()) // !am mark clear <имя маркера> или !am mark clear
 	if len(matches) != 2 {
 		return nonParametr
 	}
@@ -106,7 +107,7 @@ type ListMarker struct {
 	username string
 }
 
-func (m *ListMarker) Execute(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+func (m *ListMarker) Execute(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
 	return m.handleMarkersList(cfg, text, m.username)
 }
 
@@ -114,7 +115,7 @@ func (m *ListMarker) SetUsername(username string) {
 	m.username = username
 }
 
-func (m *ListMarker) handleMarkersList(cfg *config.Config, text *ports.MessageText, username string) *ports.AnswerType {
+func (m *ListMarker) handleMarkersList(cfg *config.Config, text *domain.MessageText, username string) *ports.AnswerType {
 	userMarkers, ok := cfg.Markers[username+"_"+m.stream.ChannelID()]
 	if !ok || len(userMarkers) == 0 {
 		return &ports.AnswerType{
@@ -149,7 +150,7 @@ func (m *ListMarker) handleMarkersList(cfg *config.Config, text *ports.MessageTe
 		return nil
 	}
 
-	matches := m.re.FindStringSubmatch(text.Original) // !am mark list <имя маркера> или !am mark list
+	matches := m.re.FindStringSubmatch(text.Text()) // !am mark list <имя маркера> или !am mark list
 	if len(matches) < 1 || len(matches) > 2 {
 		return nonParametr
 	}

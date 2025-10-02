@@ -3,6 +3,7 @@ package admin
 import (
 	"fmt"
 	"strings"
+	"twitchspam/internal/app/domain"
 	"twitchspam/internal/app/infrastructure/config"
 	"twitchspam/internal/app/ports"
 )
@@ -11,7 +12,7 @@ type ListTimers struct {
 	fs ports.FileServerPort
 }
 
-func (t *ListTimers) Execute(cfg *config.Config, _ *ports.MessageText) *ports.AnswerType {
+func (t *ListTimers) Execute(cfg *config.Config, _ *domain.MessageText) *ports.AnswerType {
 	return t.handleTimersList(cfg)
 }
 

@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"strings"
 	"time"
+	"twitchspam/internal/app/domain"
 	"twitchspam/internal/app/infrastructure/config"
 	"twitchspam/internal/app/ports"
 	"twitchspam/pkg/logger"
@@ -153,7 +154,6 @@ func (a *Admin) buildCommandTree() ports.Command {
 			},
 			"online": &ModeAntispam{mode: "online"},
 			"always": &ModeAntispam{mode: "always"},
-			"time":   &TimeAntispam{re: regexp.MustCompile(`(?i)^!am\s+time\s+(.+)$`), template: a.template},
 			"add":    &AddAntispam{re: regexp.MustCompile(`(?i)^!am\s+add\s+(.+)$`)},
 			"del":    &DelAntispam{re: regexp.MustCompile(`(?i)^!am\s+del\s+(.+)$`)},
 			"sim":    &SimAntispam{re: regexp.MustCompile(`(?i)^!am\s+sim\s+(.+)$`), template: a.template, typeSpam: "default"},
@@ -308,12 +308,12 @@ func (a *Admin) buildCommandTree() ports.Command {
 	}
 }
 
-func (a *Admin) FindMessages(msg *ports.ChatMessage) *ports.AnswerType {
-	if !(msg.Chatter.IsBroadcaster || msg.Chatter.IsMod) || !strings.HasPrefix(msg.Message.Text.Lower(), "!am") {
+func (a *Admin) FindMessages(msg *domain.ChatMessage) *ports.AnswerType {
+	if !(msg.Chatter.IsBroadcaster || msg.Chatter.IsMod) || !strings.HasPrefix(msg.Message.Text.Text(domain.Lower), "!am") {
 		return nil
 	}
 
-	words := msg.Message.Text.WordsLower()
+	words := msg.Message.Text.Words(domain.Lower)
 	if len(words) < 2 {
 		return notFoundCmd
 	}
@@ -328,7 +328,7 @@ func (a *Admin) FindMessages(msg *ports.ChatMessage) *ports.AnswerType {
 	if err := a.manager.Update(func(cfg *config.Config) {
 		result = a.root.Execute(cfg, &msg.Message.Text)
 	}); err != nil {
-		a.log.Error("Failed update config", err, slog.String("msg", msg.Message.Text.Original))
+		a.log.Error("Failed update config", err, slog.String("msg", msg.Message.Text.Text()))
 		return unknownError
 	}
 
@@ -338,8 +338,8 @@ func (a *Admin) FindMessages(msg *ports.ChatMessage) *ports.AnswerType {
 	return success
 }
 
-func (c *CompositeCommand) Execute(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
-	words := text.WordsLower()
+func (c *CompositeCommand) Execute(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
+	words := text.Words(domain.Lower)
 	if c.cursor >= len(words) {
 		if c.defaultCmd != nil {
 			return c.defaultCmd.Execute(cfg, text)

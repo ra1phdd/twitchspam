@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"twitchspam/internal/app/domain"
 	"twitchspam/internal/app/domain/template"
 	"twitchspam/internal/app/infrastructure/config"
 	"twitchspam/internal/app/ports"
@@ -28,12 +29,12 @@ type AddMword struct {
 	template ports.TemplatePort
 }
 
-func (m *AddMword) Execute(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+func (m *AddMword) Execute(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
 	return m.handleMwAdd(cfg, text)
 }
 
-func (m *AddMword) handleMwAdd(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
-	textWithoutOpts, opts := m.template.Options().ParseAll(text.Original, template.MwordOptions)
+func (m *AddMword) handleMwAdd(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
+	textWithoutOpts, opts := m.template.Options().ParseAll(text.Text(), template.MwordOptions)
 
 	// !am mw (add) <наказания через запятую> <слова/фразы через запятую>
 	// или !am mw (add) <наказания через запятую> re <name> <regex>
@@ -74,6 +75,7 @@ func (m *AddMword) handleMwAdd(cfg *config.Config, text *ports.MessageText) *por
 			Options:     m.template.Options().MergeMword(config.MwordOptions{}, opts),
 		}
 
+		m.template.Mword().Update(cfg.Mword, cfg.MwordGroup)
 		return success
 	}
 
@@ -96,6 +98,7 @@ func (m *AddMword) handleMwAdd(cfg *config.Config, text *ports.MessageText) *por
 		added = append(added, word)
 	}
 
+	m.template.Mword().Update(cfg.Mword, cfg.MwordGroup)
 	return buildResponse("мворды не указаны", RespArg{Items: added, Name: "добавлены"}, RespArg{Items: exists, Name: "уже существуют"})
 }
 
@@ -104,12 +107,12 @@ type SetMword struct {
 	template ports.TemplatePort
 }
 
-func (m *SetMword) Execute(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+func (m *SetMword) Execute(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
 	return m.handleMwSet(cfg, text)
 }
 
-func (m *SetMword) handleMwSet(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
-	textWithoutOpts, opts := m.template.Options().ParseAll(text.Original, template.MwordOptions)
+func (m *SetMword) handleMwSet(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
+	textWithoutOpts, opts := m.template.Options().ParseAll(text.Text(), template.MwordOptions)
 
 	// или !am mw set <наказания через запятую> <слова или фразы через запятую>
 	// или !am mw set <слова или фразы через запятую>
@@ -152,6 +155,7 @@ func (m *SetMword) handleMwSet(cfg *config.Config, text *ports.MessageText) *por
 		edited = append(edited, word)
 	}
 
+	m.template.Mword().Update(cfg.Mword, cfg.MwordGroup)
 	return buildResponse("мворды не указаны", RespArg{Items: edited, Name: "изменены"}, RespArg{Items: notFound, Name: "не найдены"})
 }
 
@@ -160,12 +164,12 @@ type DelMword struct {
 	template ports.TemplatePort
 }
 
-func (m *DelMword) Execute(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+func (m *DelMword) Execute(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
 	return m.handleMwDel(cfg, text)
 }
 
-func (m *DelMword) handleMwDel(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
-	matches := m.re.FindStringSubmatch(text.Original) // !am mw del <слова/фразы через запятую или regex>
+func (m *DelMword) handleMwDel(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
+	matches := m.re.FindStringSubmatch(text.Text()) // !am mw del <слова/фразы через запятую или regex>
 	if len(matches) != 2 {
 		return nonParametr
 	}
@@ -185,6 +189,7 @@ func (m *DelMword) handleMwDel(cfg *config.Config, text *ports.MessageText) *por
 		}
 	}
 
+	m.template.Mword().Update(cfg.Mword, cfg.MwordGroup)
 	return buildResponse("мворды не указаны", RespArg{Items: removed, Name: "удалены"}, RespArg{Items: notFound, Name: "не найдены"})
 }
 
@@ -193,7 +198,7 @@ type ListMword struct {
 	fs       ports.FileServerPort
 }
 
-func (m *ListMword) Execute(cfg *config.Config, _ *ports.MessageText) *ports.AnswerType {
+func (m *ListMword) Execute(cfg *config.Config, _ *domain.MessageText) *ports.AnswerType {
 	return m.handleMwList(cfg)
 }
 
@@ -217,12 +222,12 @@ type CreateMwordGroup struct {
 	template ports.TemplatePort
 }
 
-func (m *CreateMwordGroup) Execute(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+func (m *CreateMwordGroup) Execute(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
 	return m.handleMwgCreate(cfg, text)
 }
 
-func (m *CreateMwordGroup) handleMwgCreate(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
-	textWithoutOpts, opts := m.template.Options().ParseAll(text.Original, template.MwordOptions)
+func (m *CreateMwordGroup) handleMwgCreate(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
+	textWithoutOpts, opts := m.template.Options().ParseAll(text.Text(), template.MwordOptions)
 
 	matches := m.re.FindStringSubmatch(textWithoutOpts) // !am mwg create <название_группы> <наказания через запятую>
 	if len(matches) != 3 {
@@ -258,6 +263,8 @@ func (m *CreateMwordGroup) handleMwgCreate(cfg *config.Config, text *ports.Messa
 		Options:     m.template.Options().MergeMword(config.MwordOptions{}, opts),
 		Regexp:      make(map[string]*regexp.Regexp),
 	}
+
+	m.template.Mword().Update(cfg.Mword, cfg.MwordGroup)
 	return success
 }
 
@@ -266,14 +273,14 @@ type AddMwordGroup struct {
 	template ports.TemplatePort
 }
 
-func (m *AddMwordGroup) Execute(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+func (m *AddMwordGroup) Execute(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
 	return m.handleMwgAdd(cfg, text)
 }
 
-func (m *AddMwordGroup) handleMwgAdd(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+func (m *AddMwordGroup) handleMwgAdd(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
 	// !am mwg add <название_группы> <слова/фразы через запятую>
 	// или !am mwg add <название_группы> re <name> <regex>
-	matches := m.re.FindStringSubmatch(text.Original)
+	matches := m.re.FindStringSubmatch(text.Text())
 	if len(matches) != 6 {
 		return nonParametr
 	}
@@ -295,6 +302,7 @@ func (m *AddMwordGroup) handleMwgAdd(cfg *config.Config, text *ports.MessageText
 		}
 
 		cfg.MwordGroup[groupName].Regexp[name] = re
+		m.template.Mword().Update(cfg.Mword, cfg.MwordGroup)
 		return success
 	}
 
@@ -314,6 +322,7 @@ func (m *AddMwordGroup) handleMwgAdd(cfg *config.Config, text *ports.MessageText
 		added = append(added, word)
 	}
 
+	m.template.Mword().Update(cfg.Mword, cfg.MwordGroup)
 	return buildResponse("мворды не указаны", RespArg{Items: added, Name: "добавлены"}, RespArg{Items: exists, Name: "уже существуют"})
 }
 
@@ -322,12 +331,12 @@ type SetMwordGroup struct {
 	template ports.TemplatePort
 }
 
-func (m *SetMwordGroup) Execute(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+func (m *SetMwordGroup) Execute(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
 	return m.handleMwgSet(cfg, text)
 }
 
-func (m *SetMwordGroup) handleMwgSet(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
-	textWithoutOpts, opts := m.template.Options().ParseAll(text.Original, template.MwordOptions)
+func (m *SetMwordGroup) handleMwgSet(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
+	textWithoutOpts, opts := m.template.Options().ParseAll(text.Text(), template.MwordOptions)
 
 	// !am mwg set <название_группы> <наказания через запятую>
 	// или !am mwg set <название_группы>
@@ -359,6 +368,7 @@ func (m *SetMwordGroup) handleMwgSet(cfg *config.Config, text *ports.MessageText
 	if len(punishments) != 0 {
 		cfg.MwordGroup[groupName].Punishments = punishments
 	}
+	m.template.Mword().Update(cfg.Mword, cfg.MwordGroup)
 	return success
 }
 
@@ -367,13 +377,13 @@ type DelMwordGroup struct {
 	template ports.TemplatePort
 }
 
-func (m *DelMwordGroup) Execute(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+func (m *DelMwordGroup) Execute(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
 	return m.handleMwgDel(cfg, text)
 }
 
-func (m *DelMwordGroup) handleMwgDel(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+func (m *DelMwordGroup) handleMwgDel(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
 	// !am mwg del <название_группы> <слова/фразы через запятую или ничего для all>
-	matches := m.re.FindStringSubmatch(text.Original)
+	matches := m.re.FindStringSubmatch(text.Text())
 	if len(matches) != 3 {
 		return nonParametr
 	}
@@ -385,6 +395,8 @@ func (m *DelMwordGroup) handleMwgDel(cfg *config.Config, text *ports.MessageText
 
 	if strings.TrimSpace(matches[2]) == "" {
 		delete(cfg.MwordGroup, groupName)
+
+		m.template.Mword().Update(cfg.Mword, cfg.MwordGroup)
 		return success
 	}
 
@@ -416,6 +428,7 @@ func (m *DelMwordGroup) handleMwgDel(cfg *config.Config, text *ports.MessageText
 		}
 	}
 
+	m.template.Mword().Update(cfg.Mword, cfg.MwordGroup)
 	return buildResponse("мворды не указаны", RespArg{Items: removed, Name: "удалены"}, RespArg{Items: notFound, Name: "не найдены"})
 }
 
@@ -424,12 +437,12 @@ type OnOffMwordGroup struct {
 	template ports.TemplatePort
 }
 
-func (m *OnOffMwordGroup) Execute(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+func (m *OnOffMwordGroup) Execute(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
 	return m.handleMwgOnOff(cfg, text)
 }
 
-func (m *OnOffMwordGroup) handleMwgOnOff(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
-	matches := m.re.FindStringSubmatch(text.Original) // !am mwg on/off <название_группы>
+func (m *OnOffMwordGroup) handleMwgOnOff(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
+	matches := m.re.FindStringSubmatch(text.Text()) // !am mwg on/off <название_группы>
 	if len(matches) != 3 {
 		return nonParametr
 	}
@@ -442,6 +455,7 @@ func (m *OnOffMwordGroup) handleMwgOnOff(cfg *config.Config, text *ports.Message
 	}
 
 	cfg.MwordGroup[groupName].Enabled = state == "on"
+	m.template.Mword().Update(cfg.Mword, cfg.MwordGroup)
 	return success
 }
 
@@ -450,7 +464,7 @@ type ListMwordGroup struct {
 	fs       ports.FileServerPort
 }
 
-func (m *ListMwordGroup) Execute(cfg *config.Config, _ *ports.MessageText) *ports.AnswerType {
+func (m *ListMwordGroup) Execute(cfg *config.Config, _ *domain.MessageText) *ports.AnswerType {
 	return m.handleMwgList(cfg)
 }
 

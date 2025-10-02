@@ -14,6 +14,10 @@ func NewSpamPause() *SpamPauseTemplate {
 }
 
 func (p *SpamPauseTemplate) Pause(duration time.Duration) {
+	if duration == 0 {
+		atomic.StoreInt32(&p.paused, 0)
+	}
+
 	atomic.StoreInt32(&p.paused, 1)
 	time.AfterFunc(duration, func() {
 		atomic.StoreInt32(&p.paused, 0)

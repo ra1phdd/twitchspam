@@ -4,16 +4,16 @@ import "time"
 
 func (m *Manager) GetDefault() *Config {
 	return &Config{
-		App: App{},
+		App:        App{},
+		WindowSecs: 180,
 		Limiter: Limiter{
 			Requests: 3,
 			Per:      30 * time.Second,
 		},
 		Spam: Spam{
-			Mode:               "online",
-			CheckWindowSeconds: 60,
-			WhitelistUsers:     make(map[string]struct{}),
-			Exceptions:         make(map[string]*ExceptionsSettings),
+			Mode:           "online",
+			WhitelistUsers: make(map[string]struct{}),
+			Exceptions:     make(map[string]*ExceptionsSettings),
 			SettingsDefault: SpamSettings{
 				Enabled:             true,
 				SimilarityThreshold: 0.7,

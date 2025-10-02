@@ -4,7 +4,7 @@ import (
 	"log/slog"
 	"time"
 	"twitchspam/internal/app/adapters/messages/checker"
-	"twitchspam/internal/app/ports"
+	"twitchspam/internal/app/domain"
 )
 
 func (es *EventSub) checkAutomod(am AutomodHoldEvent) {
@@ -16,20 +16,20 @@ func (es *EventSub) checkAutomod(am AutomodHoldEvent) {
 		time.Sleep(time.Duration(es.cfg.Automod.Delay) * time.Second)
 	}
 
-	msg := &ports.ChatMessage{
-		Message: ports.Message{
+	msg := &domain.ChatMessage{
+		Message: domain.Message{
 			ID: am.MessageID,
-			Text: ports.MessageText{
+			Text: domain.MessageText{
 				Original: am.Message.Text,
 			},
 		},
 	}
 
-	if action := es.checker.CheckBanwords(msg.Message.Text.LowerNorm(), msg.Message.Text.Words()); action != nil {
+	if action := es.checker.CheckBanwords(msg.Message.Text.Text(domain.Lower, domain.RemovePunctuation, domain.RemoveDuplicateLetters), msg.Message.Text.Words()); action != nil {
 		es.api.BanUser(am.UserID, action.Reason)
 	}
 
-	if action := es.checker.CheckAds(msg.Message.Text.Lower(), am.UserName); action != nil {
+	if action := es.checker.CheckAds(msg.Message.Text.Text(domain.Lower), am.UserName); action != nil {
 		es.api.BanUser(am.UserID, action.Reason)
 	}
 
@@ -43,7 +43,7 @@ func (es *EventSub) checkAutomod(am AutomodHoldEvent) {
 		es.log.Warn("Banword in phrase", slog.String("username", am.UserName), slog.String("text", am.Message.Text))
 		es.api.BanUser(am.UserID, action.Reason)
 	case checker.Timeout:
-		es.log.Warn("Spam is found", slog.String("username", am.UserName), slog.String("text", am.Message.Text), slog.Int("duration", int(action.Duration.Seconds())))
+		es.log.Warn("SpamDefault is found", slog.String("username", am.UserName), slog.String("text", am.Message.Text), slog.Int("duration", int(action.Duration.Seconds())))
 		if es.cfg.Spam.SettingsDefault.Enabled {
 			es.api.TimeoutUser(am.UserID, int(action.Duration.Seconds()), action.Reason)
 		}

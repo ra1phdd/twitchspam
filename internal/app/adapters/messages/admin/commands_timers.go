@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"twitchspam/internal/app/domain"
 	"twitchspam/internal/app/domain/template"
 	"twitchspam/internal/app/infrastructure/config"
 	"twitchspam/internal/app/ports"
@@ -16,12 +17,12 @@ type AddCommandTimer struct {
 	t        *AddTimer
 }
 
-func (c *AddCommandTimer) Execute(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+func (c *AddCommandTimer) Execute(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
 	return c.handleCommandTimersAdd(cfg, text)
 }
 
-func (c *AddCommandTimer) handleCommandTimersAdd(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
-	textWithoutOpts, opts := c.template.Options().ParseAll(text.Original, template.TimersOptions)
+func (c *AddCommandTimer) handleCommandTimersAdd(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
+	textWithoutOpts, opts := c.template.Options().ParseAll(text.Text(), template.TimersOptions)
 
 	// !am cmd timer <кол-во сообщений> <интервал в секундах> <команда>
 	// или !am cmd timer add <кол-во сообщений> <интервал в секундах> <команда>
@@ -62,12 +63,12 @@ type DelCommandTimer struct {
 	timers   ports.TimersPort
 }
 
-func (c *DelCommandTimer) Execute(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+func (c *DelCommandTimer) Execute(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
 	return c.handleCommandTimersDel(cfg, text)
 }
 
-func (c *DelCommandTimer) handleCommandTimersDel(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
-	matches := c.re.FindStringSubmatch(text.Original) // !am cmd timer del <команды через запятую>
+func (c *DelCommandTimer) handleCommandTimersDel(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
+	matches := c.re.FindStringSubmatch(text.Text()) // !am cmd timer del <команды через запятую>
 	if len(matches) != 2 {
 		return nonParametr
 	}
@@ -103,12 +104,12 @@ type OnOffCommandTimer struct {
 	t        *AddTimer
 }
 
-func (c *OnOffCommandTimer) Execute(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+func (c *OnOffCommandTimer) Execute(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
 	return c.handleCommandTimersOnOff(cfg, text)
 }
 
-func (c *OnOffCommandTimer) handleCommandTimersOnOff(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
-	matches := c.re.FindStringSubmatch(text.Original) // !am cmd timer on/off <команды через запятую>
+func (c *OnOffCommandTimer) handleCommandTimersOnOff(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
+	matches := c.re.FindStringSubmatch(text.Text()) // !am cmd timer on/off <команды через запятую>
 	if len(matches) != 3 {
 		return nonParametr
 	}
@@ -154,12 +155,12 @@ type SetCommandTimer struct {
 	t        *AddTimer
 }
 
-func (c *SetCommandTimer) Execute(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+func (c *SetCommandTimer) Execute(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
 	return c.handleCommandTimersSet(cfg, text)
 }
 
-func (c *SetCommandTimer) handleCommandTimersSet(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
-	textWithoutOpts, opts := c.template.Options().ParseAll(text.Original, template.TimersOptions)
+func (c *SetCommandTimer) handleCommandTimersSet(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
+	textWithoutOpts, opts := c.template.Options().ParseAll(text.Text(), template.TimersOptions)
 
 	// !am cmd timer set <кол-во сообщений> <интервал в секундах> <команды через запятую>
 	// или !am cmd timer set <опции> <команды через запятую>

@@ -6,7 +6,6 @@ import (
 	"strings"
 	"time"
 	"twitchspam/internal/app/infrastructure/config"
-	"unicode"
 )
 
 func WordsToHashes(words []string) []uint64 {
@@ -42,23 +41,6 @@ func JaccardHashSimilarity(a, b []uint64) float64 {
 		return 0
 	}
 	return float64(intersection) / float64(unionSize)
-}
-
-func NormalizeText(s string) string {
-	var b strings.Builder
-	b.Grow(len(s))
-	var prev rune
-	for _, r := range s {
-		if !unicode.IsLetter(r) && !unicode.IsNumber(r) && !unicode.IsSpace(r) {
-			continue
-		}
-		if r == prev && unicode.IsLetter(r) {
-			continue
-		}
-		b.WriteRune(r)
-		prev = r
-	}
-	return strings.ToLower(b.String())
 }
 
 func GetPunishment(arr []config.Punishment, idx int) (string, time.Duration) {

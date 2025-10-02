@@ -38,7 +38,10 @@ func New(log logger.Logger, manager *config.Manager, client *http.Client, modCha
 		client: client,
 	}
 
-	t.stream = stream.NewStream(modChannel)
+	fs := file_server.New(client)
+	timer := timers.NewTimingWheel(100*time.Millisecond, 600)
+
+	t.stream = stream.NewStream(modChannel, fs)
 	t.api = api.NewTwitch(t.log, t.cfg, t.stream, t.client)
 
 	channelID, err := t.api.GetChannelID(modChannel)
@@ -67,10 +70,13 @@ func New(log logger.Logger, manager *config.Manager, client *http.Client, modCha
 		return nil, err
 	}
 
-	fs := file_server.New(client)
-	timer := timers.NewTimingWheel(100*time.Millisecond, 600)
-
-	t.template = template.New(log, t.cfg.Aliases, t.cfg.AliasGroups, t.cfg.Banwords.Words, t.cfg.Banwords.Regexp, t.stream)
+	t.template = template.New(
+		template.WithAliases(t.cfg.Aliases, t.cfg.AliasGroups),
+		template.WithPlaceholders(t.stream),
+		template.WithBanwords(t.log, t.cfg.Banwords.Words, t.cfg.Banwords.Regexp),
+		template.WithMword(t.irc, t.cfg.Mword, t.cfg.MwordGroup),
+		template.WithStore(t.cfg),
+	)
 	t.checker = checker.NewCheck(log, t.cfg, t.stream, t.template, t.irc)
 	t.admin = admin.New(log, manager, t.stream, t.api, t.template, fs, timer)
 	t.user = user.New(log, manager, t.stream, t.template, fs)

@@ -15,18 +15,53 @@ type Template struct {
 	parser       ports.ParserPort
 	punishment   ports.PunishmentPort
 	spamPause    ports.SpamPausePort
+	mword        ports.MwordPort
+	store        ports.StoresPort
 }
 
-func New(log logger.Logger, aliases map[string]string, aliasGroups map[string]*config.AliasGroups, banWords []string, banRegexps []*regexp.Regexp, stream ports.StreamPort) *Template {
-	return &Template{
-		aliases:      NewAliases(aliases, aliasGroups),
-		placeholders: NewPlaceholders(stream),
-		banwords:     NewBanwords(log, banWords, banRegexps),
-		options:      NewOptions(),
-		parser:       NewParser(),
-		punishment:   NewPunishment(),
-		spamPause:    NewSpamPause(),
+type Option func(*Template)
+
+func WithAliases(aliases map[string]string, groups map[string]*config.AliasGroups) Option {
+	return func(t *Template) {
+		t.aliases = NewAliases(aliases, groups)
 	}
+}
+
+func WithPlaceholders(stream ports.StreamPort) Option {
+	return func(t *Template) {
+		t.placeholders = NewPlaceholders(stream)
+	}
+}
+
+func WithBanwords(log logger.Logger, words []string, regexps []*regexp.Regexp) Option {
+	return func(t *Template) {
+		t.banwords = NewBanwords(log, words, regexps)
+	}
+}
+
+func WithMword(irc ports.IRCPort, mwords map[string]*config.Mword, mwordGroups map[string]*config.MwordGroup) Option {
+	return func(t *Template) {
+		t.mword = NewMword(irc, mwords, mwordGroups)
+	}
+}
+
+func WithStore(cfg *config.Config) Option {
+	return func(t *Template) {
+		t.store = NewStores(cfg)
+	}
+}
+
+func New(opts ...Option) *Template {
+	t := &Template{
+		options:    NewOptions(),
+		parser:     NewParser(),
+		punishment: NewPunishment(),
+		spamPause:  NewSpamPause(),
+	}
+	for _, opt := range opts {
+		opt(t)
+	}
+	return t
 }
 
 var zeroWidthRunes = map[rune]struct{}{
@@ -73,4 +108,12 @@ func (t *Template) Punishment() ports.PunishmentPort {
 
 func (t *Template) SpamPause() ports.SpamPausePort {
 	return t.spamPause
+}
+
+func (t *Template) Mword() ports.MwordPort {
+	return t.mword
+}
+
+func (t *Template) Store() ports.StoresPort {
+	return t.store
 }

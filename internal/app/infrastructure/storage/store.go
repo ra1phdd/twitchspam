@@ -60,6 +60,26 @@ func (s *Store[T]) Push(key string, val T) {
 	ks.items = append(ks.items, e)
 }
 
+func (s *Store[T]) GetAll() map[string][]T {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	vals := make(map[string][]T, len(s.keys))
+	for key, ks := range s.keys {
+		ks.mu.Lock()
+
+		var val []T
+		for _, e := range ks.items {
+			val = append(val, e.val)
+		}
+
+		vals[key] = val
+		ks.mu.Unlock()
+	}
+
+	return vals
+}
+
 func (s *Store[T]) Get(key string) ([]T, bool) {
 	s.mu.RLock()
 	ks, ok := s.keys[key]
@@ -168,6 +188,13 @@ func (s *Store[T]) SetCapacity(capacity int) {
 	}
 }
 
+func (s *Store[T]) GetCapacity() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	return s.capacity
+}
+
 func (s *Store[T]) SetTTL(newTTL time.Duration) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -183,4 +210,11 @@ func (s *Store[T]) SetTTL(newTTL time.Duration) {
 		}
 		ks.mu.Unlock()
 	}
+}
+
+func (s *Store[T]) GetTTL() time.Duration {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	return s.ttl
 }

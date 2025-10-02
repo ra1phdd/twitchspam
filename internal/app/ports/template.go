@@ -2,7 +2,9 @@ package ports
 
 import (
 	"time"
+	"twitchspam/internal/app/domain"
 	"twitchspam/internal/app/infrastructure/config"
+	"twitchspam/internal/app/infrastructure/storage"
 )
 
 type TemplatePort interface {
@@ -14,6 +16,8 @@ type TemplatePort interface {
 	Parser() ParserPort
 	Punishment() PunishmentPort
 	SpamPause() SpamPausePort
+	Mword() MwordPort
+	Store() StoresPort
 }
 
 type AliasesPort interface {
@@ -56,4 +60,25 @@ type PunishmentPort interface {
 type SpamPausePort interface {
 	Pause(duration time.Duration)
 	CanProcess() bool
+}
+
+type MwordPort interface {
+	Update(mwords map[string]*config.Mword, mwordGroups map[string]*config.MwordGroup)
+	Check(msg *domain.ChatMessage) []config.Punishment
+}
+
+type StoresPort interface {
+	SetAllTimeoutsTTL(cfg *config.Config)
+	SetMessageCapacity(cfg *config.Config)
+	Messages() StorePort[storage.Message]
+	Timeouts() *StoreTimeouts
+}
+
+type StoreTimeouts struct {
+	SpamDefault      StorePort[storage.Empty]
+	SpamVIP          StorePort[storage.Empty]
+	SpamEmote        StorePort[storage.Empty]
+	ExceptionsSpam   StorePort[storage.Empty]
+	ExceptionsEmotes StorePort[storage.Empty]
+	Mword            StorePort[storage.Empty]
 }

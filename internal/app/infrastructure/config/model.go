@@ -10,8 +10,10 @@ type Config struct {
 	App         App                              `json:"app"`
 	Enabled     bool                             `json:"enabled"`
 	Limiter     Limiter                          `json:"limiter"`
+	WindowSecs  int                              `json:"-"`
 	Spam        Spam                             `json:"spam"`
 	Automod     Automod                          `json:"automod"`
+	Nuke        Nuke                             `json:"-"`
 	Mword       map[string]*Mword                `json:"mword"`
 	MwordGroup  map[string]*MwordGroup           `json:"mword_group"`
 	Markers     map[string]map[string][]*Markers `json:"markers"` // первый ключ - юзернейм, второй ключ - название маркера
@@ -31,13 +33,12 @@ type App struct {
 }
 
 type Spam struct {
-	Mode               string                         `json:"mode"`                 // !am online/always - только на стриме/всегда
-	CheckWindowSeconds int                            `json:"check_window_seconds"` // !am time <секунды, макс 300>
-	WhitelistUsers     map[string]struct{}            `json:"whitelist_users"`      // !am add/del <список>
-	SettingsDefault    SpamSettings                   `json:"settings_default"`
-	SettingsVIP        SpamSettings                   `json:"settings_vip"`
-	SettingsEmotes     SpamSettingsEmote              `json:"settings_emotes"`
-	Exceptions         map[string]*ExceptionsSettings `json:"exceptions"`
+	Mode            string                         `json:"mode"`            // !am online/always - только на стриме/всегда
+	WhitelistUsers  map[string]struct{}            `json:"whitelist_users"` // !am add/del <список>
+	SettingsDefault SpamSettings                   `json:"settings_default"`
+	SettingsVIP     SpamSettings                   `json:"settings_vip"`
+	SettingsEmotes  SpamSettingsEmote              `json:"settings_emotes"`
+	Exceptions      map[string]*ExceptionsSettings `json:"exceptions"`
 }
 
 type SpamSettings struct {
@@ -65,6 +66,15 @@ type SpamSettingsEmote struct {
 type Automod struct {
 	Enabled bool `json:"enabled"`
 	Delay   int  `json:"delay"`
+}
+
+type Nuke struct {
+	Enabled    bool             `json:"-"`
+	ExpiresAt  time.Time        `json:"-"`
+	Punishment Punishment       `json:"-"`
+	Scrollback time.Duration    `json:"-"`
+	Words      map[bool]string  `json:"-"`
+	Regexp     []*regexp.Regexp `json:"-"`
 }
 
 type ExceptionsSettings struct {

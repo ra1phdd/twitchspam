@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"twitchspam/internal/app/domain"
 	"twitchspam/internal/app/domain/template"
 	"twitchspam/internal/app/infrastructure/config"
 	"twitchspam/internal/app/ports"
@@ -16,12 +17,12 @@ type AddExcept struct {
 	typeExcept string
 }
 
-func (e *AddExcept) Execute(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+func (e *AddExcept) Execute(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
 	return e.handleExceptAdd(cfg, text)
 }
 
-func (e *AddExcept) handleExceptAdd(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
-	textWithoutOpts, opts := e.template.Options().ParseAll(text.Original, template.ExceptOptions)
+func (e *AddExcept) handleExceptAdd(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
+	textWithoutOpts, opts := e.template.Options().ParseAll(text.Text(), template.ExceptOptions)
 
 	// !am ex (add) <кол-во сообщений> <наказания через запятую> <слова/фразы через запятую>
 	// или !am ex (add) <кол-во сообщений> <наказания через запятую> re <name> <regex>
@@ -121,12 +122,12 @@ type SetExcept struct {
 	typeExcept string
 }
 
-func (e *SetExcept) Execute(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+func (e *SetExcept) Execute(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
 	return e.handleExceptSet(cfg, text)
 }
 
-func (e *SetExcept) handleExceptSet(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
-	textWithoutOpts, opts := e.template.Options().ParseAll(text.Original, template.ExceptOptions)
+func (e *SetExcept) handleExceptSet(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
+	textWithoutOpts, opts := e.template.Options().ParseAll(text.Text(), template.ExceptOptions)
 
 	// !am ex set ml <значение> <слова или фразы через запятую>
 	// или !am ex set p <наказания через запятую> <слова или фразы через запятую>
@@ -226,12 +227,12 @@ type DelExcept struct {
 	typeExcept string
 }
 
-func (e *DelExcept) Execute(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+func (e *DelExcept) Execute(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
 	return e.handleExceptDel(cfg, text)
 }
 
-func (e *DelExcept) handleExceptDel(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
-	matches := e.re.FindStringSubmatch(text.Original) // !am ex del <слова/фразы через запятую или regex>
+func (e *DelExcept) handleExceptDel(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
+	matches := e.re.FindStringSubmatch(text.Text()) // !am ex del <слова/фразы через запятую или regex>
 	if len(matches) != 2 {
 		return nonParametr
 	}
@@ -265,7 +266,7 @@ type ListExcept struct {
 	typeExcept string
 }
 
-func (e *ListExcept) Execute(cfg *config.Config, _ *ports.MessageText) *ports.AnswerType {
+func (e *ListExcept) Execute(cfg *config.Config, _ *domain.MessageText) *ports.AnswerType {
 	return e.handleExceptList(cfg)
 }
 
@@ -288,12 +289,12 @@ type OnOffExcept struct {
 	typeExcept string
 }
 
-func (e *OnOffExcept) Execute(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+func (e *OnOffExcept) Execute(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
 	return e.handleExceptOnOff(cfg, text)
 }
 
-func (e *OnOffExcept) handleExceptOnOff(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
-	matches := e.re.FindStringSubmatch(text.Original) // !am ex on/off <слова/фразы через запятую>
+func (e *OnOffExcept) handleExceptOnOff(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
+	matches := e.re.FindStringSubmatch(text.Text()) // !am ex on/off <слова/фразы через запятую>
 	if len(matches) != 3 {
 		return nonParametr
 	}

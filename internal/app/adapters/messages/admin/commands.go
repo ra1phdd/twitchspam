@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"twitchspam/internal/app/domain"
 	"twitchspam/internal/app/domain/template"
 	"twitchspam/internal/app/infrastructure/config"
 	"twitchspam/internal/app/ports"
@@ -13,7 +14,7 @@ type ListCommand struct {
 	fs ports.FileServerPort
 }
 
-func (c *ListCommand) Execute(cfg *config.Config, _ *ports.MessageText) *ports.AnswerType {
+func (c *ListCommand) Execute(cfg *config.Config, _ *domain.MessageText) *ports.AnswerType {
 	return c.handleCommandList(cfg)
 }
 
@@ -29,12 +30,12 @@ type AddCommand struct {
 	template ports.TemplatePort
 }
 
-func (c *AddCommand) Execute(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+func (c *AddCommand) Execute(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
 	return c.handleCommandAdd(cfg, text)
 }
 
-func (c *AddCommand) handleCommandAdd(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
-	textWithoutOpts, opts := c.template.Options().ParseAll(text.Original, template.CommandOptions)
+func (c *AddCommand) handleCommandAdd(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
+	textWithoutOpts, opts := c.template.Options().ParseAll(text.Text(), template.CommandOptions)
 
 	matches := c.re.FindStringSubmatch(textWithoutOpts) // !am cmd add <команда> <текст>
 	if len(matches) != 3 {
@@ -59,12 +60,12 @@ type SetCommand struct {
 	template ports.TemplatePort
 }
 
-func (c *SetCommand) Execute(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+func (c *SetCommand) Execute(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
 	return c.handleCommandSet(cfg, text)
 }
 
-func (c *SetCommand) handleCommandSet(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
-	textWithoutOpts, opts := c.template.Options().ParseAll(text.Original, template.CommandOptions)
+func (c *SetCommand) handleCommandSet(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
+	textWithoutOpts, opts := c.template.Options().ParseAll(text.Text(), template.CommandOptions)
 
 	matches := c.re.FindStringSubmatch(textWithoutOpts) // !am cmd set <команды через запятую>
 	if len(matches) != 2 {
@@ -98,12 +99,12 @@ type DelCommand struct {
 	re *regexp.Regexp
 }
 
-func (c *DelCommand) Execute(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+func (c *DelCommand) Execute(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
 	return c.handleCommandDel(cfg, text)
 }
 
-func (c *DelCommand) handleCommandDel(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
-	matches := c.re.FindStringSubmatch(text.Original) // !am cmd del <команды через запятую>
+func (c *DelCommand) handleCommandDel(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
+	matches := c.re.FindStringSubmatch(text.Text()) // !am cmd del <команды через запятую>
 	if len(matches) != 2 {
 		return nonParametr
 	}
@@ -140,12 +141,12 @@ type AliasesCommand struct {
 	re *regexp.Regexp
 }
 
-func (c *AliasesCommand) Execute(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+func (c *AliasesCommand) Execute(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
 	return c.handleCommandAliases(cfg, text)
 }
 
-func (c *AliasesCommand) handleCommandAliases(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
-	matches := c.re.FindStringSubmatch(text.Original) // !am cmd aliases <команда>
+func (c *AliasesCommand) handleCommandAliases(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
+	matches := c.re.FindStringSubmatch(text.Text()) // !am cmd aliases <команда>
 	if len(matches) != 2 {
 		return nonParametr
 	}

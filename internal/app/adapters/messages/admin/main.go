@@ -8,13 +8,14 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"twitchspam/internal/app/domain"
 	"twitchspam/internal/app/infrastructure/config"
 	"twitchspam/internal/app/ports"
 )
 
 type Ping struct{}
 
-func (p *Ping) Execute(_ *config.Config, _ *ports.MessageText) *ports.AnswerType {
+func (p *Ping) Execute(_ *config.Config, _ *domain.MessageText) *ports.AnswerType {
 	return p.handlePing()
 }
 
@@ -39,7 +40,7 @@ type OnOff struct {
 	enabled bool
 }
 
-func (o *OnOff) Execute(cfg *config.Config, _ *ports.MessageText) *ports.AnswerType {
+func (o *OnOff) Execute(cfg *config.Config, _ *domain.MessageText) *ports.AnswerType {
 	return o.handleOnOff(cfg, o.enabled)
 }
 
@@ -53,12 +54,12 @@ type Game struct {
 	stream ports.StreamPort
 }
 
-func (g *Game) Execute(_ *config.Config, text *ports.MessageText) *ports.AnswerType {
+func (g *Game) Execute(_ *config.Config, text *domain.MessageText) *ports.AnswerType {
 	return g.handleGame(text)
 }
 
-func (g *Game) handleGame(text *ports.MessageText) *ports.AnswerType {
-	matches := g.re.FindStringSubmatch(text.Lower()) // !am game <игра>
+func (g *Game) handleGame(text *domain.MessageText) *ports.AnswerType {
+	matches := g.re.FindStringSubmatch(text.Text()) // !am game <игра>
 	if len(matches) != 2 {
 		return nonParametr
 	}
@@ -81,7 +82,7 @@ func (g *Game) handleGame(text *ports.MessageText) *ports.AnswerType {
 
 type Status struct{}
 
-func (s *Status) Execute(cfg *config.Config, _ *ports.MessageText) *ports.AnswerType {
+func (s *Status) Execute(cfg *config.Config, _ *domain.MessageText) *ports.AnswerType {
 	return s.handleStatus(cfg)
 }
 
@@ -105,7 +106,7 @@ type Reset struct {
 	manager *config.Manager
 }
 
-func (r *Reset) Execute(cfg *config.Config, _ *ports.MessageText) *ports.AnswerType {
+func (r *Reset) Execute(cfg *config.Config, _ *domain.MessageText) *ports.AnswerType {
 	return r.handleReset(cfg)
 }
 
@@ -118,12 +119,12 @@ type Say struct {
 	re *regexp.Regexp
 }
 
-func (s *Say) Execute(_ *config.Config, text *ports.MessageText) *ports.AnswerType {
+func (s *Say) Execute(_ *config.Config, text *domain.MessageText) *ports.AnswerType {
 	return s.handleSay(text)
 }
 
-func (s *Say) handleSay(text *ports.MessageText) *ports.AnswerType {
-	matches := s.re.FindStringSubmatch(text.Lower()) // !am say <текст>
+func (s *Say) handleSay(text *domain.MessageText) *ports.AnswerType {
+	matches := s.re.FindStringSubmatch(text.Text()) // !am say <текст>
 	if len(matches) != 2 {
 		return nonParametr
 	}
@@ -138,12 +139,12 @@ type Spam struct {
 	re *regexp.Regexp
 }
 
-func (s *Spam) Execute(_ *config.Config, text *ports.MessageText) *ports.AnswerType {
+func (s *Spam) Execute(_ *config.Config, text *domain.MessageText) *ports.AnswerType {
 	return s.handleSpam(text)
 }
 
-func (s *Spam) handleSpam(text *ports.MessageText) *ports.AnswerType {
-	matches := s.re.FindStringSubmatch(text.Lower()) // !am spam <кол-во> <текст>
+func (s *Spam) handleSpam(text *domain.MessageText) *ports.AnswerType {
+	matches := s.re.FindStringSubmatch(text.Text()) // !am spam <кол-во> <текст>
 	if len(matches) != 3 {
 		return nonParametr
 	}

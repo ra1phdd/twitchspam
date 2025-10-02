@@ -7,7 +7,8 @@ import (
 	"twitchspam/internal/app/infrastructure/config"
 )
 
-type PunishmentTemplate struct{}
+type PunishmentTemplate struct {
+}
 
 func NewPunishment() *PunishmentTemplate {
 	return &PunishmentTemplate{}

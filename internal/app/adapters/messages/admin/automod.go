@@ -3,6 +3,7 @@ package admin
 import (
 	"regexp"
 	"strings"
+	"twitchspam/internal/app/domain"
 	"twitchspam/internal/app/infrastructure/config"
 	"twitchspam/internal/app/ports"
 )
@@ -11,7 +12,7 @@ type OnOffAutomod struct {
 	enabled bool
 }
 
-func (a *OnOffAutomod) Execute(cfg *config.Config, _ *ports.MessageText) *ports.AnswerType {
+func (a *OnOffAutomod) Execute(cfg *config.Config, _ *domain.MessageText) *ports.AnswerType {
 	return a.handleOnOffAutomod(cfg)
 }
 
@@ -25,12 +26,12 @@ type DelayAutomod struct {
 	template ports.TemplatePort
 }
 
-func (a *DelayAutomod) Execute(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
+func (a *DelayAutomod) Execute(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
 	return a.handleDelayAutomod(cfg, text)
 }
 
-func (a *DelayAutomod) handleDelayAutomod(cfg *config.Config, text *ports.MessageText) *ports.AnswerType {
-	matches := a.re.FindStringSubmatch(text.Original) // !am mod delay <число>
+func (a *DelayAutomod) handleDelayAutomod(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
+	matches := a.re.FindStringSubmatch(text.Text()) // !am mod delay <число>
 	if len(matches) != 2 {
 		return nonParametr
 	}
