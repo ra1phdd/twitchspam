@@ -68,17 +68,7 @@ type MwordPort interface {
 }
 
 type StoresPort interface {
-	SetAllTimeoutsTTL(cfg *config.Config)
 	SetMessageCapacity(cfg *config.Config)
 	Messages() StorePort[storage.Message]
-	Timeouts() *StoreTimeouts
-}
-
-type StoreTimeouts struct {
-	SpamDefault      StorePort[storage.Empty]
-	SpamVIP          StorePort[storage.Empty]
-	SpamEmote        StorePort[storage.Empty]
-	ExceptionsSpam   StorePort[storage.Empty]
-	ExceptionsEmotes StorePort[storage.Empty]
-	Mword            StorePort[storage.Empty]
+	Timeouts() StorePort[int]
 }

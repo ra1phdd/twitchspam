@@ -14,9 +14,8 @@ func (es *EventSub) checkMessage(msgEvent ChatMessageEvent) {
 		es.stream.Stats().AddMessage(msg.Chatter.Username)
 	}
 
-	es.template.Store().Messages().Push(msg.Chatter.Username, storage.Message{
+	es.template.Store().Messages().Push(msg.Chatter.Username, msg.Message.ID, storage.Message{
 		UserID:             msg.Chatter.UserID,
-		MessageID:          msg.Message.ID,
 		Text:               msg.Message.Text,
 		HashWordsLowerNorm: domain.WordsToHashes(msg.Message.Text.Words(domain.Lower, domain.RemovePunctuation, domain.RemoveDuplicateLetters)),
 		IgnoreAntispam:     !es.cfg.Enabled || !es.template.SpamPause().CanProcess() || !es.cfg.Spam.SettingsDefault.Enabled,

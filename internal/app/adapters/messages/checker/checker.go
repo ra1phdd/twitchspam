@@ -114,8 +114,19 @@ func (c *Checker) CheckMwords(msg *domain.ChatMessage) *ports.CheckerAction {
 		return nil
 	}
 
-	action, dur := domain.GetPunishment(punishments, c.template.Store().Timeouts().Mword.Len(msg.Chatter.Username))
-	c.template.Store().Timeouts().Mword.Push(msg.Chatter.Username, storage.Empty{})
+	countTimeouts, ok := c.template.Store().Timeouts().Get(msg.Chatter.Username, "mword")
+	if !ok {
+		c.template.Store().Timeouts().Push(msg.Chatter.Username, "mword", 0, storage.WithTTL(
+			time.Duration(c.cfg.Spam.SettingsDefault.DurationResetPunishments)*time.Second),
+		)
+	}
+	action, dur := domain.GetPunishment(punishments, countTimeouts)
+	c.template.Store().Timeouts().Update(msg.Chatter.Username, "mword", func(cur int, exists bool) int {
+		if !exists {
+			return 1
+		}
+		return cur + 1
+	})
 
 	return &ports.CheckerAction{
 		Type:     action,
@@ -157,12 +168,24 @@ func (c *Checker) checkSpam(msg *domain.ChatMessage) *ports.CheckerAction {
 		return nil
 	}
 
-	action, dur := domain.GetPunishment(settings.Punishments, c.template.Store().Timeouts().SpamDefault.Len(msg.Chatter.Username))
+	cacheKey := "spam_default"
+	cacheTTL := time.Duration(c.cfg.Spam.SettingsDefault.DurationResetPunishments) * time.Second
 	if msg.Chatter.IsVip {
-		c.template.Store().Timeouts().SpamVIP.Push(msg.Chatter.Username, storage.Empty{})
-	} else {
-		c.template.Store().Timeouts().SpamDefault.Push(msg.Chatter.Username, storage.Empty{})
+		cacheKey = "spam_vip"
+		cacheTTL = time.Duration(c.cfg.Spam.SettingsVIP.DurationResetPunishments) * time.Second
 	}
+
+	countTimeouts, ok := c.template.Store().Timeouts().Get(msg.Chatter.Username, cacheKey)
+	if !ok {
+		c.template.Store().Timeouts().Push(msg.Chatter.Username, cacheKey, 0, storage.WithTTL(cacheTTL))
+	}
+	action, dur := domain.GetPunishment(settings.Punishments, countTimeouts)
+	c.template.Store().Timeouts().Update(msg.Chatter.Username, cacheKey, func(cur int, exists bool) int {
+		if !exists {
+			return 1
+		}
+		return cur + 1
+	})
 
 	c.template.Store().Messages().ClearKey(msg.Chatter.Username)
 	return &ports.CheckerAction{
@@ -239,8 +262,19 @@ func (c *Checker) handleEmotes(msg *domain.ChatMessage, countSpam int) *ports.Ch
 		return &ports.CheckerAction{Type: None}
 	}
 
-	action, dur := domain.GetPunishment(c.cfg.Spam.SettingsEmotes.Punishments, c.template.Store().Timeouts().SpamEmote.Len(msg.Chatter.Username))
-	c.template.Store().Timeouts().SpamEmote.Push(msg.Chatter.Username, storage.Empty{})
+	countTimeouts, ok := c.template.Store().Timeouts().Get(msg.Chatter.Username, "spam_emote")
+	if !ok {
+		c.template.Store().Timeouts().Push(msg.Chatter.Username, "spam_emote", 0, storage.WithTTL(
+			time.Duration(c.cfg.Spam.SettingsDefault.DurationResetPunishments)*time.Second),
+		)
+	}
+	action, dur := domain.GetPunishment(c.cfg.Spam.SettingsEmotes.Punishments, countTimeouts)
+	c.template.Store().Timeouts().Update(msg.Chatter.Username, "spam_emote", func(cur int, exists bool) int {
+		if !exists {
+			return 1
+		}
+		return cur + 1
+	})
 
 	return &ports.CheckerAction{
 		Type:     action,
@@ -259,8 +293,19 @@ func (c *Checker) handleEmotesExceptions(msg *domain.ChatMessage, countSpam int)
 			return &ports.CheckerAction{Type: None}
 		}
 
-		action, dur := domain.GetPunishment(ex.Punishments, c.template.Store().Timeouts().ExceptionsEmotes.Len(msg.Chatter.Username))
-		c.template.Store().Timeouts().ExceptionsEmotes.Push(msg.Chatter.Username, storage.Empty{})
+		countTimeouts, ok := c.template.Store().Timeouts().Get(msg.Chatter.Username, "except_emote")
+		if !ok {
+			c.template.Store().Timeouts().Push(msg.Chatter.Username, "except_emote", 0, storage.WithTTL(
+				time.Duration(c.cfg.Spam.SettingsEmotes.DurationResetPunishments)*time.Second),
+			)
+		}
+		action, dur := domain.GetPunishment(ex.Punishments, countTimeouts)
+		c.template.Store().Timeouts().Update(msg.Chatter.Username, "except_emote", func(cur int, exists bool) int {
+			if !exists {
+				return 1
+			}
+			return cur + 1
+		})
 
 		return &ports.CheckerAction{
 			Type:     action,
@@ -282,8 +327,19 @@ func (c *Checker) handleExceptions(msg *domain.ChatMessage, countSpam int) *port
 			return &ports.CheckerAction{Type: None}
 		}
 
-		action, dur := domain.GetPunishment(ex.Punishments, c.template.Store().Timeouts().ExceptionsSpam.Len(msg.Chatter.Username))
-		c.template.Store().Timeouts().ExceptionsSpam.Push(msg.Chatter.Username, storage.Empty{})
+		countTimeouts, ok := c.template.Store().Timeouts().Get(msg.Chatter.Username, "except_spam")
+		if !ok {
+			c.template.Store().Timeouts().Push(msg.Chatter.Username, "except_spam", 0, storage.WithTTL(
+				time.Duration(c.cfg.Spam.SettingsDefault.DurationResetPunishments)*time.Second),
+			)
+		}
+		action, dur := domain.GetPunishment(ex.Punishments, countTimeouts)
+		c.template.Store().Timeouts().Update(msg.Chatter.Username, "except_spam", func(cur int, exists bool) int {
+			if !exists {
+				return 1
+			}
+			return cur + 1
+		})
 
 		return &ports.CheckerAction{
 			Type:     action,

@@ -1,12 +1,9 @@
 package admin
 
 import (
-	"log/slog"
 	"regexp"
-	"slices"
 	"strings"
 	"time"
-	"twitchspam/internal/app/adapters/messages/checker"
 	"twitchspam/internal/app/domain"
 	"twitchspam/internal/app/infrastructure/config"
 	"twitchspam/internal/app/ports"
@@ -107,54 +104,54 @@ func (n *Nuke) handleNuke(cfg *config.Config, text *domain.MessageText) *ports.A
 		}
 	})
 
-	dur := time.Duration(punishment.Duration) * time.Second
-	apply := func(msgID, userID, username, text string) {
-		switch punishment.Action {
-		case checker.Ban:
-			n.log.Warn("Ban user", slog.String("username", username), slog.String("text", text))
-			n.api.BanUser(userID, "массбан")
-		case checker.Timeout:
-			n.log.Warn("Timeout user", slog.String("username", username), slog.String("text", text), slog.Int("duration", int(dur.Seconds())))
-			n.api.TimeoutUser(userID, int(dur.Seconds()), "массбан")
-		case checker.Delete:
-			n.log.Warn("Delete message", slog.String("username", username), slog.String("text", text))
-			if err := n.api.DeleteChatMessage(msgID); err != nil {
-				n.log.Error("Failed to delete message on chat", err)
-			}
-		}
-	}
+	//dur := time.Duration(punishment.Duration) * time.Second
+	//apply := func(msgID, userID, username, text string) {
+	//	switch punishment.Action {
+	//	case checker.Ban:
+	//		n.log.Warn("Ban user", slog.String("username", username), slog.String("text", text))
+	//		n.api.BanUser(userID, "массбан")
+	//	case checker.Timeout:
+	//		n.log.Warn("Timeout user", slog.String("username", username), slog.String("text", text), slog.Int("duration", int(dur.Seconds())))
+	//		n.api.TimeoutUser(userID, int(dur.Seconds()), "массбан")
+	//	case checker.Delete:
+	//		n.log.Warn("Delete message", slog.String("username", username), slog.String("text", text))
+	//		if err := n.api.DeleteChatMessage(msgID); err != nil {
+	//			n.log.Error("Failed to delete message on chat", err)
+	//		}
+	//	}
+	//}
 
-	for username, msgs := range n.template.Store().Messages().GetAll() {
-		skipUser := false
-		for _, msg := range msgs {
-			for noContains, word := range words {
-				if noContains && !slices.Contains(msg.Text.Words(), word) {
-					continue
-				}
-
-				if !noContains && !strings.Contains(msg.Text.Text(domain.RemoveDuplicateLetters), word) {
-					continue
-				}
-
-				apply(msg.MessageID, msg.UserID, username, msg.Text.Text())
-				if punishment.Action != "delete" {
-					skipUser = true
-				}
-				break
-			}
-
-			if skipUser {
-				break
-			}
-
-			for _, re := range regexps {
-				if re.MatchString(msg.Text.Text(domain.RemoveDuplicateLetters)) {
-					apply(msg.MessageID, msg.UserID, username, msg.Text.Text())
-					break
-				}
-			}
-		}
-	}
+	//for username, msgs := range n.template.Store().Messages().GetAll() {
+	//	skipUser := false
+	//	for _, msg := range msgs {
+	//		for noContains, word := range words {
+	//			if noContains && !slices.Contains(msg.Text.Words(), word) {
+	//				continue
+	//			}
+	//
+	//			if !noContains && !strings.Contains(msg.Text.Text(domain.RemoveDuplicateLetters), word) {
+	//				continue
+	//			}
+	//
+	//			apply(msg.MessageID, msg.UserID, username, msg.Text.Text())
+	//			if punishment.Action != "delete" {
+	//				skipUser = true
+	//			}
+	//			break
+	//		}
+	//
+	//		if skipUser {
+	//			break
+	//		}
+	//
+	//		for _, re := range regexps {
+	//			if re.MatchString(msg.Text.Text(domain.RemoveDuplicateLetters)) {
+	//				apply(msg.MessageID, msg.UserID, username, msg.Text.Text())
+	//				break
+	//			}
+	//		}
+	//	}
+	//}
 
 	if len(globalErrs) != 0 {
 		return &ports.AnswerType{

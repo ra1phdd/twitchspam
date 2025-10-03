@@ -1,220 +1,160 @@
 package storage
 
 import (
-	"sync"
+	"github.com/maypok86/otter/v2"
+	"sync/atomic"
 	"time"
 )
 
 type Store[T any] struct {
-	mu       sync.RWMutex
-	keys     map[string]*keyStore[T]
-	capacity int
-	ttl      time.Duration
+	outer *otter.Cache[string, *otter.Cache[string, T]]
+
+	ttl atomic.Int64
+	cap atomic.Int32
 }
 
-type keyStore[T any] struct {
-	mu    sync.Mutex
-	items []*entry[T]
-}
+func New[T any](cap int, ttl time.Duration) *Store[T] {
+	outer := otter.Must(&otter.Options[string, *otter.Cache[string, T]]{
+		InitialCapacity: 128,
+	})
 
-type entry[T any] struct {
-	val       T
-	expiresAt time.Time
-}
-
-func New[T any](capacity int, ttl time.Duration) *Store[T] {
 	s := &Store[T]{
-		keys:     make(map[string]*keyStore[T]),
-		capacity: capacity,
-		ttl:      ttl,
+		outer: outer,
 	}
-	go s.startAutoCleanup(100 * time.Millisecond)
+	s.ttl.Store(ttl.Nanoseconds())
+	s.cap.Store(int32(cap))
 
 	return s
 }
 
-func (s *Store[T]) getOrCreateKeyStore(key string) *keyStore[T] {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+func (s *Store[T]) getInner(key string) *otter.Cache[string, T] {
+	inner, ok := s.outer.GetIfPresent(key)
+	if ok {
+		return inner
+	}
 
-	ks, ok := s.keys[key]
+	inner = otter.Must(&otter.Options[string, T]{
+		MaximumSize:      int(s.cap.Load()),
+		InitialCapacity:  int(s.cap.Load()),
+		ExpiryCalculator: otter.ExpiryCreating[string, T](time.Duration(s.ttl.Load())),
+	})
+	s.outer.Set(key, inner)
+	return inner
+}
+
+type PushOption func(*pushConfig)
+
+type pushConfig struct {
+	ttl *time.Duration
+}
+
+func WithTTL(ttl time.Duration) PushOption {
+	return func(pc *pushConfig) {
+		pc.ttl = &ttl
+	}
+}
+
+func (s *Store[T]) Push(key string, subKey string, val T, opts ...PushOption) {
+	inner := s.getInner(key)
+	inner.Set(subKey, val)
+
+	config := &pushConfig{}
+	for _, opt := range opts {
+		opt(config)
+	}
+
+	if config.ttl != nil && *config.ttl > 0 {
+		inner.SetExpiresAfter(subKey, *config.ttl)
+	}
+}
+
+func (s *Store[T]) Update(key string, subKey string, updateFn func(current T, exists bool) T) {
+	inner := s.getInner(key)
+
+	current, exists := inner.GetIfPresent(subKey)
+	newValue := updateFn(current, exists)
+	inner.Set(subKey, newValue)
+}
+
+func (s *Store[T]) GetAll(key string) map[string]T {
+	inner, ok := s.outer.GetIfPresent(key)
 	if !ok {
-		ks = &keyStore[T]{items: make([]*entry[T], 0, s.capacity)}
-		s.keys[key] = ks
+		return nil
 	}
-	return ks
-}
-
-func (s *Store[T]) Push(key string, val T) {
-	ks := s.getOrCreateKeyStore(key)
-
-	ks.mu.Lock()
-	defer ks.mu.Unlock()
-
-	if s.capacity > 0 && len(ks.items) >= s.capacity {
-		over := len(ks.items) - s.capacity
-		ks.items = ks.items[over:]
-	}
-
-	e := &entry[T]{val: val, expiresAt: time.Now().Add(s.ttl)}
-	ks.items = append(ks.items, e)
-}
-
-func (s *Store[T]) GetAll() map[string][]T {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	vals := make(map[string][]T, len(s.keys))
-	for key, ks := range s.keys {
-		ks.mu.Lock()
-
-		var val []T
-		for _, e := range ks.items {
-			val = append(val, e.val)
+	values := make(map[string]T)
+	for it := range inner.All() {
+		if v, ok := inner.GetIfPresent(it); ok {
+			values[it] = v
 		}
-
-		vals[key] = val
-		ks.mu.Unlock()
 	}
-
-	return vals
+	return values
 }
 
-func (s *Store[T]) Get(key string) ([]T, bool) {
-	s.mu.RLock()
-	ks, ok := s.keys[key]
-	s.mu.RUnlock()
+func (s *Store[T]) Get(key string, subKey string) (T, bool) {
+	inner, ok := s.outer.GetIfPresent(key)
 	if !ok {
-		return nil, false
+		var zero T
+		return zero, false
 	}
-
-	ks.mu.Lock()
-	defer ks.mu.Unlock()
-
-	var items []T
-	for _, e := range ks.items {
-		items = append(items, e.val)
-	}
-
-	return items, true
+	return inner.GetIfPresent(subKey)
 }
 
 func (s *Store[T]) Len(key string) int {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	ks, ok := s.keys[key]
-	if !ok {
-		return 0
-	}
-
-	return len(ks.items)
+	inner := s.getInner(key)
+	return inner.EstimatedSize()
 }
 
 func (s *Store[T]) ForEach(key string, fn func(val *T)) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	inner := s.getInner(key)
 
-	ks, ok := s.keys[key]
-	if !ok {
-		return
-	}
-
-	for _, item := range ks.items {
-		fn(&item.val)
-	}
-}
-
-func (s *Store[T]) startAutoCleanup(interval time.Duration) {
-	ticker := time.NewTicker(interval)
-	for {
-		select {
-		case <-ticker.C:
-			s.CleanAllExpired()
+	for innerKey := range inner.All() {
+		v, ok := inner.GetIfPresent(innerKey)
+		if !ok {
+			continue
 		}
-	}
-}
-
-func (s *Store[T]) CleanAllExpired() {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	now := time.Now()
-	for key, store := range s.keys {
-		store.mu.Lock()
-		newItems := store.items[:0]
-		for _, item := range store.items {
-			if item.expiresAt.After(now) {
-				newItems = append(newItems, item)
-			}
-		}
-		store.items = newItems
-		store.mu.Unlock()
-
-		if len(newItems) == 0 {
-			delete(s.keys, key)
-		}
+		fn(&v)
 	}
 }
 
 func (s *Store[T]) ClearKey(key string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	delete(s.keys, key)
+	s.outer.Invalidate(key)
 }
 
 func (s *Store[T]) ClearAll() {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.keys = make(map[string]*keyStore[T])
+	s.outer.InvalidateAll()
 }
 
-func (s *Store[T]) SetCapacity(capacity int) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+func (s *Store[T]) SetCapacity(newCap int) {
+	s.cap.Store(int32(newCap))
 
-	s.capacity = capacity
-	if capacity <= 0 {
-		return
-	}
-
-	for _, ks := range s.keys {
-		ks.mu.Lock()
-		if len(ks.items) > capacity {
-			ks.items = ks.items[len(ks.items)-capacity:]
+	for entry := range s.outer.All() {
+		inner, ok := s.outer.GetIfPresent(entry)
+		if !ok {
+			continue
 		}
-		ks.mu.Unlock()
+		inner.SetMaximum(uint64(newCap))
 	}
 }
 
 func (s *Store[T]) GetCapacity() int {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	return s.capacity
+	return int(s.cap.Load())
 }
 
 func (s *Store[T]) SetTTL(newTTL time.Duration) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.ttl.Store(newTTL.Nanoseconds())
 
-	oldTTL := s.ttl
-	diff := newTTL - oldTTL
-	s.ttl = newTTL
-
-	for _, ks := range s.keys {
-		ks.mu.Lock()
-		for _, item := range ks.items {
-			item.expiresAt = item.expiresAt.Add(diff)
+	for entry := range s.outer.All() {
+		inner, ok := s.outer.GetIfPresent(entry)
+		if !ok {
+			continue
 		}
-		ks.mu.Unlock()
+
+		for item := range inner.All() {
+			inner.SetExpiresAfter(item, newTTL)
+		}
 	}
 }
 
 func (s *Store[T]) GetTTL() time.Duration {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	return s.ttl
+	return time.Duration(s.ttl.Load())
 }

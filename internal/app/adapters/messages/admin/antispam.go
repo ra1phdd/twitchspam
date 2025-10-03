@@ -319,7 +319,6 @@ func (a *ResetPunishmentsAntispam) handleDurationResetPunishments(cfg *config.Co
 
 	if val, ok := a.template.Parser().ParseIntArg(strings.TrimSpace(matches[1]), 1, 86400); ok {
 		*target = val
-		a.template.Store().SetAllTimeoutsTTL(cfg)
 		return success
 	}
 

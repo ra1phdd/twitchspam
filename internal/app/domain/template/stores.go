@@ -9,33 +9,17 @@ import (
 
 type StoresTemplate struct {
 	messages ports.StorePort[storage.Message]
-	timeouts *ports.StoreTimeouts
+	timeouts ports.StorePort[int]
 }
 
 func NewStores(cfg *config.Config) *StoresTemplate {
 	st := &StoresTemplate{
 		messages: storage.New[storage.Message](50, time.Duration(cfg.WindowSecs)*time.Second),
-		timeouts: &ports.StoreTimeouts{
-			SpamDefault:      storage.New[storage.Empty](15, time.Duration(cfg.Spam.SettingsDefault.DurationResetPunishments)*time.Second),
-			SpamVIP:          storage.New[storage.Empty](15, time.Duration(cfg.Spam.SettingsVIP.DurationResetPunishments)*time.Second),
-			SpamEmote:        storage.New[storage.Empty](15, time.Duration(cfg.Spam.SettingsEmotes.DurationResetPunishments)*time.Second),
-			ExceptionsSpam:   storage.New[storage.Empty](15, time.Duration(cfg.WindowSecs)*time.Second),
-			ExceptionsEmotes: storage.New[storage.Empty](15, time.Duration(cfg.WindowSecs)*time.Second),
-			Mword:            storage.New[storage.Empty](15, time.Duration(cfg.WindowSecs)*time.Second),
-		},
+		timeouts: storage.New[int](15, 0),
 	}
 	st.SetMessageCapacity(cfg)
 
 	return st
-}
-
-func (s *StoresTemplate) SetAllTimeoutsTTL(cfg *config.Config) {
-	s.timeouts.SpamDefault.SetTTL(time.Duration(cfg.Spam.SettingsDefault.DurationResetPunishments) * time.Second)
-	s.timeouts.SpamVIP.SetTTL(time.Duration(cfg.Spam.SettingsVIP.DurationResetPunishments) * time.Second)
-	s.timeouts.SpamEmote.SetTTL(time.Duration(cfg.Spam.SettingsEmotes.DurationResetPunishments) * time.Second)
-	s.timeouts.ExceptionsSpam.SetTTL(time.Duration(cfg.Spam.SettingsDefault.DurationResetPunishments) * time.Second)
-	s.timeouts.ExceptionsEmotes.SetTTL(time.Duration(cfg.Spam.SettingsEmotes.DurationResetPunishments) * time.Second)
-	s.timeouts.Mword.SetTTL(time.Duration(cfg.Spam.SettingsDefault.DurationResetPunishments) * time.Second)
 }
 
 func (s *StoresTemplate) SetMessageCapacity(cfg *config.Config) {
@@ -57,6 +41,6 @@ func (s *StoresTemplate) Messages() ports.StorePort[storage.Message] {
 	return s.messages
 }
 
-func (s *StoresTemplate) Timeouts() *ports.StoreTimeouts {
+func (s *StoresTemplate) Timeouts() ports.StorePort[int] {
 	return s.timeouts
 }
