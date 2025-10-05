@@ -1,6 +1,7 @@
 package template
 
 import (
+	"fmt"
 	"regexp"
 	"slices"
 	"sort"
@@ -8,11 +9,13 @@ import (
 	"time"
 	"twitchspam/internal/app/domain"
 	"twitchspam/internal/app/infrastructure/config"
+	"twitchspam/internal/app/infrastructure/storage"
 	"twitchspam/internal/app/ports"
 )
 
 type MwordTemplate struct {
 	irc    ports.IRCPort
+	cache  ports.CachePort[map[bool][]config.Punishment] // ключ - мворд применяется только для первых сообщений или нет
 	mwords []Mwords
 }
 
@@ -24,7 +27,10 @@ type Mwords struct {
 }
 
 func NewMword(irc ports.IRCPort, mwords map[string]*config.Mword, mwordGroups map[string]*config.MwordGroup) *MwordTemplate {
-	mt := &MwordTemplate{irc: irc}
+	mt := &MwordTemplate{
+		irc:   irc,
+		cache: storage.NewCache[map[bool][]config.Punishment](1000, 3*time.Minute),
+	}
 	mt.Update(mwords, mwordGroups)
 
 	return mt
@@ -82,14 +88,35 @@ func (t *MwordTemplate) Update(mwords map[string]*config.Mword, mwordGroups map[
 }
 
 func (t *MwordTemplate) Check(msg *domain.ChatMessage) []config.Punishment {
+	match, ok := t.cache.Get(t.getCacheKey(msg))
+	if ok {
+		if trueMatch, exists := match[true]; exists {
+			isFirst, _ := t.irc.WaitForIRC(msg.Message.ID, 250*time.Millisecond)
+			if isFirst {
+				return trueMatch
+			}
+		}
+
+		if falseMatch, exists := match[false]; exists {
+			return falseMatch
+		}
+	} else {
+		match = make(map[bool][]config.Punishment)
+	}
+
 	for _, mw := range t.mwords {
 		if !t.matchMwordRule(msg, mw.Word, mw.Regexp, mw.Options) {
 			continue
 		}
 
+		match[mw.Options.IsFirst] = mw.Punishments
+		t.cache.Set(t.getCacheKey(msg), match)
+
 		return mw.Punishments
 	}
 
+	match[false] = nil
+	t.cache.Set(t.getCacheKey(msg), match)
 	return nil
 }
 
@@ -138,4 +165,9 @@ func (t *MwordTemplate) matchMwordRule(msg *domain.ChatMessage, word string, re 
 		return strings.Contains(text, word)
 	}
 	return slices.Contains(words, word)
+}
+
+func (t *MwordTemplate) getCacheKey(msg *domain.ChatMessage) string {
+	return fmt.Sprintf("%s_%v_%v", strings.TrimSpace(msg.Message.Text.Text(domain.RemovePunctuation)),
+		msg.Chatter.IsVip, msg.Chatter.IsSubscriber)
 }

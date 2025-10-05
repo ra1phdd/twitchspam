@@ -1,28 +1,24 @@
-package checker
+package template
 
 import (
 	"testing"
 	"time"
 	"twitchspam/internal/app/adapters/twitch/irc"
 	"twitchspam/internal/app/domain"
-	"twitchspam/internal/app/domain/stream"
-	"twitchspam/internal/app/domain/template"
 	"twitchspam/internal/app/infrastructure/config"
 	"twitchspam/pkg/logger"
 )
 
 func BenchmarkCheck(b *testing.B) {
-	manager, err := config.New("../../../../../config.json")
+	manager, err := config.New("../../../../config.json")
 	if err != nil {
 		b.Fatal(err)
 	}
 
 	cfg := manager.Get()
+	tIRC, _ := irc.New(logger.New(), cfg, 250*time.Millisecond, "afsygga")
 
-	s := stream.NewStream("afsygga")
-	t := template.New(logger.New(), cfg.Aliases, cfg.Banwords.Words, cfg.Banwords.Regexp, s)
-	i, _ := irc.New(logger.New(), cfg, 100*time.Millisecond, "afsygga")
-	c := NewCheck(logger.New(), cfg, s, stream.New(), t, i)
+	t := New(WithMword(tIRC, cfg.Mword, cfg.MwordGroup))
 
 	msg := &domain.ChatMessage{
 		Broadcaster: domain.Broadcaster{
@@ -46,6 +42,6 @@ func BenchmarkCheck(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		c.Check(msg)
+		t.Mword().Check(msg)
 	}
 }

@@ -57,7 +57,7 @@ func (u *User) handleStats(msg *domain.ChatMessage) *ports.AnswerType {
 		return nil
 	}
 
-	if !u.allowUser(msg.Chatter.Username) {
+	if u.stream.IsLive() || !u.allowUser(msg.Chatter.Username) {
 		return nil
 	}
 

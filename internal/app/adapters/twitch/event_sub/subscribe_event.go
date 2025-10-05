@@ -2,45 +2,87 @@ package event_sub
 
 import (
 	"log/slog"
+	"time"
 )
 
+const maxRetries = 10
+
 func (es *EventSub) subscribeEvents(payload SessionWelcomePayload) {
-	if err := es.subscribeEvent("channel.chat.message", "1", map[string]string{
-		"broadcaster_user_id": es.stream.ChannelID(),
-		"user_id":             es.cfg.App.UserID,
-	}, payload.Session.ID); err != nil {
-		es.log.Error("Failed to subscribe to event channel.chat.message", err, slog.String("event", "channel.chat.message"))
+	events := []struct {
+		name, version string
+		condition     map[string]string
+	}{
+		{
+			name:    "channel.chat.message",
+			version: "1",
+			condition: map[string]string{
+				"broadcaster_user_id": es.stream.ChannelID(),
+				"user_id":             es.cfg.App.UserID,
+			},
+		},
+		{
+			name:    "automod.message.hold",
+			version: "1",
+			condition: map[string]string{
+				"broadcaster_user_id": es.stream.ChannelID(),
+				"moderator_user_id":   es.cfg.App.UserID,
+			},
+		},
+		{
+			name:    "stream.online",
+			version: "1",
+			condition: map[string]string{
+				"broadcaster_user_id": es.stream.ChannelID(),
+			},
+		},
+		{
+			name:    "stream.offline",
+			version: "1",
+			condition: map[string]string{
+				"broadcaster_user_id": es.stream.ChannelID(),
+			},
+		},
+		{
+			name:    "channel.update",
+			version: "2",
+			condition: map[string]string{
+				"broadcaster_user_id": es.stream.ChannelID(),
+			},
+		},
+		{
+			name:    "channel.moderate",
+			version: "2",
+			condition: map[string]string{
+				"broadcaster_user_id": es.stream.ChannelID(),
+				"moderator_user_id":   es.cfg.App.UserID,
+			},
+		},
 	}
 
-	if err := es.subscribeEvent("automod.message.hold", "1", map[string]string{
-		"broadcaster_user_id": es.stream.ChannelID(),
-		"moderator_user_id":   es.cfg.App.UserID,
-	}, payload.Session.ID); err != nil {
-		es.log.Error("Failed to subscribe to event automod", err, slog.String("event", "automod.message.hold"))
-	}
+	for _, e := range events {
+		var attempt int
+		var backoff = 1 * time.Second
 
-	if err := es.subscribeEvent("stream.online", "1", map[string]string{
-		"broadcaster_user_id": es.stream.ChannelID(),
-	}, payload.Session.ID); err != nil {
-		es.log.Error("Failed to subscribe to event", err, slog.String("event", "stream.online"))
-	}
+		for {
+			err := es.subscribeEvent(e.name, e.version, e.condition, payload.Session.ID)
+			if err == nil {
+				break
+			}
 
-	if err := es.subscribeEvent("stream.offline", "1", map[string]string{
-		"broadcaster_user_id": es.stream.ChannelID(),
-	}, payload.Session.ID); err != nil {
-		es.log.Error("Failed to subscribe to event", err, slog.String("event", "stream.offline"))
-	}
+			es.log.Error("Failed to subscribe to event", err,
+				slog.String("event", e.name),
+				slog.Int("attempt", attempt+1),
+			)
 
-	if err := es.subscribeEvent("channel.update", "2", map[string]string{
-		"broadcaster_user_id": es.stream.ChannelID(),
-	}, payload.Session.ID); err != nil {
-		es.log.Error("Failed to subscribe to event", err, slog.String("event", "channel.update"))
-	}
+			attempt++
+			if attempt >= maxRetries {
+				es.log.Error("Giving up on event after max retries", err, slog.String("event", e.name))
+				break
+			}
 
-	if err := es.subscribeEvent("channel.moderate", "2", map[string]string{
-		"broadcaster_user_id": es.stream.ChannelID(),
-		"moderator_user_id":   es.cfg.App.UserID,
-	}, payload.Session.ID); err != nil {
-		es.log.Error("Failed to subscribe to event", err, slog.String("event", "channel.moderate"))
+			es.log.Warn("Retrying event subscription", slog.String("event", e.name), slog.Duration("backoff", backoff))
+			time.Sleep(backoff)
+			backoff *= 2
+		}
 	}
 }

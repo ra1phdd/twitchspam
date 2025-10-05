@@ -14,13 +14,11 @@ type Store[T any] struct {
 }
 
 func New[T any](cap int, ttl time.Duration) *Store[T] {
-	outer := otter.Must(&otter.Options[string, *otter.Cache[string, T]]{
-		InitialCapacity:  128,
-		ExpiryCalculator: otter.ExpiryAccessing[string, *otter.Cache[string, T]](24 * time.Hour),
-	})
-
 	s := &Store[T]{
-		outer: outer,
+		outer: otter.Must(&otter.Options[string, *otter.Cache[string, T]]{
+			InitialCapacity:  128,
+			ExpiryCalculator: otter.ExpiryAccessing[string, *otter.Cache[string, T]](24 * time.Hour),
+		}),
 	}
 	s.ttl.Store(ttl.Nanoseconds())
 	s.cap.Store(int32(cap))

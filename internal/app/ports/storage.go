@@ -19,3 +19,10 @@ type StorePort[T any] interface {
 	SetTTL(newTTL time.Duration)
 	GetTTL() time.Duration
 }
+
+type CachePort[T any] interface {
+	Set(key string, val T)
+	Get(key string) (T, bool)
+	ClearKey(key string)
+	ClearAll()
+}
