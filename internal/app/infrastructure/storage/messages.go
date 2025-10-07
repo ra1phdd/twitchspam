@@ -1,10 +1,13 @@
 package storage
 
-import "twitchspam/internal/app/domain"
+import (
+	"time"
+	"twitchspam/internal/app/domain"
+)
 
 type Message struct {
-	UserID             string
-	Text               domain.MessageText
+	Data               *domain.ChatMessage
+	Time               time.Time
 	HashWordsLowerNorm []uint64
 	IgnoreAntispam     bool
 }

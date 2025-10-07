@@ -71,7 +71,7 @@ func New(log logger.Logger, manager *config.Manager, client *http.Client, modCha
 	}
 
 	t.template = template.New(
-		template.WithAliases(t.cfg.Aliases, t.cfg.AliasGroups),
+		template.WithAliases(t.cfg.Aliases, t.cfg.AliasGroups, t.cfg.GlobalAliases),
 		template.WithPlaceholders(t.stream),
 		template.WithBanwords(t.log, t.cfg.Banwords.Words, t.cfg.Banwords.Regexp),
 		template.WithMword(t.irc, t.cfg.Mword, t.cfg.MwordGroup),

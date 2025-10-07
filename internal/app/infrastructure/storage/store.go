@@ -75,6 +75,30 @@ func (s *Store[T]) Update(key string, subKey string, updateFn func(current T, ex
 	inner.Set(subKey, newValue)
 }
 
+func (s *Store[T]) GetAllData() map[string]map[string]T {
+	result := make(map[string]map[string]T)
+
+	for outerKey := range s.outer.All() {
+		innerCache, ok := s.outer.GetIfPresent(outerKey)
+		if !ok || innerCache == nil {
+			continue
+		}
+
+		innerMap := make(map[string]T)
+		for innerKey := range innerCache.All() {
+			if val, ok := innerCache.GetIfPresent(innerKey); ok {
+				innerMap[innerKey] = val
+			}
+		}
+
+		if len(innerMap) > 0 {
+			result[outerKey] = innerMap
+		}
+	}
+
+	return result
+}
+
 func (s *Store[T]) GetAll(key string) map[string]T {
 	inner, ok := s.outer.GetIfPresent(key)
 	if !ok {

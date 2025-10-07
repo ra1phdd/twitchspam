@@ -11,17 +11,21 @@ type AliasesTemplate struct {
 	trie ports.TriePort[string]
 }
 
-func NewAliases(aliases map[string]string, aliasGroups map[string]*config.AliasGroups) *AliasesTemplate {
+func NewAliases(aliases map[string]string, aliasGroups map[string]*config.AliasGroups, globalAliases map[string]string) *AliasesTemplate {
 	at := &AliasesTemplate{
 		trie: trie.NewTrie(map[string]string{}),
 	}
-	at.Update(aliases, aliasGroups)
+	at.Update(aliases, aliasGroups, globalAliases)
 
 	return at
 }
 
-func (at *AliasesTemplate) Update(newAliases map[string]string, newAliasGroups map[string]*config.AliasGroups) {
+func (at *AliasesTemplate) Update(newAliases map[string]string, newAliasGroups map[string]*config.AliasGroups, globalAliases map[string]string) {
 	als := make(map[string]string)
+	for k, v := range globalAliases {
+		als[k] = v
+	}
+
 	for k, v := range newAliases {
 		als[k] = v
 	}

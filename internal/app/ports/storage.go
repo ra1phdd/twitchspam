@@ -8,6 +8,7 @@ import (
 type StorePort[T any] interface {
 	Push(key string, subKey string, val T, opts ...storage.PushOption)
 	Update(key string, subKey string, updateFn func(current T, exists bool) T)
+	GetAllData() map[string]map[string]T
 	GetAll(key string) map[string]T
 	Get(key string, subKey string) (T, bool)
 	Len(key string) int

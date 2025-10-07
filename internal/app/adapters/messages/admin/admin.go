@@ -163,6 +163,13 @@ func (a *Admin) buildCommandTree() ports.Command {
 			"mlen":   &MaxLenAntispam{re: regexp.MustCompile(`(?i)^!am\s+mlen\s+(.+)$`), template: a.template, typeSpam: "default"},
 			"mp":     &MaxPunishmentAntispam{re: regexp.MustCompile(`(?i)^!am\s+mp\s+(.+)$`), template: a.template, typeSpam: "default"},
 			"mg":     &MinGapAntispam{re: regexp.MustCompile(`(?i)^!am\s+mg\s+(.+)$`), template: a.template, typeSpam: "default"},
+			"nuke": &CompositeCommand{
+				subcommands: map[string]ports.Command{
+					"stop": &NukeStop{template: a.template},
+				},
+				defaultCmd: &Nuke{re: regexp.MustCompile(`(?i)^!am nuke(?:\s+(\S+))?(?:\s+(\S+))?\s+(.+)$`), reWords: regexp.MustCompile(`(?i)r'(.*?)'|r"(.*?)"|'(.*?)'|"(.*?)"|([^,'"\s]+)`), log: a.log, api: a.api, template: a.template},
+				cursor:     2,
+			},
 			"mod": &CompositeCommand{
 				subcommands: map[string]ports.Command{
 					"on":    &OnOffAutomod{enabled: true},

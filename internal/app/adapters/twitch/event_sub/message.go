@@ -3,6 +3,7 @@ package event_sub
 import (
 	"log/slog"
 	"strings"
+	"time"
 	"twitchspam/internal/app/adapters/messages/checker"
 	"twitchspam/internal/app/domain"
 	"twitchspam/internal/app/infrastructure/storage"
@@ -15,8 +16,8 @@ func (es *EventSub) checkMessage(msgEvent ChatMessageEvent) {
 	}
 
 	es.template.Store().Messages().Push(msg.Chatter.Username, msg.Message.ID, storage.Message{
-		UserID:             msg.Chatter.UserID,
-		Text:               msg.Message.Text,
+		Data:               msg,
+		Time:               time.Now(),
 		HashWordsLowerNorm: domain.WordsToHashes(msg.Message.Text.Words(domain.Lower, domain.RemovePunctuation, domain.RemoveDuplicateLetters)),
 		IgnoreAntispam:     !es.cfg.Enabled || !es.template.SpamPause().CanProcess() || !es.cfg.Spam.SettingsDefault.Enabled,
 	})

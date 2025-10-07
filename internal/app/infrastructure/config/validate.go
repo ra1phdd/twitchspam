@@ -272,5 +272,9 @@ func (m *Manager) validate(cfg *Config) error {
 		}
 	}
 
+	if cfg.GlobalAliases == nil {
+		cfg.GlobalAliases = make(map[string]string)
+	}
+
 	return nil
 }

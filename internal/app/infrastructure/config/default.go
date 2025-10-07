@@ -70,10 +70,12 @@ func (m *Manager) GetDefault() *Config {
 			Enabled: true,
 			Delay:   0,
 		},
-		Mword:      make(map[string]*Mword),
-		MwordGroup: make(map[string]*MwordGroup),
-		Aliases:    make(map[string]string),
-		Markers:    make(map[string]map[string][]*Markers),
-		Commands:   make(map[string]*Commands),
+		Mword:         make(map[string]*Mword),
+		MwordGroup:    make(map[string]*MwordGroup),
+		Aliases:       make(map[string]string),
+		AliasGroups:   make(map[string]*AliasGroups),
+		GlobalAliases: make(map[string]string),
+		Markers:       make(map[string]map[string][]*Markers),
+		Commands:      make(map[string]*Commands),
 	}
 }

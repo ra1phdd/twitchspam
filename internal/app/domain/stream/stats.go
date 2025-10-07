@@ -308,7 +308,7 @@ func (s *Stats) GetTopStats(count int) *ports.AnswerType {
 	sb.WriteString(fmt.Sprintf("топ-%d чаттеров по кол-ву сообщений за стрим: ", count))
 
 	sep := ", "
-	if count > 5 {
+	if count > 10 {
 		sep = "\n"
 	}
 
@@ -320,7 +320,7 @@ func (s *Stats) GetTopStats(count int) *ports.AnswerType {
 	}
 
 	msg := sb.String()
-	if count > 5 {
+	if count > 10 {
 		key, err := s.fs.UploadToHaste(msg)
 		if err != nil {
 			return &ports.AnswerType{

@@ -34,7 +34,15 @@ func (a *ListAlias) handleAliasesList(cfg *config.Config) *ports.AnswerType {
 		for key := range als.Aliases {
 			alias = append(alias, key)
 		}
-		aliases[strings.Join(alias, ", ")] = als.Original
+
+		data := strings.Join(alias, ", ") + func() string {
+			if !als.Enabled {
+				return " (выключено)"
+			}
+			return ""
+		}()
+		aliases[data] = als.Original
+
 	}
 
 	return buildList(aliases, "алиасы", "алиасы не найдены!",
@@ -88,7 +96,7 @@ func (a *AddAlias) handleAliasesAdd(cfg *config.Config, text *domain.MessageText
 		cfg.Aliases[alias] = original
 	}
 
-	a.template.Aliases().Update(cfg.Aliases, cfg.AliasGroups)
+	a.template.Aliases().Update(cfg.Aliases, cfg.AliasGroups, cfg.GlobalAliases)
 	return &ports.AnswerType{
 		Text:    []string{fmt.Sprintf("алиасы `%s` добавлены для команды `%s`!", aliases, original)},
 		IsReply: true,
@@ -125,7 +133,7 @@ func (a *DelAlias) handleAliasesDel(cfg *config.Config, text *domain.MessageText
 		}
 	}
 
-	a.template.Aliases().Update(cfg.Aliases, cfg.AliasGroups)
+	a.template.Aliases().Update(cfg.Aliases, cfg.AliasGroups, cfg.GlobalAliases)
 	return buildResponse("алиасы не указаны", RespArg{Items: removed, Name: "удалены"}, RespArg{Items: notFound, Name: "не найдены"})
 }
 
@@ -157,10 +165,11 @@ func (a *CreateAliasGroup) handleAlgCreate(cfg *config.Config, text *domain.Mess
 	}
 
 	cfg.AliasGroups[groupName] = &config.AliasGroups{
+		Enabled:  true,
 		Aliases:  make(map[string]struct{}),
 		Original: original,
 	}
-	a.template.Aliases().Update(cfg.Aliases, cfg.AliasGroups)
+	a.template.Aliases().Update(cfg.Aliases, cfg.AliasGroups, cfg.GlobalAliases)
 
 	return &ports.AnswerType{
 		Text:    []string{fmt.Sprintf("группа алиасов `%s` создана!", groupName)},
@@ -203,7 +212,7 @@ func (a *AddAliasGroup) handleAlgAdd(cfg *config.Config, text *domain.MessageTex
 		cfg.AliasGroups[groupName].Aliases[alias] = struct{}{}
 	}
 
-	a.template.Aliases().Update(cfg.Aliases, cfg.AliasGroups)
+	a.template.Aliases().Update(cfg.Aliases, cfg.AliasGroups, cfg.GlobalAliases)
 	return success
 }
 
@@ -227,7 +236,7 @@ func (a *DelAliasGroup) handleAlgDel(cfg *config.Config, text *domain.MessageTex
 	if !exists {
 		return notFoundAliasGroup
 	}
-	defer a.template.Aliases().Update(cfg.Aliases, cfg.AliasGroups)
+	defer a.template.Aliases().Update(cfg.Aliases, cfg.AliasGroups, cfg.GlobalAliases)
 
 	if len(matches) < 3 || strings.TrimSpace(matches[2]) == "" {
 		delete(cfg.AliasGroups, groupName)
@@ -270,6 +279,6 @@ func (a *OnOffAliasGroup) handleAlgOnOff(cfg *config.Config, text *domain.Messag
 	}
 
 	cfg.AliasGroups[groupName].Enabled = state == "on"
-	a.template.Aliases().Update(cfg.Aliases, cfg.AliasGroups)
+	a.template.Aliases().Update(cfg.Aliases, cfg.AliasGroups, cfg.GlobalAliases)
 	return success
 }
