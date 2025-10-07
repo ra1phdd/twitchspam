@@ -168,6 +168,6 @@ func (t *MwordTemplate) matchMwordRule(msg *domain.ChatMessage, word string, re 
 }
 
 func (t *MwordTemplate) getCacheKey(msg *domain.ChatMessage) string {
-	return fmt.Sprintf("%s_%v_%v", strings.TrimSpace(msg.Message.Text.Text(domain.RemovePunctuation)),
+	return fmt.Sprintf("%s_%v_%v", msg.Message.Text.Text(domain.RemovePunctuation),
 		msg.Chatter.IsVip, msg.Chatter.IsSubscriber)
 }

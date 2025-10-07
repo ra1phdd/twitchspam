@@ -5,7 +5,6 @@ import (
 	"hash/fnv"
 	"strings"
 	"time"
-	"twitchspam/internal/app/infrastructure/config"
 )
 
 func WordsToHashes(words []string) []uint64 {
@@ -41,21 +40,6 @@ func JaccardHashSimilarity(a, b []uint64) float64 {
 		return 0
 	}
 	return float64(intersection) / float64(unionSize)
-}
-
-func GetPunishment(arr []config.Punishment, idx int) (string, time.Duration) {
-	if len(arr) == 0 {
-		return "timeout", 600 * time.Second
-	}
-
-	if idx >= len(arr) {
-		return arr[len(arr)-1].Action, time.Duration(arr[len(arr)-1].Duration) * time.Second
-	}
-
-	if idx < 0 {
-		return arr[0].Action, time.Duration(arr[0].Duration) * time.Second
-	}
-	return arr[idx].Action, time.Duration(arr[idx].Duration) * time.Second
 }
 
 func ParseDateTime(dateStr, timeStr string) (time.Time, error) {

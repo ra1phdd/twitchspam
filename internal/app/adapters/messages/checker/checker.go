@@ -48,6 +48,10 @@ func (c *Checker) Check(msg *domain.ChatMessage) *ports.CheckerAction {
 		return action
 	}
 
+	if action := c.template.Nuke().Check(&msg.Message.Text); action != nil {
+		return action
+	}
+
 	if action := c.CheckBanwords(msg.Message.Text.Text(domain.Lower, domain.RemovePunctuation, domain.RemoveDuplicateLetters), msg.Message.Text.Words()); action != nil {
 		return action
 	}
@@ -120,7 +124,7 @@ func (c *Checker) CheckMwords(msg *domain.ChatMessage) *ports.CheckerAction {
 			time.Duration(c.cfg.Spam.SettingsDefault.DurationResetPunishments)*time.Second),
 		)
 	}
-	action, dur := domain.GetPunishment(punishments, countTimeouts)
+	action, dur := c.template.Punishment().Get(punishments, countTimeouts)
 	c.template.Store().Timeouts().Update(msg.Chatter.Username, "mword", func(cur int, exists bool) int {
 		if !exists {
 			return 1
@@ -179,7 +183,7 @@ func (c *Checker) checkSpam(msg *domain.ChatMessage) *ports.CheckerAction {
 	if !ok {
 		c.template.Store().Timeouts().Push(msg.Chatter.Username, cacheKey, 0, storage.WithTTL(cacheTTL))
 	}
-	action, dur := domain.GetPunishment(settings.Punishments, countTimeouts)
+	action, dur := c.template.Punishment().Get(settings.Punishments, countTimeouts)
 	c.template.Store().Timeouts().Update(msg.Chatter.Username, cacheKey, func(cur int, exists bool) int {
 		if !exists {
 			return 1
@@ -268,7 +272,7 @@ func (c *Checker) handleEmotes(msg *domain.ChatMessage, countSpam int) *ports.Ch
 			time.Duration(c.cfg.Spam.SettingsDefault.DurationResetPunishments)*time.Second),
 		)
 	}
-	action, dur := domain.GetPunishment(c.cfg.Spam.SettingsEmotes.Punishments, countTimeouts)
+	action, dur := c.template.Punishment().Get(c.cfg.Spam.SettingsEmotes.Punishments, countTimeouts)
 	c.template.Store().Timeouts().Update(msg.Chatter.Username, "spam_emote", func(cur int, exists bool) int {
 		if !exists {
 			return 1
@@ -299,7 +303,7 @@ func (c *Checker) handleEmotesExceptions(msg *domain.ChatMessage, countSpam int)
 				time.Duration(c.cfg.Spam.SettingsEmotes.DurationResetPunishments)*time.Second),
 			)
 		}
-		action, dur := domain.GetPunishment(ex.Punishments, countTimeouts)
+		action, dur := c.template.Punishment().Get(ex.Punishments, countTimeouts)
 		c.template.Store().Timeouts().Update(msg.Chatter.Username, "except_emote", func(cur int, exists bool) int {
 			if !exists {
 				return 1
@@ -333,7 +337,7 @@ func (c *Checker) handleExceptions(msg *domain.ChatMessage, countSpam int) *port
 				time.Duration(c.cfg.Spam.SettingsDefault.DurationResetPunishments)*time.Second),
 			)
 		}
-		action, dur := domain.GetPunishment(ex.Punishments, countTimeouts)
+		action, dur := c.template.Punishment().Get(ex.Punishments, countTimeouts)
 		c.template.Store().Timeouts().Update(msg.Chatter.Username, "except_spam", func(cur int, exists bool) int {
 			if !exists {
 				return 1

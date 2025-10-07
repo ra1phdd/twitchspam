@@ -58,6 +58,35 @@ func (t *Twitch) SendChatMessage(message string) error {
 	return nil
 }
 
+func (t *Twitch) SendChatAnnouncement(message, color string) error {
+	reqBody := AnnouncementRequest{
+		Message: message,
+		Color:   color,
+	}
+
+	bodyBytes, err := json.Marshal(reqBody)
+	if err != nil {
+		return err
+	}
+
+	queryParams := url.Values{}
+	queryParams.Add("broadcaster_id", t.stream.ChannelID())
+	queryParams.Add("moderator_id", t.cfg.App.UserID)
+
+	err = t.doTwitchRequest("POST", "https://api.twitch.tv/helix/chat/announcements?"+queryParams.Encode(), bytes.NewReader(bodyBytes), nil)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// AnnouncementRequest represents the request body for sending an announcement
+type AnnouncementRequest struct {
+	Message string `json:"message"`
+	Color   string `json:"color,omitempty"`
+}
+
 func (t *Twitch) DeleteChatMessage(messageID string) error {
 	params := url.Values{}
 	params.Set("broadcaster_id", t.stream.ChannelID())

@@ -2,6 +2,7 @@ package template
 
 import (
 	"regexp"
+	"strings"
 	"twitchspam/internal/app/infrastructure/config"
 	"twitchspam/internal/app/ports"
 	"twitchspam/pkg/logger"
@@ -17,13 +18,14 @@ type Template struct {
 	spamPause    ports.SpamPausePort
 	mword        ports.MwordPort
 	store        ports.StoresPort
+	nuke         ports.NukePort
 }
 
 type Option func(*Template)
 
-func WithAliases(aliases map[string]string, groups map[string]*config.AliasGroups) Option {
+func WithAliases(aliases map[string]string, groups map[string]*config.AliasGroups, globalAliases map[string]string) Option {
 	return func(t *Template) {
-		t.aliases = NewAliases(aliases, groups)
+		t.aliases = NewAliases(aliases, groups, globalAliases)
 	}
 }
 
@@ -57,6 +59,7 @@ func New(opts ...Option) *Template {
 		parser:     NewParser(),
 		punishment: NewPunishment(),
 		spamPause:  NewSpamPause(),
+		nuke:       NewNuke(),
 	}
 	for _, opt := range opts {
 		opt(t)
@@ -79,7 +82,7 @@ func (t *Template) CleanMessage(text string) string {
 		}
 		out = append(out, r)
 	}
-	return string(out)
+	return strings.TrimSpace(string(out))
 }
 
 func (t *Template) Aliases() ports.AliasesPort {
@@ -116,4 +119,8 @@ func (t *Template) Mword() ports.MwordPort {
 
 func (t *Template) Store() ports.StoresPort {
 	return t.store
+}
+
+func (t *Template) Nuke() ports.NukePort {
+	return t.nuke
 }

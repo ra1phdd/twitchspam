@@ -1,6 +1,7 @@
 package ports
 
 import (
+	"regexp"
 	"time"
 	"twitchspam/internal/app/domain"
 	"twitchspam/internal/app/infrastructure/config"
@@ -18,10 +19,11 @@ type TemplatePort interface {
 	SpamPause() SpamPausePort
 	Mword() MwordPort
 	Store() StoresPort
+	Nuke() NukePort
 }
 
 type AliasesPort interface {
-	Update(newAliases map[string]string, newAliasGroups map[string]*config.AliasGroups)
+	Update(newAliases map[string]string, newAliasGroups map[string]*config.AliasGroups, globalAliases map[string]string)
 	Replace(parts []string) (string, bool)
 }
 
@@ -53,6 +55,7 @@ type ParserPort interface {
 
 type PunishmentPort interface {
 	Parse(punishment string, allowInherit bool) (config.Punishment, error)
+	Get(arr []config.Punishment, idx int) (string, time.Duration)
 	FormatAll(punishments []config.Punishment) []string
 	Format(punishment config.Punishment) string
 }
@@ -71,4 +74,10 @@ type StoresPort interface {
 	SetMessageCapacity(cfg *config.Config)
 	Messages() StorePort[storage.Message]
 	Timeouts() StorePort[int]
+}
+
+type NukePort interface {
+	Start(punishment config.Punishment, containsWords, words []string, regexp *regexp.Regexp)
+	Cancel()
+	Check(text *domain.MessageText) *CheckerAction
 }

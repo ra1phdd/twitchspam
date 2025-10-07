@@ -11,6 +11,7 @@ type APIPort interface {
 	GetUrlVOD(streams []*config.Markers) (map[string]string, error)
 	SendChatMessages(msgs *AnswerType)
 	SendChatMessage(message string) error
+	SendChatAnnouncement(message, color string) error
 	DeleteChatMessage(messageID string) error
 	TimeoutUser(userID string, duration int, reason string)
 	BanUser(userID string, reason string)

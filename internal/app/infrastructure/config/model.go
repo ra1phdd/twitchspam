@@ -7,20 +7,20 @@ import (
 )
 
 type Config struct {
-	App         App                              `json:"app"`
-	Enabled     bool                             `json:"enabled"`
-	Limiter     Limiter                          `json:"limiter"`
-	WindowSecs  int                              `json:"-"`
-	Spam        Spam                             `json:"spam"`
-	Automod     Automod                          `json:"automod"`
-	Nuke        Nuke                             `json:"-"`
-	Mword       map[string]*Mword                `json:"mword"`
-	MwordGroup  map[string]*MwordGroup           `json:"mword_group"`
-	Markers     map[string]map[string][]*Markers `json:"markers"` // первый ключ - юзернейм, второй ключ - название маркера
-	Commands    map[string]*Commands             `json:"commands"`
-	Aliases     map[string]string                `json:"aliases"`       // ключ - алиас, значение - оригинальная команда
-	AliasGroups map[string]*AliasGroups          `json:"aliases_group"` // первый ключ - название группы, второй ключ - алиас, значение - оригинальная команда
-	Banwords    Banwords                         `json:"banwords"`
+	App           App                              `json:"app"`
+	Enabled       bool                             `json:"enabled"`
+	Limiter       Limiter                          `json:"limiter"`
+	WindowSecs    int                              `json:"-"`
+	Spam          Spam                             `json:"spam"`
+	Automod       Automod                          `json:"automod"`
+	Mword         map[string]*Mword                `json:"mword"`
+	MwordGroup    map[string]*MwordGroup           `json:"mword_group"`
+	Markers       map[string]map[string][]*Markers `json:"markers"` // первый ключ - юзернейм, второй ключ - название маркера
+	Commands      map[string]*Commands             `json:"commands"`
+	Aliases       map[string]string                `json:"aliases"`       // ключ - алиас, значение - оригинальная команда
+	AliasGroups   map[string]*AliasGroups          `json:"aliases_group"` // первый ключ - название группы, второй ключ - алиас, значение - оригинальная команда
+	GlobalAliases map[string]string                `json:"global_aliases"`
+	Banwords      Banwords                         `json:"banwords"`
 }
 
 type App struct {
@@ -66,15 +66,6 @@ type SpamSettingsEmote struct {
 type Automod struct {
 	Enabled bool `json:"enabled"`
 	Delay   int  `json:"delay"`
-}
-
-type Nuke struct {
-	Enabled    bool             `json:"-"`
-	ExpiresAt  time.Time        `json:"-"`
-	Punishment Punishment       `json:"-"`
-	Scrollback time.Duration    `json:"-"`
-	Words      map[bool]string  `json:"-"`
-	Regexp     []*regexp.Regexp `json:"-"`
 }
 
 type ExceptionsSettings struct {
@@ -155,8 +146,9 @@ type MwordOptions struct {
 }
 
 type TimerOptions struct {
-	IsAnnounce bool `json:"is_announce"`
-	IsAlways   bool `json:"is_always"`
+	IsAnnounce    bool   `json:"is_announce"`
+	ColorAnnounce string `json:"color_announce"`
+	IsAlways      bool   `json:"is_always"`
 }
 
 type CommandOptions struct {

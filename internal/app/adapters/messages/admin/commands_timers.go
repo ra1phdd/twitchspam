@@ -36,6 +36,13 @@ func (c *AddCommandTimer) handleCommandTimersAdd(cfg *config.Config, text *domai
 		return invalidValueRequest
 	}
 
+	if _, ok := opts["a"]; ok && count > 1 {
+		return &ports.AnswerType{
+			Text:    []string{"при использовании анонсов можно отправить только 1 сообщение за раз!"},
+			IsReply: true,
+		}
+	}
+
 	interval, err := strconv.Atoi(strings.TrimSpace(matches[2]))
 	if err != nil || interval < 5 || interval > 86400 {
 		return invalidValueInterval
@@ -176,6 +183,13 @@ func (c *SetCommandTimer) handleCommandTimersSet(cfg *config.Config, text *domai
 		if err != nil || count < 1 || count > 10 {
 			return invalidValueRequest
 		}
+
+		if _, ok := opts["a"]; ok && count > 1 {
+			return &ports.AnswerType{
+				Text:    []string{"при использовании анонсов можно отправить только 1 сообщение за раз!"},
+				IsReply: true,
+			}
+		}
 	}
 
 	if strings.TrimSpace(matches[2]) != "" {
@@ -241,7 +255,7 @@ func (a *AddTimer) AddTimer(key string, cmd *config.Commands) {
 		}
 
 		if timer.Options.IsAnnounce {
-			a.Api.SendChatMessages(msg) // FIXME
+			_ = a.Api.SendChatAnnouncement(args["text"].(string), timer.Options.ColorAnnounce)
 		} else {
 			a.Api.SendChatMessages(msg)
 		}

@@ -33,6 +33,9 @@ var MwordOptions = map[string]struct{}{
 var TimersOptions = map[string]struct{}{
 	"-a": {}, "-noa": {},
 	"-always": {}, "-online": {},
+	"-blue": {}, "-green": {},
+	"-orange": {}, "-purple": {},
+	"-primary": {},
 }
 
 var CommandOptions = map[string]struct{}{
@@ -209,6 +212,30 @@ func (ot *OptionsTemplate) MergeTimer(dst config.TimerOptions, src map[string]bo
 		dst.IsAlways = true
 	}
 
+	if _, ok := src["-primary"]; ok {
+		dst.ColorAnnounce = "primary"
+	}
+
+	if _, ok := src["-blue"]; ok {
+		dst.ColorAnnounce = "blue"
+	}
+
+	if _, ok := src["-green"]; ok {
+		dst.ColorAnnounce = "green"
+	}
+
+	if _, ok := src["-orange"]; ok {
+		dst.ColorAnnounce = "orange"
+	}
+
+	if _, ok := src["-purple"]; ok {
+		dst.ColorAnnounce = "purple"
+	}
+
+	if dst.ColorAnnounce == "" {
+		dst.ColorAnnounce = "primary"
+	}
+
 	return dst
 }
 
@@ -339,6 +366,12 @@ func (ot *OptionsTemplate) TimerToString(opts config.TimerOptions) string {
 				return "-always"
 			}
 			return "-online"
+		}(),
+		func() string {
+			if opts.ColorAnnounce == "" {
+				return "-primary"
+			}
+			return "-" + opts.ColorAnnounce
 		}(),
 	}
 	return strings.Join(result, " ")
