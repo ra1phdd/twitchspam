@@ -255,9 +255,9 @@ func (a *AddTimer) AddTimer(key string, cmd *config.Commands) {
 		}
 
 		if timer.Options.IsAnnounce {
-			_ = a.Api.SendChatAnnouncement(args["text"].(string), timer.Options.ColorAnnounce)
+			_ = a.Api.SendChatAnnouncement(a.Stream.ChannelID(), args["text"].(string), timer.Options.ColorAnnounce)
 		} else {
-			a.Api.SendChatMessages(msg)
+			a.Api.SendChatMessages(a.Stream.ChannelID(), msg)
 		}
 	})
 }

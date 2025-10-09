@@ -3,7 +3,6 @@ package config
 import (
 	"errors"
 	"fmt"
-	"regexp"
 )
 
 func (m *Manager) validate(cfg *Config) error {
@@ -195,11 +194,8 @@ func (m *Manager) validate(cfg *Config) error {
 	}
 
 	// мворды
-	if cfg.Mword == nil {
-		cfg.Mword = make(map[string]*Mword)
-	}
 	for _, mw := range cfg.Mword {
-		if mw == nil {
+		if mw.Word == "" && mw.Regexp == nil {
 			return errors.New("mword.value is required")
 		}
 
@@ -236,10 +232,6 @@ func (m *Manager) validate(cfg *Config) error {
 			if punishment.Duration < 0 || punishment.Duration > 1209600 {
 				return errors.New("mword_group.duration must be [0,1209600]")
 			}
-		}
-
-		if mwg.Regexp == nil {
-			mwg.Regexp = make(map[string]*regexp.Regexp)
 		}
 	}
 

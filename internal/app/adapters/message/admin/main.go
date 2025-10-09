@@ -37,7 +37,8 @@ func (p *Ping) handlePing() *ports.AnswerType {
 }
 
 type OnOff struct {
-	enabled bool
+	enabled  bool
+	template ports.TemplatePort
 }
 
 func (o *OnOff) Execute(cfg *config.Config, _ *domain.MessageText) *ports.AnswerType {
@@ -46,6 +47,7 @@ func (o *OnOff) Execute(cfg *config.Config, _ *domain.MessageText) *ports.Answer
 
 func (o *OnOff) handleOnOff(cfg *config.Config, enabled bool) *ports.AnswerType {
 	cfg.Enabled = enabled
+	o.template.SpamPause().Pause(0)
 	return success
 }
 

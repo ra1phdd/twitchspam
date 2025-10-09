@@ -17,32 +17,70 @@ type IRC struct {
 	log logger.Logger
 	cfg *config.Config
 
-	mu    sync.Mutex
-	chans map[string]chan bool
-	ttl   time.Duration
+	mu       sync.Mutex
+	channels map[string]bool
+	chans    map[string]chan bool
+	ttl      time.Duration
 
 	isListen sync.Once
 	conn     net.Conn
 	reader   *bufio.Reader
 }
 
-func New(log logger.Logger, cfg *config.Config, ttl time.Duration, modChannel string) (*IRC, error) {
+func New(log logger.Logger, cfg *config.Config, ttl time.Duration) *IRC {
 	i := &IRC{
-		log:   log,
-		cfg:   cfg,
-		chans: make(map[string]chan bool),
-		ttl:   ttl,
+		log:      log,
+		cfg:      cfg,
+		channels: make(map[string]bool),
+		chans:    make(map[string]chan bool),
+		ttl:      ttl,
 	}
 
-	go i.runIRC(modChannel)
+	go i.runIRC()
 	go i.cleanupLoop()
 
-	return i, nil
+	return i
 }
 
-func (i *IRC) runIRC(modChannel string) {
+func (i *IRC) AddChannel(channel string) {
+	if !strings.HasPrefix(channel, "#") {
+		channel = "#" + channel
+	}
+
+	i.mu.Lock()
+	defer i.mu.Unlock()
+
+	if i.channels[channel] {
+		return
+	}
+
+	i.channels[channel] = true
+	if i.conn != nil {
+		i.join(channel)
+	}
+}
+
+func (i *IRC) RemoveChannel(channel string) {
+	if !strings.HasPrefix(channel, "#") {
+		channel = "#" + channel
+	}
+
+	i.mu.Lock()
+	defer i.mu.Unlock()
+
+	if !i.channels[channel] {
+		return
+	}
+
+	delete(i.channels, channel)
+	if i.conn != nil {
+		i.part(channel)
+	}
+}
+
+func (i *IRC) runIRC() {
 	for {
-		err := i.connectAndListen(modChannel)
+		err := i.connectAndListen()
 		if err != nil {
 			i.log.Warn("IRC connection lost, retrying...", slog.String("error", err.Error()))
 			time.Sleep(5 * time.Second)
@@ -50,7 +88,7 @@ func (i *IRC) runIRC(modChannel string) {
 	}
 }
 
-func (i *IRC) connectAndListen(modChannel string) error {
+func (i *IRC) connectAndListen() error {
 	conn, err := tls.Dial("tcp", "irc.chat.twitch.tv:443", &tls.Config{MinVersion: tls.VersionTLS12})
 	if err != nil {
 		i.log.Error("Failed to connect to IRC chat Twitch", err)
@@ -66,7 +104,12 @@ func (i *IRC) connectAndListen(modChannel string) error {
 	i.write("CAP REQ :twitch.tv/membership")
 	i.write("CAP REQ :twitch.tv/commands")
 
-	i.join(modChannel)
+	i.mu.Lock()
+	for ch := range i.channels {
+		i.join(ch)
+	}
+	i.mu.Unlock()
+
 	return i.listen()
 }
 

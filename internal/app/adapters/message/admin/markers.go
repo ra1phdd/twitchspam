@@ -44,7 +44,7 @@ func (m *AddMarker) handleMarkersAdd(cfg *config.Config, text *domain.MessageTex
 		cfg.Markers[userKey] = make(map[string][]*config.Markers)
 	}
 
-	live, err := m.api.GetLiveStream()
+	live, err := m.api.GetLiveStream(m.stream.ChannelID())
 	if err != nil {
 		m.log.Error("Failed to get live stream", err, slog.String("channelID", m.stream.ChannelID()))
 		return unknownError
@@ -139,7 +139,7 @@ func (m *ListMarker) handleMarkersList(cfg *config.Config, text *domain.MessageT
 
 	var parts []string
 	processMarkers := func(name string, markers []*config.Markers) error {
-		vods, err := m.api.GetUrlVOD(markers)
+		vods, err := m.api.GetUrlVOD(m.stream.ChannelID(), markers)
 		if err != nil {
 			return err
 		}

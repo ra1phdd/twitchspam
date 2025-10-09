@@ -39,6 +39,7 @@ type Message struct {
 	Text      MessageText
 	EmoteOnly bool     // если Fragments type == "text" отсутствует
 	Emotes    []string // text в Fragments при type == "emote"
+	IsFirst   func() bool
 }
 
 type MessageText struct {

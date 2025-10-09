@@ -21,7 +21,7 @@ type Stream struct {
 
 func NewStream(channelName string, fs ports.FileServerPort) *Stream {
 	s := &Stream{
-		stats: NewStats(fs),
+		stats: newStats(fs),
 	}
 
 	s.SetChannelName(channelName)

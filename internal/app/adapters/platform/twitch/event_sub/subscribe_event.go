@@ -5,9 +5,10 @@ import (
 	"time"
 )
 
-const maxRetries = 10
+const maxRetries = 5
+const initialBackoff = 3 * time.Second
 
-func (es *EventSub) subscribeEvents(payload SessionWelcomePayload) {
+func (es *EventSub) subscribeEvents(sessionID, channelID string) {
 	events := []struct {
 		name, version string
 		condition     map[string]string
@@ -16,7 +17,7 @@ func (es *EventSub) subscribeEvents(payload SessionWelcomePayload) {
 			name:    "channel.chat.message",
 			version: "1",
 			condition: map[string]string{
-				"broadcaster_user_id": es.stream.ChannelID(),
+				"broadcaster_user_id": channelID,
 				"user_id":             es.cfg.App.UserID,
 			},
 		},
@@ -24,7 +25,7 @@ func (es *EventSub) subscribeEvents(payload SessionWelcomePayload) {
 			name:    "automod.message.hold",
 			version: "1",
 			condition: map[string]string{
-				"broadcaster_user_id": es.stream.ChannelID(),
+				"broadcaster_user_id": channelID,
 				"moderator_user_id":   es.cfg.App.UserID,
 			},
 		},
@@ -32,28 +33,28 @@ func (es *EventSub) subscribeEvents(payload SessionWelcomePayload) {
 			name:    "stream.online",
 			version: "1",
 			condition: map[string]string{
-				"broadcaster_user_id": es.stream.ChannelID(),
+				"broadcaster_user_id": channelID,
 			},
 		},
 		{
 			name:    "stream.offline",
 			version: "1",
 			condition: map[string]string{
-				"broadcaster_user_id": es.stream.ChannelID(),
+				"broadcaster_user_id": channelID,
 			},
 		},
 		{
 			name:    "channel.update",
 			version: "2",
 			condition: map[string]string{
-				"broadcaster_user_id": es.stream.ChannelID(),
+				"broadcaster_user_id": channelID,
 			},
 		},
 		{
 			name:    "channel.moderate",
 			version: "2",
 			condition: map[string]string{
-				"broadcaster_user_id": es.stream.ChannelID(),
+				"broadcaster_user_id": channelID,
 				"moderator_user_id":   es.cfg.App.UserID,
 			},
 		},
@@ -61,10 +62,10 @@ func (es *EventSub) subscribeEvents(payload SessionWelcomePayload) {
 
 	for _, e := range events {
 		var attempt int
-		var backoff = 1 * time.Second
+		backoff := initialBackoff
 
 		for {
-			err := es.subscribeEvent(e.name, e.version, e.condition, payload.Session.ID)
+			err := es.subscribeEvent(e.name, e.version, e.condition, sessionID)
 			if err == nil {
 				break
 			}
@@ -85,4 +86,6 @@ func (es *EventSub) subscribeEvents(payload SessionWelcomePayload) {
 			backoff *= 2
 		}
 	}
+
+	es.log.Info("Successfully subscribed to events")
 }

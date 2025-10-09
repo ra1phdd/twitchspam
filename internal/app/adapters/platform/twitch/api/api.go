@@ -6,22 +6,19 @@ import (
 	"io"
 	"net/http"
 	"twitchspam/internal/app/infrastructure/config"
-	"twitchspam/internal/app/ports"
 	"twitchspam/pkg/logger"
 )
 
 type Twitch struct {
 	log    logger.Logger
 	cfg    *config.Config
-	stream ports.StreamPort
 	client *http.Client
 }
 
-func NewTwitch(log logger.Logger, cfg *config.Config, stream ports.StreamPort, client *http.Client) *Twitch {
+func NewTwitch(log logger.Logger, cfg *config.Config, client *http.Client) *Twitch {
 	return &Twitch{
 		log:    log,
 		cfg:    cfg,
-		stream: stream,
 		client: client,
 	}
 }

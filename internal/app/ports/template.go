@@ -66,7 +66,7 @@ type SpamPausePort interface {
 }
 
 type MwordPort interface {
-	Update(mwords map[string]*config.Mword, mwordGroups map[string]*config.MwordGroup)
+	Update(mwords []config.Mword, mwordGroups map[string]*config.MwordGroup)
 	Check(msg *domain.ChatMessage) []config.Punishment
 }
 

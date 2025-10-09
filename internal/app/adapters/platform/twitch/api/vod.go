@@ -6,12 +6,12 @@ import (
 	"twitchspam/internal/app/infrastructure/config"
 )
 
-func (t *Twitch) GetUrlVOD(streams []*config.Markers) (map[string]string, error) {
+func (t *Twitch) GetUrlVOD(channelID string, streams []*config.Markers) (map[string]string, error) {
 	remaining := len(streams)
 	vods := make(map[string]string, remaining)
 
 	params := url.Values{}
-	params.Set("user_id", t.stream.ChannelID())
+	params.Set("user_id", channelID)
 	params.Set("type", "archive")
 	params.Set("first", "100")
 
@@ -22,7 +22,7 @@ func (t *Twitch) GetUrlVOD(streams []*config.Markers) (map[string]string, error)
 	}
 
 	if len(videosResp.Data) == 0 {
-		return vods, fmt.Errorf("videos (user_id %s) not found", t.stream.ChannelID())
+		return vods, fmt.Errorf("videos (user_id %s) not found", channelID)
 	}
 
 	for i := range streams {

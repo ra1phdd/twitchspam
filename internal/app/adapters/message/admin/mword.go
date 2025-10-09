@@ -69,11 +69,12 @@ func (m *AddMword) handleMwAdd(cfg *config.Config, text *domain.MessageText) *po
 			return invalidRegex
 		}
 
-		cfg.Mword[name] = &config.Mword{
+		cfg.Mword = append(cfg.Mword, config.Mword{
 			Punishments: punishments,
-			Regexp:      re,
 			Options:     m.template.Options().MergeMword(config.MwordOptions{}, opts),
-		}
+			NameRegexp:  name,
+			Regexp:      re,
+		})
 
 		m.template.Mword().Update(cfg.Mword, cfg.MwordGroup)
 		return success
@@ -86,15 +87,16 @@ func (m *AddMword) handleMwAdd(cfg *config.Config, text *domain.MessageText) *po
 			continue
 		}
 
-		if _, ok := cfg.Mword[word]; ok {
+		if slices.ContainsFunc(cfg.Mword, func(w config.Mword) bool { return w.Word == word }) {
 			exists = append(exists, word)
 			continue
 		}
 
-		cfg.Mword[word] = &config.Mword{
+		cfg.Mword = append(cfg.Mword, config.Mword{
 			Punishments: punishments,
 			Options:     m.template.Options().MergeMword(config.MwordOptions{}, opts),
-		}
+			Word:        word,
+		})
 		added = append(added, word)
 	}
 
@@ -142,15 +144,16 @@ func (m *SetMword) handleMwSet(cfg *config.Config, text *domain.MessageText) *po
 			continue
 		}
 
-		if _, ok := cfg.Mword[word]; !ok {
+		i := slices.IndexFunc(cfg.Mword, func(w config.Mword) bool { return w.Word == word })
+		if i == -1 {
 			notFound = append(notFound, word)
 			continue
 		}
 
 		if len(punishments) != 0 {
-			cfg.Mword[word].Punishments = punishments
+			cfg.Mword[i].Punishments = punishments
 		}
-		cfg.Mword[word].Options = m.template.Options().MergeMword(cfg.Mword[word].Options, opts)
+		cfg.Mword[i].Options = m.template.Options().MergeMword(cfg.Mword[i].Options, opts)
 
 		edited = append(edited, word)
 	}
@@ -181,12 +184,14 @@ func (m *DelMword) handleMwDel(cfg *config.Config, text *domain.MessageText) *po
 			continue
 		}
 
-		if _, ok := cfg.Mword[word]; ok {
-			delete(cfg.Mword, word)
-			removed = append(removed, word)
-		} else {
+		index := slices.IndexFunc(cfg.Mword, func(w config.Mword) bool { return w.Word == word })
+		if index == -1 {
 			notFound = append(notFound, word)
+			continue
 		}
+
+		removed = append(removed, word)
+		cfg.Mword = slices.Delete(cfg.Mword, index, index+1)
 	}
 
 	m.template.Mword().Update(cfg.Mword, cfg.MwordGroup)
@@ -203,15 +208,20 @@ func (m *ListMword) Execute(cfg *config.Config, _ *domain.MessageText) *ports.An
 }
 
 func (m *ListMword) handleMwList(cfg *config.Config) *ports.AnswerType {
-	return buildList(cfg.Mword, "мворды", "мворды не найдены!",
-		func(word string, mw *config.Mword) string {
+	var mwords map[string]config.Mword
+	for i, mw := range cfg.Mword {
+		mwords[fmt.Sprint(i)] = mw
+	}
+
+	return buildList(mwords, "мворды", "мворды не найдены!",
+		func(_ string, mw config.Mword) string {
 			if mw.Regexp != nil {
 				return fmt.Sprintf("- `%s` (название мворда: %s, наказания: %s)",
-					mw.Regexp.String(), word, strings.Join(m.template.Punishment().FormatAll(mw.Punishments), ", "))
+					mw.Regexp.String(), mw.NameRegexp, strings.Join(m.template.Punishment().FormatAll(mw.Punishments), ", "))
 			}
 
 			return fmt.Sprintf("- %s (наказания: %s)",
-				word, strings.Join(m.template.Punishment().FormatAll(mw.Punishments), ", "))
+				mw.Word, strings.Join(m.template.Punishment().FormatAll(mw.Punishments), ", "))
 		}, m.fs)
 }
 
@@ -261,7 +271,6 @@ func (m *CreateMwordGroup) handleMwgCreate(cfg *config.Config, text *domain.Mess
 		Enabled:     true,
 		Punishments: punishments,
 		Options:     m.template.Options().MergeMword(config.MwordOptions{}, opts),
-		Regexp:      make(map[string]*regexp.Regexp),
 	}
 
 	m.template.Mword().Update(cfg.Mword, cfg.MwordGroup)
@@ -278,9 +287,11 @@ func (m *AddMwordGroup) Execute(cfg *config.Config, text *domain.MessageText) *p
 }
 
 func (m *AddMwordGroup) handleMwgAdd(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
+	textWithoutOpts, opts := m.template.Options().ParseAll(text.Text(), template.MwordOptions)
+
 	// !am mwg add <название_группы> <слова/фразы через запятую>
 	// или !am mwg add <название_группы> re <name> <regex>
-	matches := m.re.FindStringSubmatch(text.Text())
+	matches := m.re.FindStringSubmatch(textWithoutOpts)
 	if len(matches) != 6 {
 		return nonParametr
 	}
@@ -290,10 +301,10 @@ func (m *AddMwordGroup) handleMwgAdd(cfg *config.Config, text *domain.MessageTex
 		return notFoundMwordGroup
 	}
 
+	var punishments []config.Punishment
+	// если matches не равен пустоте то записывать
+
 	if strings.ToLower(strings.TrimSpace(matches[2])) == "re" {
-		if len(matches) < 5 {
-			return nonParametr
-		}
 		name, reStr := strings.TrimSpace(matches[3]), strings.TrimSpace(matches[4])
 
 		re, err := regexp.Compile(reStr)
@@ -301,7 +312,12 @@ func (m *AddMwordGroup) handleMwgAdd(cfg *config.Config, text *domain.MessageTex
 			return invalidRegex
 		}
 
-		cfg.MwordGroup[groupName].Regexp[name] = re
+		cfg.MwordGroup[groupName].Words = append(cfg.MwordGroup[groupName].Words, config.Mword{
+			Punishments: punishments,
+			Options:     m.template.Options().MergeMword(config.MwordOptions{}, opts),
+			NameRegexp:  name,
+			Regexp:      re,
+		})
 		m.template.Mword().Update(cfg.Mword, cfg.MwordGroup)
 		return success
 	}
@@ -313,12 +329,16 @@ func (m *AddMwordGroup) handleMwgAdd(cfg *config.Config, text *domain.MessageTex
 			continue
 		}
 
-		if slices.Contains(cfg.MwordGroup[groupName].Words, word) {
+		if slices.ContainsFunc(cfg.Mword, func(w config.Mword) bool { return w.Word == word }) {
 			exists = append(exists, word)
 			continue
 		}
 
-		cfg.MwordGroup[groupName].Words = append(cfg.MwordGroup[groupName].Words, word)
+		cfg.MwordGroup[groupName].Words = append(cfg.MwordGroup[groupName].Words, config.Mword{
+			Punishments: punishments,
+			Options:     m.template.Options().MergeMword(config.MwordOptions{}, opts),
+			Word:        word,
+		})
 		added = append(added, word)
 	}
 
@@ -407,25 +427,14 @@ func (m *DelMwordGroup) handleMwgDel(cfg *config.Config, text *domain.MessageTex
 			continue
 		}
 
-		isFound := false
-		if _, ok := cfg.MwordGroup[groupName].Regexp[word]; ok {
-			delete(cfg.MwordGroup[groupName].Regexp, word)
-			removed = append(removed, word)
-			isFound = true
-		}
-
-		for i, w := range cfg.MwordGroup[groupName].Words {
-			if w == word {
-				cfg.MwordGroup[groupName].Words = append(cfg.MwordGroup[groupName].Words[:i], cfg.MwordGroup[groupName].Words[i+1:]...)
-				removed = append(removed, word)
-				isFound = true
-				break
-			}
-		}
-
-		if !isFound {
+		index := slices.IndexFunc(cfg.MwordGroup[groupName].Words, func(w config.Mword) bool { return w.Word == word || w.NameRegexp == word })
+		if index == -1 {
 			notFound = append(notFound, word)
+			continue
 		}
+
+		removed = append(removed, word)
+		cfg.MwordGroup[groupName].Words = slices.Delete(cfg.MwordGroup[groupName].Words, index, index+1)
 	}
 
 	m.template.Mword().Update(cfg.Mword, cfg.MwordGroup)
@@ -471,26 +480,33 @@ func (m *ListMwordGroup) Execute(cfg *config.Config, _ *domain.MessageText) *por
 func (m *ListMwordGroup) handleMwgList(cfg *config.Config) *ports.AnswerType {
 	return buildList(cfg.MwordGroup, "мворд группы", "мворд группы не найдены!",
 		func(name string, mwg *config.MwordGroup) string {
-			var re []string
-			for _, pattern := range mwg.Regexp {
-				re = append(re, pattern.String())
+			var sb strings.Builder
+			sb.WriteString(fmt.Sprintf("%s:\n", name))
+			sb.WriteString(fmt.Sprintf("- глобальные наказания: %v\n", strings.Join(m.template.Punishment().FormatAll(mwg.Punishments), ", ")))
+			sb.WriteString(fmt.Sprintf("- глобальные опции: %+v\n", m.template.Options().MwordToString(mwg.Options)))
+
+			sb.WriteString("- мворды:\n")
+			for _, mw := range mwg.Words {
+				punishments := "стандартные"
+				if len(mw.Punishments) > 0 {
+					punishments = fmt.Sprintf("%v", mw.Punishments)
+				}
+
+				options := "стандартные"
+				if mw.Options != (config.MwordOptions{}) {
+					options = m.template.Options().MwordToString(mw.Options)
+				}
+
+				if mw.Regexp != nil {
+					sb.WriteString(fmt.Sprintf("  - %s (название: %s, наказания: %s, опции: %s)\n",
+						mw.Regexp.String(), mw.NameRegexp, punishments, options))
+					continue
+				}
+
+				sb.WriteString(fmt.Sprintf("  - %s (наказания: %s, опции: %s)\n", mw.Word, punishments, options))
 			}
 
-			if len(re) == 0 {
-				re = append(re, "отсутствуют")
-			}
-
-			words := mwg.Words
-			if len(words) == 0 {
-				words = append(words, "отсутствуют")
-			}
-
-			return fmt.Sprintf("%s\n- включено: %v\n- наказания: %s\n- слова: %s\n- регулярные выражения: %s\n\n",
-				name,
-				mwg.Enabled,
-				strings.Join(m.template.Punishment().FormatAll(mwg.Punishments), ", "),
-				strings.Join(words, ", "),
-				strings.Join(re, ", "),
-			)
+			sb.WriteString("\n")
+			return sb.String()
 		}, m.fs)
 }

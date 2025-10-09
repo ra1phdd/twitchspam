@@ -6,11 +6,13 @@ import (
 	"twitchspam/internal/app/infrastructure/config"
 )
 
+type MessagePort interface {
+	Check(msg *domain.ChatMessage)
+	CheckAutomod(msg *domain.ChatMessage)
+}
+
 type CheckerPort interface {
-	Check(msg *domain.ChatMessage) *CheckerAction
-	CheckBanwords(textLower string, wordsOriginal []string) *CheckerAction
-	CheckAds(text string, username string) *CheckerAction
-	CheckMwords(msg *domain.ChatMessage) *CheckerAction
+	Check(msg *domain.ChatMessage, checkSpam bool) *CheckerAction
 }
 
 type CommandPort interface {

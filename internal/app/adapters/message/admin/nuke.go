@@ -5,7 +5,7 @@ import (
 	"regexp"
 	"strings"
 	"time"
-	"twitchspam/internal/app/adapters/messages/checker"
+	"twitchspam/internal/app/adapters/message/checker"
 	"twitchspam/internal/app/domain"
 	"twitchspam/internal/app/infrastructure/config"
 	"twitchspam/internal/app/ports"
@@ -18,6 +18,7 @@ type Nuke struct {
 	log      logger.Logger
 	api      ports.APIPort
 	template ports.TemplatePort
+	stream   ports.StreamPort
 }
 
 func (n *Nuke) Execute(_ *config.Config, text *domain.MessageText) *ports.AnswerType {
@@ -91,13 +92,13 @@ func (n *Nuke) handleNuke(text *domain.MessageText) *ports.AnswerType {
 		switch punishment.Action {
 		case checker.Ban:
 			n.log.Warn("Ban user", slog.String("username", username), slog.String("text", text))
-			n.api.BanUser(userID, "массбан")
+			n.api.BanUser(n.stream.ChannelID(), userID, "массбан")
 		case checker.Timeout:
 			n.log.Warn("Timeout user", slog.String("username", username), slog.String("text", text), slog.Int("duration", int(dur.Seconds())))
-			n.api.TimeoutUser(userID, int(dur.Seconds()), "массбан")
+			n.api.TimeoutUser(n.stream.ChannelID(), userID, int(dur.Seconds()), "массбан")
 		case checker.Delete:
 			n.log.Warn("Delete message", slog.String("username", username), slog.String("text", text))
-			if err := n.api.DeleteChatMessage(msgID); err != nil {
+			if err := n.api.DeleteChatMessage(n.stream.ChannelID(), msgID); err != nil {
 				n.log.Error("Failed to delete message on chat", err)
 			}
 		}

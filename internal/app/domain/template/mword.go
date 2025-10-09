@@ -14,35 +14,37 @@ import (
 )
 
 type MwordTemplate struct {
-	irc    ports.IRCPort
-	cache  ports.CachePort[map[bool][]config.Punishment] // ключ - мворд применяется только для первых сообщений или нет
-	mwords []Mwords
+	options ports.OptionsPort
+	cache   ports.CachePort[map[bool][]config.Punishment] // ключ - мворд применяется только для первых сообщений или нет
+	mwords  []Mwords
 }
 
 type Mwords struct {
+	Punishments []config.Punishment
+	Options     config.MwordOptions
 	Word        string
-	Punishments []config.Punishment `json:"punishments"`
-	Options     config.MwordOptions `json:"options"`
-	Regexp      *regexp.Regexp      `json:"regexp"`
+	NameRegexp  string
+	Regexp      *regexp.Regexp
 }
 
-func NewMword(irc ports.IRCPort, mwords map[string]*config.Mword, mwordGroups map[string]*config.MwordGroup) *MwordTemplate {
+func NewMword(options ports.OptionsPort, mwords []config.Mword, mwordGroups map[string]*config.MwordGroup) *MwordTemplate {
 	mt := &MwordTemplate{
-		irc:   irc,
-		cache: storage.NewCache[map[bool][]config.Punishment](1000, 3*time.Minute),
+		options: options,
+		cache:   storage.NewCache[map[bool][]config.Punishment](1000, 3*time.Minute),
 	}
 	mt.Update(mwords, mwordGroups)
 
 	return mt
 }
 
-func (t *MwordTemplate) Update(mwords map[string]*config.Mword, mwordGroups map[string]*config.MwordGroup) {
+func (t *MwordTemplate) Update(mwords []config.Mword, mwordGroups map[string]*config.MwordGroup) {
 	var mws []Mwords
-	for word, mw := range mwords {
+	for _, mw := range mwords {
 		mws = append(mws, Mwords{
-			Word:        word,
 			Punishments: mw.Punishments,
 			Options:     mw.Options,
+			Word:        mw.Word,
+			NameRegexp:  mw.NameRegexp,
 			Regexp:      mw.Regexp,
 		})
 	}
@@ -52,20 +54,31 @@ func (t *MwordTemplate) Update(mwords map[string]*config.Mword, mwordGroups map[
 			continue
 		}
 
-		for _, w := range mwg.Words {
-			mws = append(mws, Mwords{
-				Word:        w,
-				Punishments: mwg.Punishments,
-				Options:     mwg.Options,
-			})
-		}
+		for _, mw := range mwg.Words {
+			punishments := mwg.Punishments
+			if len(mw.Punishments) != 0 {
+				punishments = mw.Punishments
+			}
 
-		for _, re := range mwg.Regexp {
+			options := mwg.Options
+			if mw.Options != (config.MwordOptions{}) {
+				options = t.options.MergeMword(mwg.Options, map[string]bool{
+					"is_first":       mw.Options.IsFirst,
+					"no_sub":         mw.Options.NoSub,
+					"no_vip":         mw.Options.NoVip,
+					"norepeat":       mw.Options.NoRepeat,
+					"one_word":       mw.Options.OneWord,
+					"contains":       mw.Options.Contains,
+					"case_sensitive": mw.Options.CaseSensitive,
+				})
+			}
+
 			mws = append(mws, Mwords{
-				Word:        "",
-				Punishments: mwg.Punishments,
-				Options:     mwg.Options,
-				Regexp:      re,
+				Punishments: punishments,
+				Options:     options,
+				Word:        mw.Word,
+				NameRegexp:  mw.NameRegexp,
+				Regexp:      mw.Regexp,
 			})
 		}
 	}
@@ -90,11 +103,8 @@ func (t *MwordTemplate) Update(mwords map[string]*config.Mword, mwordGroups map[
 func (t *MwordTemplate) Check(msg *domain.ChatMessage) []config.Punishment {
 	match, ok := t.cache.Get(t.getCacheKey(msg))
 	if ok {
-		if trueMatch, exists := match[true]; exists {
-			isFirst, _ := t.irc.WaitForIRC(msg.Message.ID, 250*time.Millisecond)
-			if isFirst {
-				return trueMatch
-			}
+		if trueMatch, exists := match[true]; exists && msg.Message.IsFirst() {
+			return trueMatch
 		}
 
 		if falseMatch, exists := match[false]; exists {
@@ -127,10 +137,8 @@ func (t *MwordTemplate) matchMwordRule(msg *domain.ChatMessage, word string, re 
 	if opts.NoSub && msg.Chatter.IsSubscriber {
 		return false
 	}
-	if opts.IsFirst {
-		if isFirst, _ := t.irc.WaitForIRC(msg.Message.ID, 250*time.Millisecond); !isFirst {
-			return false
-		}
+	if opts.IsFirst && !msg.Message.IsFirst() {
+		return false
 	}
 	if opts.OneWord && len(msg.Message.Text.Words()) > 1 {
 		return false

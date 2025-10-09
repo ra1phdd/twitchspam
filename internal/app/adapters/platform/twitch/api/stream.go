@@ -6,9 +6,9 @@ import (
 	"twitchspam/internal/app/ports"
 )
 
-func (t *Twitch) GetLiveStream() (*ports.Stream, error) {
+func (t *Twitch) GetLiveStream(channelID string) (*ports.Stream, error) {
 	params := url.Values{}
-	params.Set("user_id", t.stream.ChannelID())
+	params.Set("user_id", channelID)
 	params.Set("type", "live")
 
 	var streamResp StreamResponse

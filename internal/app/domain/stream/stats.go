@@ -37,7 +37,7 @@ type CategoryInterval struct {
 	EndTime   time.Time
 }
 
-func NewStats(fs ports.FileServerPort) *Stats {
+func newStats(fs ports.FileServerPort) *Stats {
 	return &Stats{fs: fs}
 }
 

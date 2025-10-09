@@ -136,8 +136,8 @@ func (a *Admin) buildCommandTree() ports.Command {
 	return &CompositeCommand{
 		subcommands: map[string]ports.Command{
 			"ping":   &Ping{},
-			"on":     &OnOff{enabled: true},
-			"off":    &OnOff{enabled: false},
+			"on":     &OnOff{enabled: true, template: a.template},
+			"off":    &OnOff{enabled: false, template: a.template},
 			"status": &Status{},
 			"say":    &Say{re: regexp.MustCompile(`(?i)^!am\s+say\s+(.+)$`)},
 			"spam":   &Spam{re: regexp.MustCompile(`(?i)^!am\s+spam\s+(.+)\s+(.+)$`)},
@@ -145,8 +145,8 @@ func (a *Admin) buildCommandTree() ports.Command {
 			"game":   &Game{re: regexp.MustCompile(`(?i)^!am\s+game\s+(.+)$`), stream: a.stream},
 			"as": &CompositeCommand{
 				subcommands: map[string]ports.Command{
-					"on":   &OnOffAntispam{enabled: true, typeSpam: "default"},
-					"off":  &OnOffAntispam{enabled: false, typeSpam: "default"},
+					"on":   &OnOffAntispam{enabled: true, typeSpam: "default", template: a.template},
+					"off":  &OnOffAntispam{enabled: false, typeSpam: "default", template: a.template},
 					"info": &InfoAntispam{template: a.template, fs: a.fs},
 				},
 				defaultCmd: &PauseAntispam{re: regexp.MustCompile(`(?i)^!am\s+as\s+(.+)$`), template: a.template},
@@ -167,7 +167,7 @@ func (a *Admin) buildCommandTree() ports.Command {
 				subcommands: map[string]ports.Command{
 					"stop": &NukeStop{template: a.template},
 				},
-				defaultCmd: &Nuke{re: regexp.MustCompile(`(?i)^!am nuke(?:\s+(\S+))?(?:\s+(\S+))?\s+(.+)$`), reWords: regexp.MustCompile(`(?i)r'(.*?)'|r"(.*?)"|'(.*?)'|"(.*?)"|([^,'"\s]+)`), log: a.log, api: a.api, template: a.template},
+				defaultCmd: &Nuke{re: regexp.MustCompile(`(?i)^!am nuke(?:\s+(\S+))?(?:\s+(\S+))?\s+(.+)$`), reWords: regexp.MustCompile(`(?i)r'(.*?)'|r"(.*?)"|'(.*?)'|"(.*?)"|([^,'"\s]+)`), log: a.log, api: a.api, template: a.template, stream: a.stream},
 				cursor:     2,
 			},
 			"mod": &CompositeCommand{
@@ -180,8 +180,8 @@ func (a *Admin) buildCommandTree() ports.Command {
 			},
 			"vip": &CompositeCommand{
 				subcommands: map[string]ports.Command{
-					"on":   &OnOffAntispam{enabled: true, typeSpam: "vip"},
-					"off":  &OnOffAntispam{enabled: false, typeSpam: "vip"},
+					"on":   &OnOffAntispam{enabled: true, typeSpam: "vip", template: a.template},
+					"off":  &OnOffAntispam{enabled: false, typeSpam: "vip", template: a.template},
 					"sim":  &SimAntispam{re: regexp.MustCompile(`(?i)^!am\s+vip\s+sim\s+(.+)$`), template: a.template, typeSpam: "vip"},
 					"msg":  &MsgAntispam{re: regexp.MustCompile(`(?i)^!am\s+vip\s+msg\s+(.+)$`), template: a.template, typeSpam: "vip"},
 					"p":    &PunishmentsAntispam{re: regexp.MustCompile(`(?i)^!am\s+vip\s+p\s+(.+)$`), template: a.template, typeSpam: "vip"},
@@ -194,8 +194,8 @@ func (a *Admin) buildCommandTree() ports.Command {
 			},
 			"emote": &CompositeCommand{
 				subcommands: map[string]ports.Command{
-					"on":   &OnOffAntispam{enabled: true, typeSpam: "emote"},
-					"off":  &OnOffAntispam{enabled: false, typeSpam: "emote"},
+					"on":   &OnOffAntispam{enabled: true, typeSpam: "emote", template: a.template},
+					"off":  &OnOffAntispam{enabled: false, typeSpam: "emote", template: a.template},
 					"msg":  &MsgAntispam{re: regexp.MustCompile(`(?i)^!am\s+emote\s+msg\s+(.+)$`), template: a.template, typeSpam: "emote"},
 					"p":    &PunishmentsAntispam{re: regexp.MustCompile(`(?i)^!am\s+emote\s+p\s+(.+)$`), template: a.template, typeSpam: "emote"},
 					"rp":   &ResetPunishmentsAntispam{re: regexp.MustCompile(`(?i)^!am\s+emote\s+rp\s+(.+)$`), template: a.template, typeSpam: "emote"},
@@ -328,6 +328,7 @@ func (a *Admin) FindMessages(msg *domain.ChatMessage) *ports.AnswerType {
 	// дикий костыль, не смотреть - есть шанс лишиться зрения
 	markCmd := a.root.(*CompositeCommand).subcommands["mark"].(*CompositeCommand)
 	markCmd.defaultCmd.(*AddMarker).username = msg.Chatter.Username
+	markCmd.subcommands["add"].(*AddMarker).username = msg.Chatter.Username
 	markCmd.subcommands["clear"].(*ClearMarker).username = msg.Chatter.Username
 	markCmd.subcommands["list"].(*ListMarker).username = msg.Chatter.Username
 

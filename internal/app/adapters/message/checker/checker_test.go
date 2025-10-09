@@ -3,7 +3,7 @@ package checker
 import (
 	"testing"
 	"time"
-	"twitchspam/internal/app/adapters/twitch/irc"
+	"twitchspam/internal/app/adapters/platform/twitch/irc"
 	"twitchspam/internal/app/domain"
 	"twitchspam/internal/app/domain/stream"
 	"twitchspam/internal/app/domain/template"

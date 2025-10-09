@@ -39,6 +39,7 @@ func (a *PauseAntispam) handleAntiSpamPause(text *domain.MessageText) *ports.Ans
 type OnOffAntispam struct {
 	enabled  bool
 	typeSpam string
+	template ports.TemplatePort
 }
 
 func (a *OnOffAntispam) Execute(cfg *config.Config, _ *domain.MessageText) *ports.AnswerType {
@@ -54,6 +55,8 @@ func (a *OnOffAntispam) handleAntiSpamOnOff(cfg *config.Config) *ports.AnswerTyp
 
 	if target, ok := targetMap[a.typeSpam]; ok {
 		*target = a.enabled
+
+		a.template.SpamPause().Pause(0)
 		return success
 	}
 

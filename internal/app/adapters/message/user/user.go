@@ -96,7 +96,7 @@ func (u *User) handleCommands(msg *domain.ChatMessage) *ports.AnswerType {
 		}
 
 		if strings.HasPrefix(word, "@") && replyUsername == "" {
-			replyUsername = strings.TrimSuffix(strings.TrimPrefix(word, "@"), ",")
+			replyUsername = strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(word, "@"), ","))
 		}
 
 		cfg := u.manager.Get()

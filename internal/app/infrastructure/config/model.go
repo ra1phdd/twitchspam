@@ -13,12 +13,12 @@ type Config struct {
 	WindowSecs    int                              `json:"-"`
 	Spam          Spam                             `json:"spam"`
 	Automod       Automod                          `json:"automod"`
-	Mword         map[string]*Mword                `json:"mword"`
+	Mword         []Mword                          `json:"mword"`
 	MwordGroup    map[string]*MwordGroup           `json:"mword_group"`
 	Markers       map[string]map[string][]*Markers `json:"markers"` // первый ключ - юзернейм, второй ключ - название маркера
 	Commands      map[string]*Commands             `json:"commands"`
-	Aliases       map[string]string                `json:"aliases"`       // ключ - алиас, значение - оригинальная команда
-	AliasGroups   map[string]*AliasGroups          `json:"aliases_group"` // первый ключ - название группы, второй ключ - алиас, значение - оригинальная команда
+	Aliases       map[string]string                `json:"aliases"` // ключ - алиас, значение - оригинальная команда
+	AliasGroups   map[string]*AliasGroups          `json:"aliases_group"`
 	GlobalAliases map[string]string                `json:"global_aliases"`
 	Banwords      Banwords                         `json:"banwords"`
 }
@@ -33,8 +33,8 @@ type App struct {
 }
 
 type Spam struct {
-	Mode            string                         `json:"mode"`            // !am online/always - только на стриме/всегда
-	WhitelistUsers  map[string]struct{}            `json:"whitelist_users"` // !am add/del <список>
+	Mode            string                         `json:"mode"`
+	WhitelistUsers  map[string]struct{}            `json:"whitelist_users"`
 	SettingsDefault SpamSettings                   `json:"settings_default"`
 	SettingsVIP     SpamSettings                   `json:"settings_vip"`
 	SettingsEmotes  SpamSettingsEmote              `json:"settings_emotes"`
@@ -43,13 +43,13 @@ type Spam struct {
 
 type SpamSettings struct {
 	Enabled                  bool         `json:"enabled"`
-	SimilarityThreshold      float64      `json:"similarity_threshold"`       // !am sim <0.1-1.0>
-	MessageLimit             int          `json:"message_limit"`              // !am msg <2-15 или off>
-	Punishments              []Punishment `json:"punishments"`                // !am p <значения через запятую>
-	DurationResetPunishments int          `json:"duration_reset_punishments"` // !am rto <значение>
-	MaxWordLength            int          `json:"max_word_length"`            // !am mwlen <значение или 0 для оффа>
+	SimilarityThreshold      float64      `json:"similarity_threshold"`
+	MessageLimit             int          `json:"message_limit"`
+	Punishments              []Punishment `json:"punishments"`
+	DurationResetPunishments int          `json:"duration_reset_punishments"`
+	MaxWordLength            int          `json:"max_word_length"`
 	MaxWordPunishment        Punishment   `json:"max_word_punishment"`
-	MinGapMessages           int          `json:"min_gap_messages"` // !am min_gap <0-15>
+	MinGapMessages           int          `json:"min_gap_messages"`
 }
 
 type SpamSettingsEmote struct {
@@ -85,15 +85,16 @@ type AliasGroups struct {
 type Mword struct {
 	Punishments []Punishment   `json:"punishments"`
 	Options     MwordOptions   `json:"options"`
+	Word        string         `json:"word"`
+	NameRegexp  string         `json:"name_regexp"`
 	Regexp      *regexp.Regexp `json:"regexp"`
 }
 
 type MwordGroup struct {
-	Enabled     bool                      `json:"enabled"`
-	Punishments []Punishment              `json:"punishments"`
-	Options     MwordOptions              `json:"options"`
-	Words       []string                  `json:"words"`
-	Regexp      map[string]*regexp.Regexp `json:"regexp"`
+	Enabled     bool         `json:"enabled"`
+	Punishments []Punishment `json:"punishments"` // глобальные наказания
+	Options     MwordOptions `json:"options"`     // глобальные опции
+	Words       []Mword      `json:"words"`
 }
 
 type Markers struct {

@@ -41,9 +41,9 @@ func WithBanwords(log logger.Logger, words []string, regexps []*regexp.Regexp) O
 	}
 }
 
-func WithMword(irc ports.IRCPort, mwords map[string]*config.Mword, mwordGroups map[string]*config.MwordGroup) Option {
+func WithMword(mwords []config.Mword, mwordGroups map[string]*config.MwordGroup) Option {
 	return func(t *Template) {
-		t.mword = NewMword(irc, mwords, mwordGroups)
+		t.mword = NewMword(t.options, mwords, mwordGroups)
 	}
 }
 

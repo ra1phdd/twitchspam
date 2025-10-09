@@ -29,21 +29,19 @@ type Checker struct {
 	stream   ports.StreamPort
 	sevenTV  ports.SevenTVPort
 	template ports.TemplatePort
-	irc      ports.IRCPort
 }
 
-func NewCheck(log logger.Logger, cfg *config.Config, stream ports.StreamPort, template ports.TemplatePort, irc ports.IRCPort) *Checker {
+func NewCheck(log logger.Logger, cfg *config.Config, stream ports.StreamPort, template ports.TemplatePort) *Checker {
 	return &Checker{
 		log:      log,
 		cfg:      cfg,
 		stream:   stream,
 		sevenTV:  seventv.New(log, cfg, stream),
 		template: template,
-		irc:      irc,
 	}
 }
 
-func (c *Checker) Check(msg *domain.ChatMessage) *ports.CheckerAction {
+func (c *Checker) Check(msg *domain.ChatMessage, checkSpam bool) *ports.CheckerAction {
 	if action := c.checkBypass(msg); action != nil {
 		return action
 	}
@@ -52,20 +50,22 @@ func (c *Checker) Check(msg *domain.ChatMessage) *ports.CheckerAction {
 		return action
 	}
 
-	if action := c.CheckBanwords(msg.Message.Text.Text(domain.Lower, domain.RemovePunctuation, domain.RemoveDuplicateLetters), msg.Message.Text.Words()); action != nil {
+	if action := c.checkBanwords(msg.Message.Text.Text(domain.Lower, domain.RemovePunctuation, domain.RemoveDuplicateLetters), msg.Message.Text.Words()); action != nil {
 		return action
 	}
 
-	if action := c.CheckAds(msg.Message.Text.Text(domain.Lower), msg.Chatter.Username); action != nil {
+	if action := c.checkAds(msg.Message.Text.Text(domain.Lower), msg.Chatter.Username); action != nil {
 		return action
 	}
 
-	if action := c.CheckMwords(msg); action != nil {
+	if action := c.checkMwords(msg); action != nil {
 		return action
 	}
 
-	if action := c.checkSpam(msg); action != nil {
-		return action
+	if checkSpam {
+		if action := c.checkSpam(msg); action != nil {
+			return action
+		}
 	}
 
 	return &ports.CheckerAction{Type: None}
@@ -84,7 +84,7 @@ func (c *Checker) checkBypass(msg *domain.ChatMessage) *ports.CheckerAction {
 	return nil
 }
 
-func (c *Checker) CheckBanwords(textLower string, wordsOriginal []string) *ports.CheckerAction {
+func (c *Checker) checkBanwords(textLower string, wordsOriginal []string) *ports.CheckerAction {
 	if !c.template.Banwords().CheckMessage(textLower, wordsOriginal) {
 		return nil
 	}
@@ -95,7 +95,7 @@ func (c *Checker) CheckBanwords(textLower string, wordsOriginal []string) *ports
 	}
 }
 
-func (c *Checker) CheckAds(text string, username string) *ports.CheckerAction {
+func (c *Checker) checkAds(text string, username string) *ports.CheckerAction {
 	if !strings.Contains(text, "twitch.tv/") ||
 		strings.Contains(text, "twitch.tv/"+strings.ToLower(c.stream.ChannelName())) {
 		return nil
@@ -112,7 +112,7 @@ func (c *Checker) CheckAds(text string, username string) *ports.CheckerAction {
 	}
 }
 
-func (c *Checker) CheckMwords(msg *domain.ChatMessage) *ports.CheckerAction {
+func (c *Checker) checkMwords(msg *domain.ChatMessage) *ports.CheckerAction {
 	punishments := c.template.Mword().Check(msg)
 	if punishments == nil || len(punishments) == 0 {
 		return nil

@@ -13,7 +13,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-	admin2 "twitchspam/internal/app/adapters/messages/admin"
 	"twitchspam/internal/app/domain"
 	"twitchspam/internal/app/infrastructure/config"
 	"twitchspam/internal/app/ports"
@@ -22,44 +21,60 @@ import (
 )
 
 type EventSub struct {
-	log         logger.Logger
-	cfg         *config.Config
-	stream      ports.StreamPort
-	api         ports.APIPort
-	checker     ports.CheckerPort
-	admin, user ports.CommandPort
-	template    ports.TemplatePort
-	timers      ports.TimersPort
+	log logger.Logger
+	cfg *config.Config
+	api ports.APIPort
+	irc ports.IRCPort
+
+	mu        sync.Mutex
+	channels  map[string]channel
+	sessionID string
 
 	client *http.Client
 }
 
-func New(log logger.Logger, cfg *config.Config, stream ports.StreamPort, api ports.APIPort, checker ports.CheckerPort, admin, user ports.CommandPort, template ports.TemplatePort, timers ports.TimersPort, client *http.Client) *EventSub {
+type channel struct {
+	username string
+	stream   ports.StreamPort
+	message  ports.MessagePort
+}
+
+func NewTwitch(log logger.Logger, cfg *config.Config, api ports.APIPort, irc ports.IRCPort, client *http.Client) *EventSub {
 	es := &EventSub{
 		log:      log,
 		cfg:      cfg,
-		stream:   stream,
 		api:      api,
-		checker:  checker,
-		admin:    admin,
-		user:     user,
-		template: template,
-		timers:   timers,
+		irc:      irc,
 		client:   client,
+		channels: make(map[string]channel),
 	}
+	go es.runEventLoop()
 
-	for cmd, data := range es.cfg.Commands {
-		if data.Timer == nil {
-			continue
-		}
-
-		(&admin2.AddTimer{Timers: timers, Stream: stream, Api: api}).AddTimer(cmd, data)
+	for es.sessionID == "" {
+		time.Sleep(time.Millisecond)
 	}
 
 	return es
 }
 
-func (es *EventSub) RunEventLoop() {
+func (es *EventSub) AddChannel(channelID, channelName string, stream ports.StreamPort, message ports.MessagePort) {
+	es.mu.Lock()
+	if _, ok := es.channels[channelID]; ok {
+		es.mu.Unlock()
+		return
+	}
+
+	es.channels[channelID] = channel{
+		username: channelName,
+		stream:   stream,
+		message:  message,
+	}
+	es.mu.Unlock()
+
+	es.subscribeEvents(es.sessionID, channelID)
+}
+
+func (es *EventSub) runEventLoop() {
 	for {
 		err := es.connectAndHandleEvents()
 		if err != nil {
@@ -133,7 +148,7 @@ func (es *EventSub) handleMessage(cancel context.CancelFunc, msgBytes []byte) {
 			return
 		}
 
-		es.subscribeEvents(payload)
+		es.sessionID = payload.Session.ID
 	case "session_keepalive":
 		es.log.Trace("Received session_keepalive on EventSub")
 	case "notification":
@@ -152,9 +167,11 @@ func (es *EventSub) handleMessage(cancel context.CancelFunc, msgBytes []byte) {
 				es.log.Error("Failed to decode channel.chat.message event", err)
 				return
 			}
-			es.log.Debug("New message", slog.String("username", msgEvent.ChatterUserName), slog.String("text", msgEvent.Message.Text))
+			es.log.Debug("NewTwitch message", slog.String("username", msgEvent.ChatterUserName), slog.String("text", msgEvent.Message.Text))
 
-			es.checkMessage(msgEvent)
+			if c, ok := es.channels[msgEvent.BroadcasterUserID]; ok {
+				c.message.Check(es.convertMap(msgEvent))
+			}
 		case "automod.message.hold":
 			var am AutomodHoldEvent
 			if err := json.Unmarshal(envelope.Event, &am); err != nil {
@@ -163,18 +180,52 @@ func (es *EventSub) handleMessage(cancel context.CancelFunc, msgBytes []byte) {
 			}
 			es.log.Info("AutoMod held message", slog.String("user_id", am.UserID), slog.String("message_id", am.MessageID), slog.String("text", am.Message.Text))
 
-			go es.checkAutomod(am)
-		case "stream.online":
-			es.log.Info("Stream started")
-			es.stream.SetIslive(true)
-			es.stream.Stats().SetStartTime(time.Now())
-		case "stream.offline":
-			es.log.Info("Stream ended")
-			es.stream.SetIslive(false)
-			es.stream.Stats().SetEndTime(time.Now())
+			msg := &domain.ChatMessage{
+				Broadcaster: domain.Broadcaster{
+					UserID: am.UserID,
+				},
+				Chatter: domain.Chatter{
+					UserID:   am.UserID,
+					Username: am.UserName,
+				},
+				Message: domain.Message{
+					ID: am.MessageID,
+					Text: domain.MessageText{
+						Original: am.Message.Text,
+					},
+				},
+			}
 
-			if es.cfg.Enabled {
-				es.api.SendChatMessages(es.stream.Stats().GetStats())
+			if c, ok := es.channels[am.BroadcasterUserID]; ok {
+				go c.message.CheckAutomod(msg)
+			}
+		case "stream.online":
+			var sm StreamMessageEvent
+			if err := json.Unmarshal(envelope.Event, &sm); err != nil {
+				es.log.Error("Failed to decode stream message event", err)
+				return
+			}
+			es.log.Info("Stream started")
+
+			if c, ok := es.channels[sm.BroadcasterUserID]; ok {
+				c.stream.SetIslive(true)
+				c.stream.Stats().SetStartTime(time.Now())
+			}
+		case "stream.offline":
+			var sm StreamMessageEvent
+			if err := json.Unmarshal(envelope.Event, &sm); err != nil {
+				es.log.Error("Failed to decode stream message event", err)
+				return
+			}
+			es.log.Info("Stream ended")
+
+			if c, ok := es.channels[sm.BroadcasterUserID]; ok {
+				c.stream.SetIslive(false)
+				c.stream.Stats().SetEndTime(time.Now())
+
+				if es.cfg.Enabled {
+					es.api.SendChatMessages(c.stream.ChannelID(), c.stream.Stats().GetStats())
+				}
 			}
 		case "channel.update":
 			var upd ChannelUpdateEvent
@@ -182,10 +233,10 @@ func (es *EventSub) handleMessage(cancel context.CancelFunc, msgBytes []byte) {
 				es.log.Error("Failed to decode channel.update event", err)
 				return
 			}
-			es.log.Info("Channel updated", slog.String("title", upd.Title), slog.String("category", upd.CategoryName), slog.String("lang", upd.Language))
+			es.log.Info("channel updated", slog.String("title", upd.Title), slog.String("category", upd.CategoryName), slog.String("lang", upd.Language))
 
-			if upd.CategoryName != "" { // TODO
-				es.stream.SetCategory(upd.CategoryName)
+			if c, ok := es.channels[upd.BroadcasterUserID]; ok {
+				c.stream.SetCategory(upd.CategoryName)
 			}
 		case "channel.moderate":
 			var modEvent ChannelModerateEvent
@@ -313,10 +364,14 @@ func (es *EventSub) convertMap(msgEvent ChatMessageEvent) *domain.ChatMessage {
 		Message: domain.Message{
 			ID: msgEvent.MessageID,
 			Text: domain.MessageText{
-				Original: es.template.CleanMessage(msgEvent.Message.Text),
+				Original: msgEvent.Message.Text,
 			},
 			EmoteOnly: emoteOnly,
 			Emotes:    emotes,
+			IsFirst: func() bool {
+				isFirst, _ := es.irc.WaitForIRC(msgEvent.MessageID, 250*time.Millisecond)
+				return isFirst
+			},
 		},
 	}
 
