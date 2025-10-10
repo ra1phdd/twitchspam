@@ -47,7 +47,7 @@ func (at *AliasesTemplate) Replace(parts []string) (string, bool) {
 	var bestAlias string
 	var bestStart, bestEnd int
 
-	for i := 0; i < len(parts); i++ {
+	for i := range parts {
 		cur := at.trie.Root()
 		j := i
 
@@ -72,10 +72,9 @@ func (at *AliasesTemplate) Replace(parts []string) (string, bool) {
 		return "", false
 	}
 
-	// это можно было сделать в одну строку через append, но это +лишние аллокации памяти
 	var sb strings.Builder
-	for k := 0; k < bestStart; k++ {
-		sb.WriteString(parts[k])
+	for _, part := range parts[:bestStart] {
+		sb.WriteString(part)
 		sb.WriteByte(' ')
 	}
 	sb.WriteString(bestAlias)

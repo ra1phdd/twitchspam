@@ -52,7 +52,7 @@ const (
 func (ot *OptionsTemplate) ParseAll(input string, opts map[string]struct{}) (string, map[string]bool) {
 	words := strings.Fields(input)
 
-	var clean []string
+	clean := make([]string, 0, len(words))
 	founds := make(map[string]bool)
 
 	for _, w := range words {

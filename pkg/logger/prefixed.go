@@ -13,11 +13,6 @@ func NewPrefixedLogger(inner Logger, prefix string) *PrefixedLogger {
 		prefix: prefix,
 	}
 }
-
-func (p *PrefixedLogger) prefixed(msg string) string {
-	return fmt.Sprintf("[%s] %s", p.prefix, msg)
-}
-
 func (p *PrefixedLogger) SetLogLevel(levelStr string) {
 	p.inner.SetLogLevel(levelStr)
 }
@@ -48,4 +43,8 @@ func (p *PrefixedLogger) Error(msg string, err error, args ...any) {
 
 func (p *PrefixedLogger) Fatal(msg string, err error, args ...any) {
 	p.inner.Fatal(p.prefixed(msg), err, args...)
+}
+
+func (p *PrefixedLogger) prefixed(msg string) string {
+	return fmt.Sprintf("[%s] %s", p.prefix, msg)
 }

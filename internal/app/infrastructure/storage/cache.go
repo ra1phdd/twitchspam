@@ -13,15 +13,15 @@ type Cache[T any] struct {
 	cap atomic.Int32
 }
 
-func NewCache[T any](cap int, ttl time.Duration) *Cache[T] {
+func NewCache[T any](capacity int32, ttl time.Duration) *Cache[T] {
 	s := &Cache[T]{
 		outer: otter.Must(&otter.Options[string, T]{
-			InitialCapacity:  cap,
+			InitialCapacity:  int(capacity),
 			ExpiryCalculator: otter.ExpiryAccessing[string, T](ttl),
 		}),
 	}
 	s.ttl.Store(ttl.Nanoseconds())
-	s.cap.Store(int32(cap))
+	s.cap.Store(capacity)
 
 	return s
 }

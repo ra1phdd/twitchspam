@@ -100,28 +100,31 @@ func (u *User) handleCommands(msg *domain.ChatMessage) *ports.AnswerType {
 		}
 
 		cfg := u.manager.Get()
-		if cmd, ok := cfg.Commands[strings.ToLower(word)]; ok {
-			if cmd.Options.IsPrivate && !(msg.Chatter.IsBroadcaster || msg.Chatter.IsMod) {
-				return nil
-			}
+		cmd, ok := cfg.Commands[strings.ToLower(word)]
+		if !ok {
+			continue
+		}
 
-			if (cmd.Options.Mode == template.OnlineCommandMode && !u.stream.IsLive()) ||
-				(cmd.Options.Mode == template.OfflineCommandMode && u.stream.IsLive()) {
-				return nil
-			}
+		if cmd.Options.IsPrivate && !msg.Chatter.IsBroadcaster && !msg.Chatter.IsMod {
+			return nil
+		}
 
-			if !u.allowUser(msg.Chatter.Username) || !u.allowCommand(word, cmd.Limiter) {
-				return nil
-			}
+		if (cmd.Options.Mode == template.OnlineCommandMode && !u.stream.IsLive()) ||
+			(cmd.Options.Mode == template.OfflineCommandMode && u.stream.IsLive()) {
+			return nil
+		}
 
-			text = u.template.Placeholders().ReplaceAll(cmd.Text, words)
-			if text == "" {
-				return nil
-			}
+		if !u.allowUser(msg.Chatter.Username) || !u.allowCommand(word, cmd.Limiter) {
+			return nil
+		}
 
-			if replyUsername != "" {
-				break
-			}
+		text = u.template.Placeholders().ReplaceAll(cmd.Text, words)
+		if text == "" {
+			return nil
+		}
+
+		if replyUsername != "" {
+			break
 		}
 	}
 

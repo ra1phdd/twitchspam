@@ -21,18 +21,20 @@ func New(path string) (*Manager, error) {
 
 	var err error
 	m.cfg, err = m.readParseValidate(path)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			m.cfg = m.GetDefault()
-			data, err := json.MarshalIndent(m.cfg, "", "  ")
-			if err != nil {
-				return nil, fmt.Errorf("marshal config: %w", err)
-			}
-			if err := m.writeAtomic(path, data, 0644); err != nil {
-				return nil, fmt.Errorf("write config: %w", err)
-			}
-		}
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return nil, fmt.Errorf("read config: %w", err)
+	}
+
+	if errors.Is(err, os.ErrNotExist) {
+		m.cfg = m.GetDefault()
+		data, err := json.MarshalIndent(m.cfg, "", "  ")
+		if err != nil {
+			return nil, fmt.Errorf("marshal config: %w", err)
+		}
+
+		if err := m.writeAtomic(path, data, 0644); err != nil {
+			return nil, fmt.Errorf("write config: %w", err)
+		}
 	}
 
 	return m, nil
@@ -63,6 +65,10 @@ func (m *Manager) Update(modify func(cfg *Config)) error {
 }
 
 func (m *Manager) readParseValidate(path string) (*Config, error) {
+	if path == "" {
+		return nil, errors.New("no config path provided")
+	}
+
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("open/read config: %w", err)

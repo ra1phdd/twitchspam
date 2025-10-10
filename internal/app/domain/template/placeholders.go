@@ -10,15 +10,6 @@ import (
 	"twitchspam/internal/app/ports"
 )
 
-var nonGameCategories = []string{
-	"", "Just Chatting", "IRL", "I'm Only Sleeping", "DJs", "Music",
-	"Games + Demos", "ASMR", "Special Events", "Art", "Politics",
-	"Pools, Hot Tubs, and Beaches", "Slots", "Food & Drink",
-	"Science & Technology", "Sports", "Animals, Aquariums, and Zoos",
-	"Crypto", "Talk Shows & Podcasts", "Co-working & Studying",
-	"Software and Game Development", "Makers & Crafting", "Writing & Reading",
-}
-
 type PlaceholdersTemplate struct {
 	stream ports.StreamPort
 
@@ -28,6 +19,15 @@ type PlaceholdersTemplate struct {
 }
 
 func NewPlaceholders(stream ports.StreamPort) *PlaceholdersTemplate {
+	nonGameCategories := []string{
+		"", "Just Chatting", "IRL", "I'm Only Sleeping", "DJs", "Music",
+		"Games + Demos", "ASMR", "Special Events", "Art", "Politics",
+		"Pools, Hot Tubs, and Beaches", "Slots", "Food & Drink",
+		"Science & Technology", "Sports", "Animals, Aquariums, and Zoos",
+		"Crypto", "Talk Shows & Podcasts", "Co-working & Studying",
+		"Software and Game Development", "Makers & Crafting", "Writing & Reading",
+	}
+
 	pt := &PlaceholdersTemplate{
 		stream:            stream,
 		queryRe:           regexp.MustCompile(`\{query(?: (\d+))?\}`),
@@ -217,7 +217,7 @@ func (pt *PlaceholdersTemplate) placeholderTime(args []string, countUp bool) str
 	if countUp {
 		duration = time.Since(targetTime)
 	} else {
-		duration = targetTime.Sub(time.Now())
+		duration = time.Until(targetTime)
 	}
 
 	return domain.FormatDuration(duration)

@@ -39,7 +39,6 @@ func New(log logger.Logger, cfg *config.Config, stream ports.StreamPort) *SevenT
 		s.emoteSet[strings.TrimSpace(e.Name)] = struct{}{}
 	}
 
-	//go s.runEventLoop()
 	return s
 }
 
@@ -87,76 +86,3 @@ func (sv *SevenTV) EmoteStats(words []string) (count int, onlyEmotes bool) {
 
 	return count, onlyEmotes
 }
-
-//func (sv *SevenTV) runEventLoop() {
-//	for {
-//		err := sv.connectAndHandleEvents()
-//		if err != nil {
-//			sv.log.Warn("7TV WS connection lost, retrying...", slog.String("error", err.Error()))
-//			time.Sleep(5 * time.Second)
-//		}
-//	}
-//}
-//
-//func (sv *SevenTV) connectAndHandleEvents() error {
-//	conn, resp, err := websocket.DefaultDialer.Dial("wss://events.7tv.io/v3", nil)
-//	if err != nil {
-//		log.Fatalf("Dial error: %v (resp: %+v)", err, resp)
-//	}
-//	defer conn.Close()
-//
-//	sv.log.Info("Connected to 7TV EventAPI")
-//	sub := map[string]interface{}{
-//		"op": 35, // Subscribe
-//		"d": map[string]interface{}{
-//			"type": "emote_set.update",
-//			"condition": map[string]string{
-//				"object_id": sv.setID,
-//			},
-//		},
-//	}
-//	subBytes, _ := json.Marshal(sub)
-//	conn.WriteMessage(websocket.TextMessage, subBytes)
-//
-//	for {
-//		_, msgBytes, err := conn.ReadMessage()
-//		if err != nil {
-//			sv.log.Error("Error while reading 7TV event", err)
-//			return err
-//		}
-//
-//		var event ports.SevenTVMessage
-//		if err := json.Unmarshal(msgBytes, &event); err != nil {
-//			sv.log.Error("Failed to decode 7TV event", err, slog.String("event", string(msgBytes)))
-//			continue
-//		}
-//
-//		var m map[string]any
-//		if err := json.Unmarshal(event.D, &m); err != nil {
-//			log.Fatal("decode map error:", err)
-//		}
-//
-//		eventType, _ := m["type"].(string)
-//		switch eventType {
-//		case "emote_set.update":
-//			var upd ports.EmoteSetUpdate
-//			if err := json.Unmarshal(event.D, &upd); err != nil {
-//				sv.log.Error("Failed to decode emote_set.update", err)
-//				break
-//			}
-//
-//			for _, em := range upd.Pushed {
-//				sv.log.Info("7TV: SpamEmote added", slog.String("name", em.Name), slog.String("id", em.ID))
-//			}
-//			for _, em := range upd.Pulled {
-//				sv.log.Info("7TV: SpamEmote removed", slog.String("name", em.Name), slog.String("id", em.ID))
-//			}
-//		case "hello":
-//			sv.log.Info("Received Hello from 7TV")
-//		case "ack":
-//			sv.log.Info("Subscription acknowledged")
-//		default:
-//			sv.log.Info("Unhandled 7TV event", slog.String("raw", string(msgBytes)))
-//		}
-//	}
-//}

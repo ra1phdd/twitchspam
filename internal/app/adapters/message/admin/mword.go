@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"twitchspam/internal/app/domain"
 	"twitchspam/internal/app/domain/template"
@@ -43,8 +44,10 @@ func (m *AddMword) handleMwAdd(cfg *config.Config, text *domain.MessageText) *po
 		return nonParametr
 	}
 
-	var punishments []config.Punishment
-	for _, pa := range strings.Split(strings.TrimSpace(matches[1]), ",") {
+	parts := strings.Split(strings.TrimSpace(matches[1]), ",")
+	punishments := make([]config.Punishment, 0, len(parts))
+
+	for _, pa := range parts {
 		pa = strings.TrimSpace(pa)
 		if pa == "" {
 			continue
@@ -80,8 +83,11 @@ func (m *AddMword) handleMwAdd(cfg *config.Config, text *domain.MessageText) *po
 		return success
 	}
 
-	var added, exists []string
-	for _, word := range strings.Split(strings.TrimSpace(matches[5]), ",") {
+	words := strings.Split(strings.TrimSpace(matches[5]), ",")
+	added := make([]string, 0, len(words))
+	exists := make([]string, 0, len(words))
+
+	for _, word := range words {
 		word = strings.TrimSpace(word)
 		if word == "" {
 			continue
@@ -208,9 +214,9 @@ func (m *ListMword) Execute(cfg *config.Config, _ *domain.MessageText) *ports.An
 }
 
 func (m *ListMword) handleMwList(cfg *config.Config) *ports.AnswerType {
-	var mwords map[string]config.Mword
+	mwords := make(map[string]config.Mword)
 	for i, mw := range cfg.Mword {
-		mwords[fmt.Sprint(i)] = mw
+		mwords[strconv.Itoa(i)] = mw
 	}
 
 	return buildList(mwords, "мворды", "мворды не найдены!",
@@ -481,7 +487,7 @@ func (m *ListMwordGroup) handleMwgList(cfg *config.Config) *ports.AnswerType {
 	return buildList(cfg.MwordGroup, "мворд группы", "мворд группы не найдены!",
 		func(name string, mwg *config.MwordGroup) string {
 			var sb strings.Builder
-			sb.WriteString(fmt.Sprintf("%s:\n", name))
+			sb.WriteString(name + ":\n")
 			sb.WriteString(fmt.Sprintf("- глобальные наказания: %v\n", strings.Join(m.template.Punishment().FormatAll(mwg.Punishments), ", ")))
 			sb.WriteString(fmt.Sprintf("- глобальные опции: %+v\n", m.template.Options().MwordToString(mwg.Options)))
 

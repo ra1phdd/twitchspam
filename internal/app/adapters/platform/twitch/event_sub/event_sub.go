@@ -85,10 +85,12 @@ func (es *EventSub) runEventLoop() {
 }
 
 func (es *EventSub) connectAndHandleEvents() error {
-	ws, _, err := websocket.DefaultDialer.Dial("wss://eventsub.wss.twitch.tv/ws", nil)
+	ws, resp, err := websocket.DefaultDialer.Dial("wss://eventsub.wss.twitch.tv/ws", nil)
 	if err != nil {
-		es.log.Error("Failed to connect to EventSub EventSub", err)
-		return err
+		if resp != nil {
+			resp.Body.Close()
+		}
+		return fmt.Errorf("websocket dial: %w", err)
 	}
 	defer ws.Close()
 
@@ -104,7 +106,7 @@ func (es *EventSub) connectAndHandleEvents() error {
 }
 
 func (es *EventSub) startWorkers(ctx context.Context, cancel context.CancelFunc, wg *sync.WaitGroup, msgChan chan []byte) {
-	for i := 0; i < runtime.NumCPU(); i++ {
+	for range runtime.NumCPU() {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -147,8 +149,14 @@ func (es *EventSub) handleMessage(cancel context.CancelFunc, msgBytes []byte) {
 			es.log.Error("Failed to decode session_welcome payload", err, slog.String("event", string(msgBytes)))
 			return
 		}
-
 		es.sessionID = payload.Session.ID
+
+		es.mu.Lock()
+		defer es.mu.Unlock()
+
+		for id := range es.channels {
+			es.subscribeEvents(es.sessionID, id)
+		}
 	case "session_keepalive":
 		es.log.Trace("Received session_keepalive on EventSub")
 	case "notification":
@@ -341,10 +349,7 @@ func (es *EventSub) convertMap(msgEvent ChatMessageEvent) *domain.ChatMessage {
 	}
 
 	total := emoteChars + textChars
-	emoteOnly := false
-	if total > 0 && float64(emoteChars)/float64(total) >= es.cfg.Spam.SettingsEmotes.EmoteThreshold {
-		emoteOnly = true
-	}
+	emoteOnly := total > 0 && float64(emoteChars)/float64(total) >= es.cfg.Spam.SettingsEmotes.EmoteThreshold
 
 	msg := &domain.ChatMessage{
 		Broadcaster: domain.Broadcaster{

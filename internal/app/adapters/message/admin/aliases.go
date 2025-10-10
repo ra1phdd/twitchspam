@@ -42,7 +42,6 @@ func (a *ListAlias) handleAliasesList(cfg *config.Config) *ports.AnswerType {
 			return ""
 		}()
 		aliases[data] = als.Original
-
 	}
 
 	return buildList(aliases, "алиасы", "алиасы не найдены!",

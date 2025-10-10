@@ -8,6 +8,9 @@ import (
 
 type Config struct {
 	App           App                              `json:"app"`
+	UserAccess    UserAccess                       `json:"user_access"`
+	UsersTokens   map[string]UserTokens            `json:"user_tokens"`
+	CertDomains   []string                         `json:"cert_domains"`
 	Enabled       bool                             `json:"enabled"`
 	Limiter       Limiter                          `json:"limiter"`
 	WindowSecs    int                              `json:"-"`
@@ -25,11 +28,24 @@ type Config struct {
 
 type App struct {
 	LogLevel    string   `json:"log_level"`
-	OAuth       string   `json:"oauth,required"`
-	ClientID    string   `json:"client_id,required"`
-	Username    string   `json:"username,required"`
-	UserID      string   `json:"user_id,required"`
-	ModChannels []string `json:"mod_channels,required"`
+	OAuth       string   `json:"oauth"`
+	ClientID    string   `json:"client_id"`
+	Username    string   `json:"username"`
+	UserID      string   `json:"user_id"`
+	ModChannels []string `json:"mod_channels"`
+}
+
+type UserAccess struct {
+	ClientID     string `json:"client_id"`
+	ClientSecret string `json:"client_secret"`
+	RedirectURL  string `json:"redirect_uri"`
+}
+
+type UserTokens struct {
+	AccessToken  string    `json:"access_token"`
+	RefreshToken string    `json:"refresh_token"`
+	ExpiresIn    int       `json:"expires_in"`
+	ObtainedAt   time.Time `json:"obtained_at"`
 }
 
 type Spam struct {

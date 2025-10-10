@@ -37,8 +37,11 @@ func (c *AddCommandLimiter) handleCommandLimiterAdd(cfg *config.Config, text *do
 		return invalidValueInterval
 	}
 
-	var added, notFound []string
-	for _, key := range strings.Split(strings.ToLower(strings.TrimSpace(matches[3])), ",") {
+	words := strings.Split(strings.TrimSpace(matches[3]), ",")
+	added := make([]string, 0, len(words))
+	notFound := make([]string, 0, len(words))
+
+	for _, key := range words {
 		key = strings.TrimSpace(key)
 		if key == "" {
 			continue
@@ -89,8 +92,11 @@ func (c *SetCommandLimiter) handleCommandLimiterSet(cfg *config.Config, text *do
 		return invalidValueInterval
 	}
 
-	var edited, notFound []string
-	for _, key := range strings.Split(strings.ToLower(strings.TrimSpace(matches[3])), ",") {
+	words := strings.Split(strings.TrimSpace(matches[3]), ",")
+	edited := make([]string, 0, len(words))
+	notFound := make([]string, 0, len(words))
+
+	for _, key := range words {
 		key = strings.TrimSpace(key)
 		if key == "" {
 			continue
@@ -130,8 +136,11 @@ func (c *DelCommandLimiter) handleCommandLimiterDel(cfg *config.Config, text *do
 		return nonParametr
 	}
 
-	var removed, notFound []string
-	for _, key := range strings.Split(strings.ToLower(strings.TrimSpace(matches[1])), ",") {
+	words := strings.Split(strings.TrimSpace(matches[1]), ",")
+	removed := make([]string, 0, len(words))
+	notFound := make([]string, 0, len(words))
+
+	for _, key := range words {
 		key = strings.TrimSpace(key)
 		if key == "" {
 			continue

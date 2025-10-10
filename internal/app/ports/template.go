@@ -5,11 +5,9 @@ import (
 	"time"
 	"twitchspam/internal/app/domain"
 	"twitchspam/internal/app/infrastructure/config"
-	"twitchspam/internal/app/infrastructure/storage"
 )
 
 type TemplatePort interface {
-	CleanMessage(text string) string
 	Aliases() AliasesPort
 	Placeholders() PlaceholdersPort
 	Banwords() BanwordsPort
@@ -18,7 +16,6 @@ type TemplatePort interface {
 	Punishment() PunishmentPort
 	SpamPause() SpamPausePort
 	Mword() MwordPort
-	Store() StoresPort
 	Nuke() NukePort
 }
 
@@ -49,8 +46,8 @@ type OptionsPort interface {
 }
 
 type ParserPort interface {
-	ParseIntArg(valStr string, min int, max int) (int, bool)
-	ParseFloatArg(valStr string, min float64, max float64) (float64, bool)
+	ParseIntArg(valStr string, minVal int, maxVal int) (int, bool)
+	ParseFloatArg(valStr string, minVal float64, maxVal float64) (float64, bool)
 }
 
 type PunishmentPort interface {
@@ -68,12 +65,6 @@ type SpamPausePort interface {
 type MwordPort interface {
 	Update(mwords []config.Mword, mwordGroups map[string]*config.MwordGroup)
 	Check(msg *domain.ChatMessage) []config.Punishment
-}
-
-type StoresPort interface {
-	SetMessageCapacity(cfg *config.Config)
-	Messages() StorePort[storage.Message]
-	Timeouts() StorePort[int]
 }
 
 type NukePort interface {

@@ -15,8 +15,8 @@ type StorePort[T any] interface {
 	ForEach(key string, fn func(val *T))
 	ClearKey(key string)
 	ClearAll()
-	SetCapacity(capacity int)
-	GetCapacity() int
+	SetCapacity(capacity int32)
+	GetCapacity() int32
 	SetTTL(newTTL time.Duration)
 	GetTTL() time.Duration
 }

@@ -5,18 +5,13 @@ import (
 	"net/http"
 	"time"
 	"twitchspam/internal/app/adapters/file_server"
+	router "twitchspam/internal/app/adapters/http"
 	"twitchspam/internal/app/adapters/message"
 	"twitchspam/internal/app/adapters/platform/twitch"
 	"twitchspam/internal/app/domain/stream"
 	"twitchspam/internal/app/infrastructure/config"
 	"twitchspam/pkg/logger"
 )
-
-type App struct {
-	log    logger.Logger
-	cfg    *config.Config
-	client *http.Client
-}
 
 func New() error {
 	log := logger.New()
@@ -47,5 +42,6 @@ func New() error {
 		}()
 	}
 
-	return nil
+	r := router.NewRouter(log, manager)
+	return r.Run()
 }

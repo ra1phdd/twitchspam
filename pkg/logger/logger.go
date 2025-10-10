@@ -74,6 +74,7 @@ func New() *SlogLogger {
 		MaxBackups: 32,
 		MaxAge:     30,
 		Compress:   true,
+		LocalTime:  true,
 	}
 
 	l.log = slog.New(
@@ -150,7 +151,15 @@ func (l *SlogLogger) Error(msg string, err error, args ...any) {
 
 func (l *SlogLogger) Fatal(msg string, err error, args ...any) {
 	if err != nil {
-		l.log.Log(context.Background(), LevelFatal, msg, append([]any{slog.Any("error", err.Error())}, args...)...)
+		l.log.Log(
+			context.Background(),
+			LevelFatal,
+			msg,
+			append(
+				[]any{slog.Any("error", err.Error())},
+				args...,
+			)...,
+		)
 	} else {
 		l.log.Log(context.Background(), LevelFatal, msg, args...)
 	}

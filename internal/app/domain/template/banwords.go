@@ -48,7 +48,7 @@ func (bt *BanwordsTemplate) CheckMessage(textLower string, wordsOriginal []strin
 		return true
 	}
 
-	for i := 0; i < len(wordsOriginal); i++ {
+	for i := range wordsOriginal {
 		cur := bt.trie.Root()
 		j := i
 		for j < len(wordsOriginal) {

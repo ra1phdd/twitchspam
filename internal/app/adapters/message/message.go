@@ -26,6 +26,9 @@ type Message struct {
 	template    ports.TemplatePort
 	admin, user ports.CommandPort
 	checker     ports.CheckerPort
+
+	messages ports.StorePort[storage.Message]
+	timeouts ports.StorePort[int]
 }
 
 func New(log logger.Logger, manager *config.Manager, stream ports.StreamPort, api ports.APIPort, client *http.Client) *Message {
@@ -43,12 +46,13 @@ func New(log logger.Logger, manager *config.Manager, stream ports.StreamPort, ap
 			template.WithPlaceholders(stream),
 			template.WithBanwords(log, cfg.Banwords.Words, cfg.Banwords.Regexp),
 			template.WithMword(cfg.Mword, cfg.MwordGroup),
-			template.WithStore(cfg),
 		),
+		messages: storage.New[storage.Message](50, time.Duration(cfg.WindowSecs)*time.Second),
+		timeouts: storage.New[int](15, 0),
 	}
 	m.admin = admin.New(log, manager, stream, api, m.template, fs, timer)
 	m.user = user.New(log, manager, stream, m.template, fs)
-	m.checker = checker.NewCheck(log, cfg, stream, m.template)
+	m.checker = checker.NewCheck(log, cfg, stream, m.template, m.messages, m.timeouts)
 
 	for cmd, data := range cfg.Commands {
 		if data.Timer == nil {
@@ -66,7 +70,7 @@ func (m *Message) Check(msg *domain.ChatMessage) {
 		m.stream.Stats().AddMessage(msg.Chatter.Username)
 	}
 
-	m.template.Store().Messages().Push(msg.Chatter.Username, msg.Message.ID, storage.Message{
+	m.messages.Push(msg.Chatter.Username, msg.Message.ID, storage.Message{
 		Data:               msg,
 		Time:               time.Now(),
 		HashWordsLowerNorm: domain.WordsToHashes(msg.Message.Text.Words(domain.Lower, domain.RemovePunctuation, domain.RemoveDuplicateLetters)),
@@ -99,6 +103,10 @@ func (m *Message) Check(msg *domain.ChatMessage) {
 }
 
 func (m *Message) CheckAutomod(msg *domain.ChatMessage) {
+	if m.stream.IsLive() {
+		m.stream.Stats().AddMessage(msg.Chatter.Username)
+	}
+
 	if !m.cfg.Enabled || !m.cfg.Automod.Enabled {
 		return
 	}

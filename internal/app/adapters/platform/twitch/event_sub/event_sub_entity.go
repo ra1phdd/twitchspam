@@ -36,24 +36,24 @@ type ChatMessageEvent struct {
 	BroadcasterUserLogin string `json:"broadcaster_user_login"`
 	BroadcasterUserName  string `json:"broadcaster_user_name"`
 
-	//SourceBroadcasterUserID *string `json:"source_broadcaster_user_id"`
-	//SourceBroadcasterUserLogin *string `json:"source_broadcaster_user_login"`
-	//SourceBroadcasterUserName  *string `json:"source_broadcaster_user_name"`
+	// SourceBroadcasterUserID *string `json:"source_broadcaster_user_id"`
+	// SourceBroadcasterUserLogin *string `json:"source_broadcaster_user_login"`
+	// SourceBroadcasterUserName  *string `json:"source_broadcaster_user_name"`
 
 	ChatterUserID    string `json:"chatter_user_id"`
 	ChatterUserLogin string `json:"chatter_user_login"`
 	ChatterUserName  string `json:"chatter_user_name"`
 
 	MessageID string `json:"message_id"`
-	//SourceMessageID *string `json:"source_message_id"`
-	//IsSourceOnly    *bool   `json:"is_source_only"`
+	// SourceMessageID *string `json:"source_message_id"`
+	// IsSourceOnly    *bool   `json:"is_source_only"`
 
 	Message struct {
 		Text      string `json:"text"`
 		Fragments []struct {
 			Type string `json:"type"`
 			Text string `json:"text"`
-			//Cheermote *string `json:"cheermote"`
+			// Cheermote *string `json:"cheermote"`
 			Emote *struct {
 				ID         string   `json:"id"`
 				EmoteSetID string   `json:"emote_set_id"`
@@ -76,14 +76,14 @@ type ChatMessageEvent struct {
 		Info  string `json:"info"`
 	} `json:"badges"`
 
-	//SourceBadges *[]struct {
+	// SourceBadges *[]struct {
 	//		SetID string `json:"set_id"`
 	//		ID    string `json:"id"`
 	//		Info  string `json:"info"`
-	//	} `json:"badges"`
+	// } `json:"badges"`
 
 	MessageType string `json:"message_type"`
-	//Cheer                       *string `json:"cheer"`
+	// Cheer                       *string `json:"cheer"`
 	Reply *struct {
 		ParentMessageID   string `json:"parent_message_id"`
 		ParentMessageBody string `json:"parent_message_body"`
@@ -95,8 +95,8 @@ type ChatMessageEvent struct {
 		ThreadUserName    string `json:"thread_user_name"`
 		ThreadUserLogin   string `json:"thread_user_login"`
 	} `json:"reply"`
-	//ChannelPointsCustomRewardID *string `json:"channel_points_custom_reward_id"`
-	//ChannelPointsAnimationID    *string `json:"channel_points_animation_id"`
+	// ChannelPointsCustomRewardID *string `json:"channel_points_custom_reward_id"`
+	// ChannelPointsAnimationID    *string `json:"channel_points_animation_id"`
 }
 
 type AutomodHoldEvent struct {

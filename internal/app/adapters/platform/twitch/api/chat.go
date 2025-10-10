@@ -81,7 +81,6 @@ func (t *Twitch) SendChatAnnouncement(channelID, message, color string) error {
 	return nil
 }
 
-// AnnouncementRequest represents the request body for sending an announcement
 type AnnouncementRequest struct {
 	Message string `json:"message"`
 	Color   string `json:"color,omitempty"`

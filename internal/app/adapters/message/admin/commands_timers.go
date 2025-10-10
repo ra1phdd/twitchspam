@@ -80,8 +80,11 @@ func (c *DelCommandTimer) handleCommandTimersDel(cfg *config.Config, text *domai
 		return nonParametr
 	}
 
-	var removed, notFound []string
-	for _, key := range strings.Split(strings.ToLower(strings.TrimSpace(matches[1])), ",") {
+	words := strings.Split(strings.TrimSpace(matches[1]), ",")
+	removed := make([]string, 0, len(words))
+	notFound := make([]string, 0, len(words))
+
+	for _, key := range words {
 		key = strings.TrimSpace(key)
 		if key == "" {
 			continue
@@ -123,8 +126,11 @@ func (c *OnOffCommandTimer) handleCommandTimersOnOff(cfg *config.Config, text *d
 
 	state := strings.ToLower(strings.TrimSpace(matches[1]))
 
-	var edited, notFound []string
-	for _, key := range strings.Split(strings.ToLower(strings.TrimSpace(matches[2])), ",") {
+	words := strings.Split(strings.TrimSpace(matches[2]), ",")
+	edited := make([]string, 0, len(words))
+	notFound := make([]string, 0, len(words))
+
+	for _, key := range words {
 		key = strings.TrimSpace(key)
 		if key == "" {
 			continue
@@ -250,7 +256,7 @@ func (a *AddTimer) AddTimer(key string, cmd *config.Commands) {
 		}
 
 		msg := &ports.AnswerType{}
-		for i := 0; i < timer.Count; i++ {
+		for range timer.Count {
 			msg.Text = append(msg.Text, args["text"].(string))
 		}
 

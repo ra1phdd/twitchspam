@@ -13,7 +13,7 @@ type Store[T any] struct {
 	cap atomic.Int32
 }
 
-func New[T any](cap int, ttl time.Duration) *Store[T] {
+func New[T any](capacity int32, ttl time.Duration) *Store[T] {
 	s := &Store[T]{
 		outer: otter.Must(&otter.Options[string, *otter.Cache[string, T]]{
 			InitialCapacity:  128,
@@ -21,7 +21,7 @@ func New[T any](cap int, ttl time.Duration) *Store[T] {
 		}),
 	}
 	s.ttl.Store(ttl.Nanoseconds())
-	s.cap.Store(int32(cap))
+	s.cap.Store(capacity)
 
 	return s
 }
@@ -147,8 +147,8 @@ func (s *Store[T]) ClearAll() {
 	s.outer.InvalidateAll()
 }
 
-func (s *Store[T]) SetCapacity(newCap int) {
-	s.cap.Store(int32(newCap))
+func (s *Store[T]) SetCapacity(newCap int32) {
+	s.cap.Store(newCap)
 
 	for entry := range s.outer.All() {
 		inner, ok := s.outer.GetIfPresent(entry)
@@ -159,8 +159,8 @@ func (s *Store[T]) SetCapacity(newCap int) {
 	}
 }
 
-func (s *Store[T]) GetCapacity() int {
-	return int(s.cap.Load())
+func (s *Store[T]) GetCapacity() int32 {
+	return s.cap.Load()
 }
 
 func (s *Store[T]) SetTTL(newTTL time.Duration) {

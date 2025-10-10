@@ -15,6 +15,9 @@ type APIPort interface {
 	DeleteChatMessage(channelID, messageID string) error
 	TimeoutUser(channelID, userID string, duration int, reason string)
 	BanUser(channelID, userID string, reason string)
+	SearchCategory(gameName string) (string, string, error)
+	UpdateChannelGameID(broadcasterID string, gameID string) error
+	UpdateChannelTitle(broadcasterID string, title string) error
 }
 
 type IRCPort interface {

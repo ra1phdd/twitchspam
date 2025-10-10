@@ -11,6 +11,7 @@ import (
 	"twitchspam/internal/app/domain"
 	"twitchspam/internal/app/infrastructure/config"
 	"twitchspam/internal/app/ports"
+	"twitchspam/pkg/logger"
 )
 
 type Ping struct{}
@@ -169,5 +170,84 @@ func (s *Spam) handleSpam(text *domain.MessageText) *ports.AnswerType {
 	return &ports.AnswerType{
 		Text:    answers,
 		IsReply: false,
+	}
+}
+
+type SetCategory struct {
+	re     *regexp.Regexp
+	log    logger.Logger
+	stream ports.StreamPort
+	api    ports.APIPort
+}
+
+func (c *SetCategory) Execute(_ *config.Config, text *domain.MessageText) *ports.AnswerType {
+	return c.handleSetCategory(text)
+}
+
+func (c *SetCategory) handleSetCategory(text *domain.MessageText) *ports.AnswerType {
+	matches := c.re.FindStringSubmatch(text.Text()) // !am cat <название категории>
+	if len(matches) != 2 {
+		return nonParametr
+	}
+
+	id, name := "0", ""
+	match := strings.TrimSpace(matches[1])
+
+	if match != "" {
+		var err error
+		id, name, err = c.api.SearchCategory(match)
+		if err != nil {
+			return &ports.AnswerType{
+				Text:    []string{"категория не найдена!"},
+				IsReply: true,
+			}
+		}
+	}
+
+	err := c.api.UpdateChannelGameID(c.stream.ChannelID(), id)
+	if err != nil {
+		c.log.Error("Failed to update channel game id", err)
+		return unknownError
+	}
+
+	if id == "0" {
+		return &ports.AnswerType{
+			Text:    []string{"категория удалена!"},
+			IsReply: true,
+		}
+	}
+
+	return &ports.AnswerType{
+		Text:    []string{fmt.Sprintf("установлена категория %s!", name)},
+		IsReply: true,
+	}
+}
+
+type SetTitle struct {
+	re     *regexp.Regexp
+	log    logger.Logger
+	stream ports.StreamPort
+	api    ports.APIPort
+}
+
+func (t *SetTitle) Execute(_ *config.Config, text *domain.MessageText) *ports.AnswerType {
+	return t.handleSetTitle(text)
+}
+
+func (t *SetTitle) handleSetTitle(text *domain.MessageText) *ports.AnswerType {
+	matches := t.re.FindStringSubmatch(text.Text()) // !am title <название>
+	if len(matches) != 2 {
+		return nonParametr
+	}
+
+	err := t.api.UpdateChannelTitle(t.stream.ChannelID(), strings.TrimSpace(matches[1]))
+	if err != nil {
+		t.log.Error("Failed to update channel title", err)
+		return unknownError
+	}
+
+	return &ports.AnswerType{
+		Text:    []string{fmt.Sprintf("установлено название стрима - %s!", strings.TrimSpace(matches[1]))},
+		IsReply: true,
 	}
 }

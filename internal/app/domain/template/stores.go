@@ -23,12 +23,12 @@ func NewStores(cfg *config.Config) *StoresTemplate {
 }
 
 func (s *StoresTemplate) SetMessageCapacity(cfg *config.Config) {
-	capacity := func() int {
+	capacity := func() int32 {
 		defLimit := float64(cfg.Spam.SettingsDefault.MessageLimit*cfg.Spam.SettingsDefault.MinGapMessages) / cfg.Spam.SettingsDefault.SimilarityThreshold
 		vipLimit := float64(cfg.Spam.SettingsVIP.MessageLimit*cfg.Spam.SettingsVIP.MinGapMessages) / cfg.Spam.SettingsVIP.SimilarityThreshold
 		emoteLimit := float64(cfg.Spam.SettingsEmotes.MessageLimit) / cfg.Spam.SettingsEmotes.EmoteThreshold
 
-		return int(max(defLimit, vipLimit, emoteLimit))
+		return int32(max(defLimit, vipLimit, emoteLimit))
 	}()
 
 	if capacity <= 50 {

@@ -28,6 +28,10 @@ func (m *Manager) validate(cfg *Config) error {
 		return errors.New("app.mod_channels is required")
 	}
 
+	if cfg.UsersTokens == nil {
+		cfg.UsersTokens = make(map[string]UserTokens)
+	}
+
 	cfg.WindowSecs = 180
 
 	// limiter

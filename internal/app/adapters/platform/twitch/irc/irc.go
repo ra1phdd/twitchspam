@@ -3,7 +3,6 @@ package irc
 import (
 	"bufio"
 	"crypto/tls"
-	"fmt"
 	"log/slog"
 	"net"
 	"strings"
@@ -22,9 +21,8 @@ type IRC struct {
 	chans    map[string]chan bool
 	ttl      time.Duration
 
-	isListen sync.Once
-	conn     net.Conn
-	reader   *bufio.Reader
+	conn   net.Conn
+	reader *bufio.Reader
 }
 
 func New(log logger.Logger, cfg *config.Config, ttl time.Duration) *IRC {
@@ -98,8 +96,8 @@ func (i *IRC) connectAndListen() error {
 	i.conn = conn
 	i.reader = bufio.NewReader(conn)
 
-	i.write(fmt.Sprintf("PASS oauth:%s", i.cfg.App.OAuth))
-	i.write(fmt.Sprintf("NICK %s", i.cfg.App.Username))
+	i.write("PASS oauth:" + i.cfg.App.OAuth)
+	i.write("NICK " + i.cfg.App.Username)
 	i.write("CAP REQ :twitch.tv/tags")
 	i.write("CAP REQ :twitch.tv/membership")
 	i.write("CAP REQ :twitch.tv/commands")
@@ -156,7 +154,6 @@ func (i *IRC) listen() error {
 func (i *IRC) join(channel string) {
 	if !strings.HasPrefix(channel, "#") {
 		channel = "#" + channel
-
 	}
 	i.write("JOIN " + channel)
 }

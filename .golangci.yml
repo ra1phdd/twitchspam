@@ -1,0 +1,33 @@
+version: "2"
+
+run:
+  timeout: 5m
+  tests: true
+
+linters:
+  default: all
+  disable:
+    - cyclop
+    - funcorder
+    - depguard
+    - gocyclo
+    - err113
+    - errcheck
+    - exhaustruct
+    - forcetypeassert
+    - funlen
+    - gochecknoglobals
+    - gocognit
+    - interfacebloat
+    - ireturn
+    - lll
+    - mnd
+    - nlreturn
+    - noinlineerr
+    - nonamedreturns
+    - revive
+    - tagliatelle
+    - varnamelen
+    - wrapcheck
+    - wsl
+    - wsl_v5

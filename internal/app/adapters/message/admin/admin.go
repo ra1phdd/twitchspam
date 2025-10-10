@@ -77,10 +77,6 @@ var (
 		Text:    []string{"не указан корректный интервал!"},
 		IsReply: true,
 	}
-	invalidMessageFormat = &ports.AnswerType{
-		Text:    []string{"кол-во сообщений не указано или указано неверно!"},
-		IsReply: true,
-	}
 	invalidValueRepeats = &ports.AnswerType{
 		Text:    []string{"кол-во повторов не указано или указано неверно!"},
 		IsReply: true,
@@ -125,6 +121,57 @@ func New(log logger.Logger, manager *config.Manager, stream ports.StreamPort, ap
 }
 
 var startApp = time.Now()
+
+func (a *Admin) FindMessages(msg *domain.ChatMessage) *ports.AnswerType {
+	if (!msg.Chatter.IsBroadcaster && !msg.Chatter.IsMod) || !strings.HasPrefix(msg.Message.Text.Text(domain.Lower), "!am") {
+		return nil
+	}
+
+	words := msg.Message.Text.Words(domain.Lower)
+	if len(words) < 2 {
+		return notFoundCmd
+	}
+
+	// дикий костыль, не смотреть - есть шанс лишиться зрения
+	markCmd := a.root.(*CompositeCommand).subcommands["mark"].(*CompositeCommand)
+	markCmd.defaultCmd.(*AddMarker).username = msg.Chatter.Username
+	markCmd.subcommands["add"].(*AddMarker).username = msg.Chatter.Username
+	markCmd.subcommands["clear"].(*ClearMarker).username = msg.Chatter.Username
+	markCmd.subcommands["list"].(*ListMarker).username = msg.Chatter.Username
+
+	var result *ports.AnswerType
+	if err := a.manager.Update(func(cfg *config.Config) {
+		result = a.root.Execute(cfg, &msg.Message.Text)
+	}); err != nil {
+		a.log.Error("Failed update config", err, slog.String("msg", msg.Message.Text.Text()))
+		return unknownError
+	}
+
+	if result != nil {
+		return result
+	}
+	return success
+}
+
+func (c *CompositeCommand) Execute(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
+	words := text.Words(domain.Lower)
+	if c.cursor >= len(words) {
+		if c.defaultCmd != nil {
+			return c.defaultCmd.Execute(cfg, text)
+		}
+		return notFoundCmd
+	}
+
+	cmdName := words[c.cursor]
+	if cmd, ok := c.subcommands[cmdName]; ok {
+		return cmd.Execute(cfg, text)
+	}
+
+	if c.defaultCmd != nil {
+		return c.defaultCmd.Execute(cfg, text)
+	}
+	return notFoundCmd
+}
 
 func (a *Admin) buildCommandTree() ports.Command {
 	timer := &AddTimer{
@@ -310,60 +357,11 @@ func (a *Admin) buildCommandTree() ports.Command {
 				},
 				cursor: 2,
 			},
+			"cat":   &SetCategory{re: regexp.MustCompile(`(?i)^!am\s+cat\s*(.*)$`), log: a.log, stream: a.stream, api: a.api},
+			"title": &SetTitle{re: regexp.MustCompile(`(?i)^!am\s+title\s+(.+)$`), log: a.log, stream: a.stream, api: a.api},
 		},
 		cursor: 1,
 	}
-}
-
-func (a *Admin) FindMessages(msg *domain.ChatMessage) *ports.AnswerType {
-	if !(msg.Chatter.IsBroadcaster || msg.Chatter.IsMod) || !strings.HasPrefix(msg.Message.Text.Text(domain.Lower), "!am") {
-		return nil
-	}
-
-	words := msg.Message.Text.Words(domain.Lower)
-	if len(words) < 2 {
-		return notFoundCmd
-	}
-
-	// дикий костыль, не смотреть - есть шанс лишиться зрения
-	markCmd := a.root.(*CompositeCommand).subcommands["mark"].(*CompositeCommand)
-	markCmd.defaultCmd.(*AddMarker).username = msg.Chatter.Username
-	markCmd.subcommands["add"].(*AddMarker).username = msg.Chatter.Username
-	markCmd.subcommands["clear"].(*ClearMarker).username = msg.Chatter.Username
-	markCmd.subcommands["list"].(*ListMarker).username = msg.Chatter.Username
-
-	var result *ports.AnswerType
-	if err := a.manager.Update(func(cfg *config.Config) {
-		result = a.root.Execute(cfg, &msg.Message.Text)
-	}); err != nil {
-		a.log.Error("Failed update config", err, slog.String("msg", msg.Message.Text.Text()))
-		return unknownError
-	}
-
-	if result != nil {
-		return result
-	}
-	return success
-}
-
-func (c *CompositeCommand) Execute(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
-	words := text.Words(domain.Lower)
-	if c.cursor >= len(words) {
-		if c.defaultCmd != nil {
-			return c.defaultCmd.Execute(cfg, text)
-		}
-		return notFoundCmd
-	}
-
-	cmdName := words[c.cursor]
-	if cmd, ok := c.subcommands[cmdName]; ok {
-		return cmd.Execute(cfg, text)
-	}
-
-	if c.defaultCmd != nil {
-		return c.defaultCmd.Execute(cfg, text)
-	}
-	return notFoundCmd
 }
 
 type RespArg struct {
@@ -407,7 +405,7 @@ func buildList[T any](
 		}
 	}
 
-	var parts []string
+	parts := make([]string, 0, len(items))
 	for key, value := range items {
 		parts = append(parts, formatFunc(key, value))
 	}

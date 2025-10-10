@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"errors"
 	"fmt"
 	"hash/fnv"
 	"strings"
@@ -12,7 +13,7 @@ func WordsToHashes(words []string) []uint64 {
 	h := fnv.New64a()
 	for i, w := range words {
 		h.Reset()
-		h.Write([]byte(w))
+		_, _ = h.Write([]byte(w))
 		hashes[i] = h.Sum64()
 	}
 	return hashes
@@ -73,11 +74,11 @@ func ParseDateTime(dateStr, timeStr string) (time.Time, error) {
 			return t, nil
 		}
 	}
-	return time.Time{}, fmt.Errorf("не удалось распознать дату/время")
+	return time.Time{}, errors.New("не удалось распознать дату/время")
 }
 
 func pluralize(n int, forms [3]string) string {
-	n = n % 100
+	n %= 100
 	if n >= 11 && n <= 19 {
 		return forms[2]
 	}

@@ -72,8 +72,11 @@ func (c *SetCommand) handleCommandSet(cfg *config.Config, text *domain.MessageTe
 		return nonParametr
 	}
 
-	var edited, notFound []string
-	for _, word := range strings.Split(strings.TrimSpace(matches[1]), ",") {
+	words := strings.Split(strings.TrimSpace(matches[1]), ",")
+	edited := make([]string, 0, len(words))
+	notFound := make([]string, 0, len(words))
+
+	for _, word := range words {
 		word = strings.ToLower(strings.TrimSpace(word))
 		if word == "" {
 			continue
@@ -109,8 +112,11 @@ func (c *DelCommand) handleCommandDel(cfg *config.Config, text *domain.MessageTe
 		return nonParametr
 	}
 
-	var removed, notFound []string
-	for _, cmd := range strings.Split(strings.TrimSpace(matches[1]), ",") {
+	words := strings.Split(strings.TrimSpace(matches[1]), ",")
+	removed := make([]string, 0, len(words))
+	notFound := make([]string, 0, len(words))
+
+	for _, cmd := range words {
 		cmd = strings.ToLower(strings.TrimSpace(cmd))
 		if cmd == "" {
 			continue

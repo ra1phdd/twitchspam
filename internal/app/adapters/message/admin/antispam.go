@@ -3,6 +3,7 @@ package admin
 import (
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 	"twitchspam/internal/app/domain"
@@ -116,29 +117,29 @@ func (a *InfoAntispam) handleAntiSpamInfo(cfg *config.Config) *ports.AnswerType 
 		"- режим: " + cfg.Spam.Mode,
 		"- разрешенные пользователи: " + whitelistUsers,
 		"\nобщие:",
-		"- включен: " + fmt.Sprint(cfg.Spam.SettingsDefault.Enabled),
+		"- включен: " + strconv.FormatBool(cfg.Spam.SettingsDefault.Enabled),
 		"- порог схожести сообщений: " + fmt.Sprint(cfg.Spam.SettingsDefault.SimilarityThreshold),
-		"- кол-во похожих сообщений: " + fmt.Sprint(cfg.Spam.SettingsDefault.MessageLimit),
+		"- кол-во похожих сообщений: " + strconv.Itoa(cfg.Spam.SettingsDefault.MessageLimit),
 		"- наказания: " + strings.Join(a.template.Punishment().FormatAll(cfg.Spam.SettingsDefault.Punishments), ", "),
-		"- время сброса счётчика наказаний: " + fmt.Sprint(cfg.Spam.SettingsDefault.DurationResetPunishments),
-		"- ограничение максимальной длины слова: " + fmt.Sprint(cfg.Spam.SettingsDefault.MaxWordLength),
+		"- время сброса счётчика наказаний: " + strconv.Itoa(cfg.Spam.SettingsDefault.DurationResetPunishments),
+		"- ограничение максимальной длины слова: " + strconv.Itoa(cfg.Spam.SettingsDefault.MaxWordLength),
 		"- наказание за превышение длины слова: " + a.template.Punishment().Format(cfg.Spam.SettingsDefault.MaxWordPunishment),
-		"- минимальное количество разных сообщений между спамом: " + fmt.Sprint(cfg.Spam.SettingsDefault.MinGapMessages),
+		"- минимальное количество разных сообщений между спамом: " + strconv.Itoa(cfg.Spam.SettingsDefault.MinGapMessages),
 		"\nвиперы:",
-		"- включен: " + fmt.Sprint(cfg.Spam.SettingsVIP.Enabled),
+		"- включен: " + strconv.FormatBool(cfg.Spam.SettingsVIP.Enabled),
 		"- порог схожести сообщений: " + fmt.Sprint(cfg.Spam.SettingsVIP.SimilarityThreshold),
-		"- кол-во похожих сообщений: " + fmt.Sprint(cfg.Spam.SettingsVIP.MessageLimit),
+		"- кол-во похожих сообщений: " + strconv.Itoa(cfg.Spam.SettingsVIP.MessageLimit),
 		"- наказания: " + strings.Join(a.template.Punishment().FormatAll(cfg.Spam.SettingsVIP.Punishments), ", "),
-		"- время сброса счётчика наказаний: " + fmt.Sprint(cfg.Spam.SettingsVIP.DurationResetPunishments),
-		"- ограничение максимальной длины слова: " + fmt.Sprint(cfg.Spam.SettingsVIP.MaxWordLength),
+		"- время сброса счётчика наказаний: " + strconv.Itoa(cfg.Spam.SettingsVIP.DurationResetPunishments),
+		"- ограничение максимальной длины слова: " + strconv.Itoa(cfg.Spam.SettingsVIP.MaxWordLength),
 		"- наказание за превышение длины слова: " + a.template.Punishment().Format(cfg.Spam.SettingsVIP.MaxWordPunishment),
-		"- минимальное количество разных сообщений между спамом: " + fmt.Sprint(cfg.Spam.SettingsVIP.MinGapMessages),
+		"- минимальное количество разных сообщений между спамом: " + strconv.Itoa(cfg.Spam.SettingsVIP.MinGapMessages),
 		"\nэмоуты:",
-		"- включен: " + fmt.Sprint(cfg.Spam.SettingsEmotes.Enabled),
-		"- кол-во похожих сообщений: " + fmt.Sprint(cfg.Spam.SettingsEmotes.MessageLimit),
+		"- включен: " + strconv.FormatBool(cfg.Spam.SettingsEmotes.Enabled),
+		"- кол-во похожих сообщений: " + strconv.Itoa(cfg.Spam.SettingsEmotes.MessageLimit),
 		"- наказания: " + strings.Join(a.template.Punishment().FormatAll(cfg.Spam.SettingsEmotes.Punishments), ", "),
-		"- время сброса счётчика наказаний: " + fmt.Sprint(cfg.Spam.SettingsEmotes.DurationResetPunishments),
-		"- ограничение количества эмоутов в сообщении: " + fmt.Sprint(cfg.Spam.SettingsEmotes.MaxEmotesLength),
+		"- время сброса счётчика наказаний: " + strconv.Itoa(cfg.Spam.SettingsEmotes.DurationResetPunishments),
+		"- ограничение количества эмоутов в сообщении: " + strconv.Itoa(cfg.Spam.SettingsEmotes.MaxEmotesLength),
 		"- наказание за превышение количества эмоутов в сообщении: " + a.template.Punishment().Format(cfg.Spam.SettingsEmotes.MaxEmotesPunishment),
 		"- исключения: " + formatExceptions(cfg.Spam.SettingsEmotes.Exceptions),
 		"\nисключения:",
@@ -193,7 +194,7 @@ func (a *SimAntispam) handleSim(cfg *config.Config, text *domain.MessageText, ty
 
 	if val, ok := a.template.Parser().ParseFloatArg(strings.TrimSpace(matches[1]), 0.1, 1); ok {
 		*target = val
-		a.template.Store().SetMessageCapacity(cfg)
+		//a.template.Store().SetMessageCapacity(cfg)
 		return success
 	}
 
@@ -229,7 +230,7 @@ func (a *MsgAntispam) handleMsg(cfg *config.Config, text *domain.MessageText) *p
 
 	if val, ok := a.template.Parser().ParseIntArg(strings.TrimSpace(matches[1]), 2, 15); ok {
 		*target = val
-		a.template.Store().SetMessageCapacity(cfg)
+		//a.template.Store().SetMessageCapacity(cfg)
 		return success
 	}
 
@@ -260,8 +261,10 @@ func (a *PunishmentsAntispam) handlePunishments(cfg *config.Config, text *domain
 		return nonParametr
 	}
 
-	var punishments []config.Punishment
-	for i, str := range strings.Split(strings.TrimSpace(matches[1]), ",") {
+	parts := strings.Split(strings.TrimSpace(matches[1]), ",")
+	punishments := make([]config.Punishment, 0, len(parts))
+
+	for i, str := range parts {
 		if i >= 15 {
 			break
 		}
@@ -439,7 +442,7 @@ func (a *MinGapAntispam) handleMinGap(cfg *config.Config, text *domain.MessageTe
 
 	if val, ok := a.template.Parser().ParseIntArg(strings.TrimSpace(matches[1]), 0, 15); ok {
 		*target = val
-		a.template.Store().SetMessageCapacity(cfg)
+		//a.template.Store().SetMessageCapacity(cfg)
 		return success
 	}
 

@@ -2,7 +2,6 @@ package template
 
 import (
 	"regexp"
-	"strings"
 	"twitchspam/internal/app/infrastructure/config"
 	"twitchspam/internal/app/ports"
 	"twitchspam/pkg/logger"
@@ -17,7 +16,6 @@ type Template struct {
 	punishment   ports.PunishmentPort
 	spamPause    ports.SpamPausePort
 	mword        ports.MwordPort
-	store        ports.StoresPort
 	nuke         ports.NukePort
 }
 
@@ -47,12 +45,6 @@ func WithMword(mwords []config.Mword, mwordGroups map[string]*config.MwordGroup)
 	}
 }
 
-func WithStore(cfg *config.Config) Option {
-	return func(t *Template) {
-		t.store = NewStores(cfg)
-	}
-}
-
 func New(opts ...Option) *Template {
 	t := &Template{
 		options:    NewOptions(),
@@ -65,24 +57,6 @@ func New(opts ...Option) *Template {
 		opt(t)
 	}
 	return t
-}
-
-var zeroWidthRunes = map[rune]struct{}{
-	'\u200B': {}, // ZERO WIDTH SPACE
-	'\u200C': {}, // ZERO WIDTH NON-JOINER
-	'\u200D': {}, // ZERO WIDTH JOINER
-	'\uFEFF': {}, // ZERO WIDTH NO-BREAK SPACE (BOM)в
-}
-
-func (t *Template) CleanMessage(text string) string {
-	out := make([]rune, 0, len(text))
-	for _, r := range text {
-		if _, bad := zeroWidthRunes[r]; bad {
-			continue
-		}
-		out = append(out, r)
-	}
-	return strings.TrimSpace(string(out))
 }
 
 func (t *Template) Aliases() ports.AliasesPort {
@@ -115,10 +89,6 @@ func (t *Template) SpamPause() ports.SpamPausePort {
 
 func (t *Template) Mword() ports.MwordPort {
 	return t.mword
-}
-
-func (t *Template) Store() ports.StoresPort {
-	return t.store
 }
 
 func (t *Template) Nuke() ports.NukePort {

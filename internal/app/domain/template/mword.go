@@ -38,7 +38,7 @@ func NewMword(options ports.OptionsPort, mwords []config.Mword, mwordGroups map[
 }
 
 func (t *MwordTemplate) Update(mwords []config.Mword, mwordGroups map[string]*config.MwordGroup) {
-	var mws []Mwords
+	mws := make([]Mwords, 0, len(mwords)+len(mwordGroups))
 	for _, mw := range mwords {
 		mws = append(mws, Mwords{
 			Punishments: mw.Punishments,
@@ -151,11 +151,14 @@ func (t *MwordTemplate) matchMwordRule(msg *domain.ChatMessage, word string, re 
 		text = msg.Message.Text.Text()
 		words = msg.Message.Text.Words()
 	case opts.NoRepeat:
-		text = msg.Message.Text.Text()
-		words = msg.Message.Text.Words()
+		text = msg.Message.Text.Text(domain.Lower)
+		words = msg.Message.Text.Words(domain.Lower)
 	case opts.CaseSensitive:
 		text = msg.Message.Text.Text(domain.RemovePunctuation, domain.RemoveDuplicateLetters)
 		words = msg.Message.Text.Words(domain.RemovePunctuation, domain.RemoveDuplicateLetters)
+	case opts.Contains:
+		text = msg.Message.Text.Text(domain.Lower)
+		words = msg.Message.Text.Words(domain.Lower)
 	default:
 		text = msg.Message.Text.Text(domain.Lower, domain.RemovePunctuation, domain.RemoveDuplicateLetters)
 		words = msg.Message.Text.Words(domain.Lower, domain.RemovePunctuation, domain.RemoveDuplicateLetters)
@@ -169,7 +172,7 @@ func (t *MwordTemplate) matchMwordRule(msg *domain.ChatMessage, word string, re 
 		return false
 	}
 
-	if opts.Contains || strings.Contains(word, " ") {
+	if opts.Contains {
 		return strings.Contains(text, word)
 	}
 	return slices.Contains(words, word)

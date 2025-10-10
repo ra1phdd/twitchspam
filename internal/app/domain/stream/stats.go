@@ -186,7 +186,7 @@ func (s *Stats) GetStats() *ports.AnswerType {
 		value int
 	}
 
-	var list []kv
+	list := make([]kv, 0, len(combined))
 	for k, v := range combined {
 		list = append(list, kv{k, v})
 	}
@@ -209,11 +209,11 @@ func (s *Stats) GetStats() *ports.AnswerType {
 		top = len(list)
 	}
 
-	for i := 0; i < top; i++ {
+	for i, item := range list[:top] {
 		if i > 0 {
 			msg += ", "
 		}
-		msg += fmt.Sprintf("%s (%d)", list[i].key, list[i].value)
+		msg += fmt.Sprintf("%s (%d)", item.key, item.value)
 	}
 
 	diff := s.startTime.Sub(s.startStreamTime)

@@ -40,8 +40,10 @@ func (e *AddExcept) handleExceptAdd(cfg *config.Config, text *domain.MessageText
 		return invalidMessageLimitValue
 	}
 
-	var punishments []config.Punishment
-	for _, pa := range strings.Split(strings.TrimSpace(matches[2]), ",") {
+	parts := strings.Split(strings.TrimSpace(matches[2]), ",")
+	punishments := make([]config.Punishment, 0, len(parts))
+
+	for _, pa := range parts {
 		pa = strings.TrimSpace(pa)
 		if pa == "" {
 			continue
@@ -92,8 +94,11 @@ func (e *AddExcept) handleExceptAdd(cfg *config.Config, text *domain.MessageText
 		return success
 	}
 
-	var added, exists []string
-	for _, word := range strings.Split(strings.TrimSpace(matches[6]), ",") {
+	words := strings.Split(strings.TrimSpace(matches[6]), ",")
+	added := make([]string, 0, len(words))
+	exists := make([]string, 0, len(words))
+
+	for _, word := range words {
 		word = strings.TrimSpace(word)
 		if word == "" {
 			continue
