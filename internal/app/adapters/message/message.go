@@ -115,6 +115,13 @@ func (m *Message) CheckAutomod(msg *domain.ChatMessage) {
 		time.Sleep(time.Duration(m.cfg.Automod.Delay) * time.Second)
 	}
 
+	if msg.Message.Text.Text(domain.RemoveDuplicateLetters, domain.RemovePunctuation) == "(" {
+		err := m.api.ManageHeldAutoModMessage(msg.Chatter.UserID, msg.Message.ID, "ALLOW")
+		if err != nil {
+			m.log.Error("Failed to manage held automod", err)
+		}
+	}
+
 	action := m.checker.Check(msg, true)
 	m.getAction(action, msg)
 }

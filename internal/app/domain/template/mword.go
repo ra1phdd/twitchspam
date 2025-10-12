@@ -172,7 +172,7 @@ func (t *MwordTemplate) matchMwordRule(msg *domain.ChatMessage, word string, re 
 		return false
 	}
 
-	if opts.Contains {
+	if opts.Contains || strings.Contains(word, " ") {
 		return strings.Contains(text, word)
 	}
 	return slices.Contains(words, word)

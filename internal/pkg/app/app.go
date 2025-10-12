@@ -27,6 +27,7 @@ func New() error {
 	log.SetLogLevel(cfg.App.LogLevel)
 
 	t := twitch.New(log, manager, client)
+
 	for _, channel := range cfg.App.ModChannels {
 		go func() {
 			prefixedLog := logger.NewPrefixedLogger(log, channel)

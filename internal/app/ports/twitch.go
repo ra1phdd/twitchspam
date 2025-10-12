@@ -18,6 +18,7 @@ type APIPort interface {
 	SearchCategory(gameName string) (string, string, error)
 	UpdateChannelGameID(broadcasterID string, gameID string) error
 	UpdateChannelTitle(broadcasterID string, title string) error
+	ManageHeldAutoModMessage(userID, msgID, action string) error
 }
 
 type IRCPort interface {
