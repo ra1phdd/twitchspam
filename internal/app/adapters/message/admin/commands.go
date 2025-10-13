@@ -67,35 +67,30 @@ func (c *SetCommand) Execute(cfg *config.Config, text *domain.MessageText) *port
 func (c *SetCommand) handleCommandSet(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
 	textWithoutOpts, opts := c.template.Options().ParseAll(text.Text(), template.CommandOptions)
 
-	matches := c.re.FindStringSubmatch(textWithoutOpts) // !am cmd set <команды через запятую>
-	if len(matches) != 2 {
+	matches := c.re.FindStringSubmatch(textWithoutOpts) // !am cmd set <команда> <*текст>
+	if len(matches) != 3 {
 		return nonParametr
 	}
 
-	words := strings.Split(strings.TrimSpace(matches[1]), ",")
-	edited := make([]string, 0, len(words))
-	notFound := make([]string, 0, len(words))
-
-	for _, word := range words {
-		word = strings.ToLower(strings.TrimSpace(word))
-		if word == "" {
-			continue
-		}
-
-		if !strings.HasPrefix(word, "!") {
-			word = "!" + word
-		}
-
-		if _, ok := cfg.Commands[word]; !ok {
-			notFound = append(notFound, word)
-			continue
-		}
-
-		cfg.Commands[word].Options = c.template.Options().MergeCommand(cfg.Commands[word].Options, opts)
-		edited = append(edited, word)
+	cmd := strings.ToLower(strings.TrimSpace(matches[1]))
+	if !strings.HasPrefix(cmd, "!") {
+		cmd = "!" + cmd
 	}
 
-	return buildResponse("команды не указаны", RespArg{Items: edited, Name: "изменены"}, RespArg{Items: notFound, Name: "не найдены"})
+	if _, ok := cfg.Commands[cmd]; !ok {
+		return &ports.AnswerType{
+			Text:    []string{"команда не найдена!"},
+			IsReply: true,
+		}
+	}
+
+	cmdText := strings.TrimSpace(matches[2])
+	if cmdText != "" {
+		cfg.Commands[cmd].Text = cmdText
+	}
+	cfg.Commands[cmd].Options = c.template.Options().MergeCommand(cfg.Commands[cmd].Options, opts)
+
+	return success
 }
 
 type DelCommand struct {

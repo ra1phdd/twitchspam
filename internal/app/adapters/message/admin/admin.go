@@ -8,6 +8,7 @@ import (
 	"time"
 	"twitchspam/internal/app/domain"
 	"twitchspam/internal/app/infrastructure/config"
+	"twitchspam/internal/app/infrastructure/storage"
 	"twitchspam/internal/app/ports"
 	"twitchspam/pkg/logger"
 )
@@ -95,6 +96,7 @@ type Admin struct {
 	api      ports.APIPort
 	template ports.TemplatePort
 	timers   ports.TimersPort
+	messages ports.StorePort[storage.Message]
 
 	root ports.Command
 }
@@ -105,7 +107,7 @@ type CompositeCommand struct {
 	cursor      int
 }
 
-func New(log logger.Logger, manager *config.Manager, stream ports.StreamPort, api ports.APIPort, template ports.TemplatePort, fs ports.FileServerPort, timers ports.TimersPort) *Admin {
+func New(log logger.Logger, manager *config.Manager, stream ports.StreamPort, api ports.APIPort, template ports.TemplatePort, fs ports.FileServerPort, timers ports.TimersPort, messages ports.StorePort[storage.Message]) *Admin {
 	a := &Admin{
 		log:      log,
 		manager:  manager,
@@ -114,6 +116,7 @@ func New(log logger.Logger, manager *config.Manager, stream ports.StreamPort, ap
 		api:      api,
 		template: template,
 		timers:   timers,
+		messages: messages,
 	}
 	a.root = a.buildCommandTree()
 
@@ -214,8 +217,10 @@ func (a *Admin) buildCommandTree() ports.Command {
 				subcommands: map[string]ports.Command{
 					"stop": &NukeStop{template: a.template},
 				},
-				defaultCmd: &Nuke{re: regexp.MustCompile(`(?i)^!am nuke(?:\s+(\S+))?(?:\s+(\S+))?\s+(.+)$`), reWords: regexp.MustCompile(`(?i)r'(.*?)'|r"(.*?)"|'(.*?)'|"(.*?)"|([^,'"\s]+)`), log: a.log, api: a.api, template: a.template, stream: a.stream},
-				cursor:     2,
+				defaultCmd: &Nuke{re: regexp.MustCompile(`(?i)^!am nuke(?:\s+(\S+))?(?:\s+(\S+))?\s+(.+)$`),
+					reWords: regexp.MustCompile(`(?i)r'(.*?)'|r"(.*?)"|'(.*?)'|"(.*?)"|([^,'"\s]+)`),
+					log:     a.log, api: a.api, template: a.template, stream: a.stream, messages: a.messages},
+				cursor: 2,
 			},
 			"mod": &CompositeCommand{
 				subcommands: map[string]ports.Command{
@@ -311,7 +316,7 @@ func (a *Admin) buildCommandTree() ports.Command {
 				subcommands: map[string]ports.Command{
 					"list":    &ListCommand{fs: a.fs},
 					"add":     &AddCommand{re: regexp.MustCompile(`(?i)^!am\s+cmd(?:\s+add)?\s+(\S+)\s+(.+)$`), template: a.template},
-					"set":     &SetCommand{re: regexp.MustCompile(`(?i)^!am\s+cmd\s+set\s+(.+)$`), template: a.template},
+					"set":     &SetCommand{re: regexp.MustCompile(`(?i)^!am\s+cmd\s+set\s+\s+(\S+)\s+(.+)$`), template: a.template},
 					"del":     &DelCommand{re: regexp.MustCompile(`(?i)^!am\s+cmd\s+del\s+(.+)$`)},
 					"aliases": &AliasesCommand{re: regexp.MustCompile(`(?i)^!am\s+cmd\s+aliases\s+(.+)$`)},
 					"timer": &CompositeCommand{

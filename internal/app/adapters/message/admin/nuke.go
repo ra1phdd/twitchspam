@@ -1,10 +1,14 @@
 package admin
 
 import (
+	"log/slog"
 	"regexp"
 	"strings"
+	"time"
+	"twitchspam/internal/app/adapters/message/checker"
 	"twitchspam/internal/app/domain"
 	"twitchspam/internal/app/infrastructure/config"
+	"twitchspam/internal/app/infrastructure/storage"
 	"twitchspam/internal/app/ports"
 	"twitchspam/pkg/logger"
 )
@@ -16,6 +20,7 @@ type Nuke struct {
 	api      ports.APIPort
 	template ports.TemplatePort
 	stream   ports.StreamPort
+	messages ports.StorePort[storage.Message]
 }
 
 func (n *Nuke) Execute(_ *config.Config, text *domain.MessageText) *ports.AnswerType {
@@ -32,24 +37,24 @@ func (n *Nuke) handleNuke(text *domain.MessageText) *ports.AnswerType {
 	var globalErrs []string
 	punishment := config.Punishment{
 		Action:   "timeout",
-		Duration: 600,
+		Duration: 60,
 	}
-	//scrollback := n.template.Store().Messages().GetTTL()
+	scrollback := n.messages.GetTTL()
 
-	//if strings.TrimSpace(matches[1]) != "" {
-	//	p, err := n.template.Punishment().Parse(strings.TrimSpace(matches[1]), false)
-	//	if err != nil {
-	//		globalErrs = append(globalErrs, "не удалось распарсить наказание, применено дефолтное (600))")
-	//	} else {
-	//		punishment = p
-	//	}
-	//}
-	//
-	//if strings.TrimSpace(matches[2]) != "" {
-	//	if val, ok := n.template.Parser().ParseIntArg(strings.TrimSpace(matches[2]), 1, 180); ok {
-	//		scrollback = time.Duration(val) * time.Second
-	//	}
-	//}
+	if strings.TrimSpace(matches[1]) != "" {
+		p, err := n.template.Punishment().Parse(strings.TrimSpace(matches[1]), false)
+		if err != nil {
+			globalErrs = append(globalErrs, "не удалось распарсить наказание, применено дефолтное (600))")
+		} else {
+			punishment = p
+		}
+	}
+
+	if strings.TrimSpace(matches[2]) != "" {
+		if val, ok := n.template.Parser().ParseIntArg(strings.TrimSpace(matches[2]), 1, 180); ok {
+			scrollback = time.Duration(val) * time.Second
+		}
+	}
 
 	if strings.TrimSpace(matches[3]) == "" {
 		return &ports.AnswerType{
@@ -84,40 +89,40 @@ func (n *Nuke) handleNuke(text *domain.MessageText) *ports.AnswerType {
 		}
 	}
 
-	//dur := time.Duration(punishment.Duration) * time.Second
-	//apply := func(msgID, userID, username, text string) {
-	//	switch punishment.Action {
-	//	case checker.Ban:
-	//		n.log.Warn("Ban user", slog.String("username", username), slog.String("text", text))
-	//		n.api.BanUser(n.stream.ChannelID(), userID, "массбан")
-	//	case checker.Timeout:
-	//		n.log.Warn("Timeout user", slog.String("username", username), slog.String("text", text), slog.Int("duration", int(dur.Seconds())))
-	//		n.api.TimeoutUser(n.stream.ChannelID(), userID, int(dur.Seconds()), "массбан")
-	//	case checker.Delete:
-	//		n.log.Warn("Delete message", slog.String("username", username), slog.String("text", text))
-	//		if err := n.api.DeleteChatMessage(n.stream.ChannelID(), msgID); err != nil {
-	//			n.log.Error("Failed to delete message on chat", err)
-	//		}
-	//	}
-	//}
+	dur := time.Duration(punishment.Duration) * time.Second
+	apply := func(msgID, userID, username, text string) {
+		switch punishment.Action {
+		case checker.Ban:
+			n.log.Warn("Ban user", slog.String("username", username), slog.String("text", text))
+			n.api.BanUser(n.stream.ChannelID(), userID, "массбан")
+		case checker.Timeout:
+			n.log.Warn("Timeout user", slog.String("username", username), slog.String("text", text), slog.Int("duration", int(dur.Seconds())))
+			n.api.TimeoutUser(n.stream.ChannelID(), userID, int(dur.Seconds()), "массбан")
+		case checker.Delete:
+			n.log.Warn("Delete message", slog.String("username", username), slog.String("text", text))
+			if err := n.api.DeleteChatMessage(n.stream.ChannelID(), msgID); err != nil {
+				n.log.Error("Failed to delete message on chat", err)
+			}
+		}
+	}
 
-	//now := time.Now()
+	now := time.Now()
 	n.template.Nuke().Start(punishment, containsWords, words, re)
-	//for username, msgs := range n.template.Store().Messages().GetAllData() {
-	//	for messageID, msg := range msgs {
-	//		if now.Sub(msg.Time) >= scrollback {
-	//			continue
-	//		}
-	//
-	//		action := n.template.Nuke().Check(&msg.Data.Message.Text)
-	//		if action != nil && !msg.Data.Chatter.IsBroadcaster && !msg.Data.Chatter.IsMod {
-	//			apply(messageID, msg.Data.Chatter.UserID, username, msg.Data.Message.Text.Text())
-	//			if punishment.Action != "delete" {
-	//				break
-	//			}
-	//		}
-	//	}
-	//}
+	for username, msgs := range n.messages.GetAllData() {
+		for messageID, msg := range msgs {
+			if now.Sub(msg.Time) >= scrollback {
+				continue
+			}
+
+			action := n.template.Nuke().Check(&msg.Data.Message.Text)
+			if action != nil && !msg.Data.Chatter.IsBroadcaster && !msg.Data.Chatter.IsMod {
+				apply(messageID, msg.Data.Chatter.UserID, username, msg.Data.Message.Text.Text())
+				if punishment.Action != "delete" {
+					break
+				}
+			}
+		}
+	}
 
 	if len(globalErrs) != 0 {
 		return &ports.AnswerType{

@@ -76,8 +76,7 @@ func (c *Checker) Check(msg *domain.ChatMessage, checkSpam bool) *ports.CheckerA
 }
 
 func (c *Checker) checkBypass(msg *domain.ChatMessage) *ports.CheckerAction {
-	if !c.cfg.Enabled || msg.Chatter.IsBroadcaster || msg.Chatter.IsMod ||
-		(c.cfg.Spam.Mode == "online" && !c.stream.IsLive()) {
+	if !c.cfg.Enabled || msg.Chatter.IsBroadcaster || msg.Chatter.IsMod {
 		return &ports.CheckerAction{Type: None}
 	}
 
@@ -150,7 +149,7 @@ func (c *Checker) checkSpam(msg *domain.ChatMessage) *ports.CheckerAction {
 		settings = c.cfg.Spam.SettingsVIP
 	}
 
-	if !settings.Enabled || !c.template.SpamPause().CanProcess() {
+	if !settings.Enabled || !c.template.SpamPause().CanProcess() || (c.cfg.Spam.Mode == "online" && !c.stream.IsLive()) {
 		return nil
 	}
 

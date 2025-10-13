@@ -50,7 +50,7 @@ func New(log logger.Logger, manager *config.Manager, stream ports.StreamPort, ap
 		messages: storage.New[storage.Message](50, time.Duration(cfg.WindowSecs)*time.Second),
 		timeouts: storage.New[int](15, 0),
 	}
-	m.admin = admin.New(log, manager, stream, api, m.template, fs, timer)
+	m.admin = admin.New(log, manager, stream, api, m.template, fs, timer, m.messages)
 	m.user = user.New(log, manager, stream, m.template, fs)
 	m.checker = checker.NewCheck(log, cfg, stream, m.template, m.messages, m.timeouts)
 
@@ -78,7 +78,7 @@ func (m *Message) Check(msg *domain.ChatMessage) {
 	})
 
 	if !strings.HasPrefix(msg.Message.Text.Text(), "!am al ") && !strings.HasPrefix(msg.Message.Text.Text(), "!am alg ") {
-		text, ok := m.template.Aliases().Replace(msg.Message.Text.Words(domain.RemovePunctuation))
+		text, ok := m.template.Aliases().Replace(msg.Message.Text.Words())
 		if ok {
 			msg.Message.Text.ReplaceOriginal(text)
 		}
@@ -115,14 +115,14 @@ func (m *Message) CheckAutomod(msg *domain.ChatMessage) {
 		time.Sleep(time.Duration(m.cfg.Automod.Delay) * time.Second)
 	}
 
-	if msg.Message.Text.Text(domain.RemoveDuplicateLetters, domain.RemovePunctuation) == "(" {
-		err := m.api.ManageHeldAutoModMessage(msg.Chatter.UserID, msg.Message.ID, "ALLOW")
+	if msg.Message.Text.Text(domain.RemoveDuplicateLetters) == "(" {
+		err := m.api.ManageHeldAutoModMessage(m.cfg.App.UserID, msg.Message.ID, "ALLOW")
 		if err != nil {
 			m.log.Error("Failed to manage held automod", err)
 		}
 	}
 
-	action := m.checker.Check(msg, true)
+	action := m.checker.Check(msg, false)
 	m.getAction(action, msg)
 }
 
@@ -133,9 +133,7 @@ func (m *Message) getAction(action *ports.CheckerAction, msg *domain.ChatMessage
 		m.api.BanUser(m.stream.ChannelID(), msg.Chatter.UserID, action.Reason)
 	case checker.Timeout:
 		m.log.Warn("Timeout user", slog.String("username", msg.Chatter.Username), slog.String("text", msg.Message.Text.Text()), slog.Int("duration", int(action.Duration.Seconds())))
-		if m.cfg.Spam.SettingsDefault.Enabled {
-			m.api.TimeoutUser(m.stream.ChannelID(), msg.Chatter.UserID, int(action.Duration.Seconds()), action.Reason)
-		}
+		m.api.TimeoutUser(m.stream.ChannelID(), msg.Chatter.UserID, int(action.Duration.Seconds()), action.Reason)
 	case checker.Delete:
 		m.log.Warn("Delete message", slog.String("username", msg.Chatter.Username), slog.String("text", msg.Message.Text.Text()))
 		if err := m.api.DeleteChatMessage(m.stream.ChannelID(), msg.Message.ID); err != nil {
