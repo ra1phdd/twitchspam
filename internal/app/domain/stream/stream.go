@@ -12,7 +12,6 @@ type Stream struct {
 
 	channelID   string
 	channelName string
-	streamID    string
 	category    string
 	isLive      atomic.Bool
 
@@ -38,18 +37,6 @@ func (s *Stream) IsLive() bool {
 
 func (s *Stream) SetIslive(v bool) {
 	s.isLive.Store(v)
-}
-
-func (s *Stream) StreamID() string {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	return s.streamID
-}
-
-func (s *Stream) SetStreamID(streamID string) {
-	s.mu.Lock()
-	s.streamID = streamID
-	s.mu.Unlock()
 }
 
 func (s *Stream) ChannelID() string {

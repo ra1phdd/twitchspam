@@ -44,16 +44,20 @@ func (m *AddMarker) handleMarkersAdd(cfg *config.Config, text *domain.MessageTex
 		cfg.Markers[userKey] = make(map[string][]*config.Markers)
 	}
 
-	live, err := m.api.GetLiveStream(m.stream.ChannelID())
+	s, err := m.api.GetLiveStreams([]string{m.stream.ChannelID()})
 	if err != nil {
 		m.log.Error("Failed to get live stream", err, slog.String("channelID", m.stream.ChannelID()))
 		return unknownError
 	}
 
+	if len(s) == 0 {
+		return streamOff
+	}
+
 	marker := &config.Markers{
-		StreamID:  live.ID,
+		StreamID:  s[0].ID,
 		CreatedAt: time.Now(),
-		Timecode:  time.Since(live.StartedAt),
+		Timecode:  time.Since(s[0].StartedAt),
 	}
 
 	markerName := strings.TrimSpace(matches[1])

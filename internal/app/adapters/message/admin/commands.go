@@ -161,10 +161,27 @@ func (c *AliasesCommand) handleCommandAliases(cfg *config.Config, text *domain.M
 		cmd = orig
 	}
 
+	for _, alg := range cfg.AliasGroups {
+		if _, ok := alg.Aliases[cmd]; ok {
+			cmd = alg.Original
+			break
+		}
+	}
+
 	var aliases []string
 	for alias, orig := range cfg.Aliases {
 		if strings.Contains(cmd, orig) {
 			aliases = append(aliases, alias)
+		}
+	}
+
+	for _, alg := range cfg.AliasGroups {
+		if !strings.Contains(cmd, alg.Original) {
+			continue
+		}
+
+		for als := range alg.Aliases {
+			aliases = append(aliases, als)
 		}
 	}
 

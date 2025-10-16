@@ -73,7 +73,7 @@ func (m *Message) Check(msg *domain.ChatMessage) {
 	m.messages.Push(msg.Chatter.Username, msg.Message.ID, storage.Message{
 		Data:               msg,
 		Time:               time.Now(),
-		HashWordsLowerNorm: domain.WordsToHashes(msg.Message.Text.Words(domain.Lower, domain.RemovePunctuation, domain.RemoveDuplicateLetters)),
+		HashWordsLowerNorm: domain.WordsToHashes(msg.Message.Text.Words(domain.RemovePunctuation)),
 		IgnoreAntispam:     !m.cfg.Enabled || !m.template.SpamPause().CanProcess() || !m.cfg.Spam.SettingsDefault.Enabled,
 	})
 

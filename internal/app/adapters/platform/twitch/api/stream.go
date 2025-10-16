@@ -6,9 +6,11 @@ import (
 	"twitchspam/internal/app/ports"
 )
 
-func (t *Twitch) GetLiveStream(channelID string) (*ports.Stream, error) {
+func (t *Twitch) GetLiveStreams(channelIDs []string) ([]*ports.Stream, error) {
 	params := url.Values{}
-	params.Set("user_id", channelID)
+	for _, channelID := range channelIDs {
+		params.Add("user_id", channelID)
+	}
 	params.Set("type", "live")
 
 	var streamResp StreamResponse
@@ -17,16 +19,21 @@ func (t *Twitch) GetLiveStream(channelID string) (*ports.Stream, error) {
 		return nil, err
 	}
 
-	if len(streamResp.Data) == 0 {
-		return &ports.Stream{ID: "", IsOnline: false, ViewerCount: 0}, nil
+	streams := make([]*ports.Stream, 0, len(streamResp.Data))
+	loc := time.Now().Location()
+
+	for _, stream := range streamResp.Data {
+		startTime, _ := time.Parse(time.RFC3339, stream.StartedAt)
+
+		streams = append(streams, &ports.Stream{
+			ID:          stream.ID,
+			UserID:      stream.UserID,
+			UserLogin:   stream.UserLogin,
+			Username:    stream.UserName,
+			ViewerCount: stream.ViewerCount,
+			StartedAt:   startTime.In(loc),
+		})
 	}
 
-	startTime, _ := time.Parse(time.RFC3339, streamResp.Data[0].StartedAt)
-	loc := time.Now().Location()
-	return &ports.Stream{
-		ID:          streamResp.Data[0].ID,
-		IsOnline:    true,
-		ViewerCount: streamResp.Data[0].ViewerCount,
-		StartedAt:   startTime.In(loc),
-	}, nil
+	return streams, nil
 }

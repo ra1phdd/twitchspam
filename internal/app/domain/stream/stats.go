@@ -209,6 +209,17 @@ func (s *Stats) GetStats() *ports.AnswerType {
 		top = len(list)
 	}
 
+	if top != 0 {
+		for i, item := range list[:top] {
+			if i > 0 {
+				msg += ", "
+			}
+			msg += fmt.Sprintf("%s (%d)", item.key, item.value)
+		}
+	} else {
+		msg += "не найдены"
+	}
+
 	for i, item := range list[:top] {
 		if i > 0 {
 			msg += ", "
@@ -216,12 +227,11 @@ func (s *Stats) GetStats() *ports.AnswerType {
 		msg += fmt.Sprintf("%s (%d)", item.key, item.value)
 	}
 
+	msg += " • посмотреть свою стату - !stats"
 	diff := s.startTime.Sub(s.startStreamTime)
 	if diff >= 5*time.Minute {
-		msg += fmt.Sprintf(" (статистика велась с %s) ", s.startTime.Format("15:04:05"))
+		msg += fmt.Sprintf(" (статистика велась с %s)", s.startTime.Format("15:04:05"))
 	}
-
-	msg += " • посмотреть свою стату - !stats"
 
 	return &ports.AnswerType{
 		Text:    []string{msg},
@@ -250,10 +260,15 @@ func (s *Stats) GetUserStats(username string) *ports.AnswerType {
 		}
 	}
 
-	msg := fmt.Sprintf("статистика %s - кол-во сообщений за стрим: %d (топ-%d чаттер)", username, s.countMessages[usernameLower], position)
+	msg := fmt.Sprintf("статистика %s - кол-во сообщений за стрим: %d • топ-%d чаттер", username, s.countMessages[usernameLower], position)
 	if s.countBans[usernameLower] > 0 || s.countTimeouts[usernameLower] > 0 || s.countDeletes[usernameLower] > 0 {
 		msg += fmt.Sprintf(" • кол-во банов: %d • кол-во мутов: %d • кол-во удаленных сообщений: %d",
 			s.countBans[usernameLower], s.countTimeouts[usernameLower], s.countDeletes[usernameLower])
+	}
+
+	diff := s.startTime.Sub(s.startStreamTime)
+	if diff >= 5*time.Minute {
+		msg += fmt.Sprintf(" (статистика велась с %s)", s.startTime.Format("15:04:05"))
 	}
 
 	return &ports.AnswerType{
@@ -317,6 +332,11 @@ func (s *Stats) GetTopStats(count int) *ports.AnswerType {
 			sb.WriteString(sep)
 		}
 		sb.WriteString(fmt.Sprintf("%s (%d)", pairs[i].Key, pairs[i].Val))
+	}
+
+	diff := s.startTime.Sub(s.startStreamTime)
+	if diff >= 5*time.Minute {
+		sb.WriteString(fmt.Sprintf(" (статистика велась с %s)", s.startTime.Format("15:04:05")))
 	}
 
 	msg := sb.String()

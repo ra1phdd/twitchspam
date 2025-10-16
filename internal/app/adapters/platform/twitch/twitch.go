@@ -53,40 +53,6 @@ func (t *Twitch) AddChannel(channel string, stream ports.StreamPort, message por
 	}
 	stream.SetChannelID(channelID)
 
-	go func() {
-		live, err := t.api.GetLiveStream(channelID)
-		if err != nil {
-			t.log.Error("Error getting live stream", err)
-			return
-		}
-		stream.SetIslive(live.IsOnline)
-
-		if live.IsOnline {
-			t.log.Info("Stream started")
-			stream.SetIslive(true)
-			stream.SetStreamID(live.ID)
-
-			stream.Stats().SetStartTime(live.StartedAt)
-			stream.Stats().SetOnline(live.ViewerCount)
-		}
-
-		ticker := time.NewTicker(30 * time.Second)
-		for range ticker.C {
-			live, err := t.api.GetLiveStream(channelID)
-			if err != nil {
-				t.log.Error("Error getting viewer count", err)
-				return
-			}
-
-			if live.IsOnline {
-				stream.SetIslive(true)
-				stream.SetStreamID(live.ID)
-				stream.Stats().SetOnline(live.ViewerCount)
-				stream.Stats().SetEndTime(time.Now())
-			}
-		}
-	}()
-
 	t.eventSub.AddChannel(channelID, channel, stream, message)
 	return nil
 }

@@ -44,7 +44,7 @@ func (n *Nuke) handleNuke(text *domain.MessageText) *ports.AnswerType {
 	if strings.TrimSpace(matches[1]) != "" {
 		p, err := n.template.Punishment().Parse(strings.TrimSpace(matches[1]), false)
 		if err != nil {
-			globalErrs = append(globalErrs, "не удалось распарсить наказание, применено дефолтное (600))")
+			globalErrs = append(globalErrs, "не удалось распарсить наказание, применено дефолтное (60))")
 		} else {
 			punishment = p
 		}

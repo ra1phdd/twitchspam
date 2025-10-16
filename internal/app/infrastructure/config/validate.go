@@ -12,6 +12,11 @@ func (m *Manager) validate(cfg *Config) error {
 		return fmt.Errorf("app.log_level must be one of debug, info, warn, error; got %s", cfg.App.LogLevel)
 	}
 
+	validGinModes := map[string]bool{"debug": true, "release": true}
+	if cfg.App.GinMode != "" && !validGinModes[cfg.App.GinMode] {
+		return fmt.Errorf("app.gin_mode must be one of debug, release; got %s", cfg.App.GinMode)
+	}
+
 	if cfg.App.OAuth == "" {
 		return errors.New("app.oauth is required")
 	}
@@ -42,8 +47,8 @@ func (m *Manager) validate(cfg *Config) error {
 	validPunishments := map[string]bool{"delete": true, "timeout": true, "warn": true, "ban": true}
 
 	// spam
-	if cfg.Spam.Mode != "online" && cfg.Spam.Mode != "always" {
-		return errors.New("spam.mode must be 'online' or 'always'")
+	if cfg.Spam.Mode < 0 || cfg.Spam.Mode > 3 {
+		return fmt.Errorf("spam.mode must be one of always (0), online (1), offline (2); got %d", cfg.Spam.Mode)
 	}
 	if cfg.Spam.WhitelistUsers == nil {
 		cfg.Spam.WhitelistUsers = make(map[string]struct{})

@@ -1,6 +1,7 @@
 package template
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -31,7 +32,7 @@ func (p *PunishmentTemplate) Parse(punishment string, allowInherit bool) (config
 
 	duration, err := strconv.Atoi(punishment)
 	if err != nil || duration < 1 || duration > 1209600 {
-		return config.Punishment{}, fmt.Errorf("invalid timeout value")
+		return config.Punishment{}, errors.New("invalid timeout value")
 	}
 
 	return config.Punishment{Action: "timeout", Duration: duration}, nil

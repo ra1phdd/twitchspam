@@ -6,7 +6,6 @@ import (
 	"strings"
 	"sync"
 	"twitchspam/internal/app/domain"
-	"twitchspam/internal/app/domain/template"
 	"twitchspam/internal/app/infrastructure/config"
 	"twitchspam/internal/app/ports"
 	"twitchspam/pkg/logger"
@@ -109,8 +108,8 @@ func (u *User) handleCommands(msg *domain.ChatMessage) *ports.AnswerType {
 			return nil
 		}
 
-		if (cmd.Options.Mode == template.OnlineCommandMode && !u.stream.IsLive()) ||
-			(cmd.Options.Mode == template.OfflineCommandMode && u.stream.IsLive()) {
+		if (cmd.Options.Mode == config.OnlineMode && !u.stream.IsLive()) ||
+			(cmd.Options.Mode == config.OfflineMode && u.stream.IsLive()) {
 			return nil
 		}
 

@@ -7,7 +7,7 @@ import (
 
 type APIPort interface {
 	GetChannelID(username string) (string, error)
-	GetLiveStream(channelID string) (*Stream, error)
+	GetLiveStreams(channelIDs []string) ([]*Stream, error)
 	GetUrlVOD(channelID string, streams []*config.Markers) (map[string]string, error)
 	SendChatMessages(channelID string, msgs *AnswerType)
 	SendChatMessage(channelID, message string) error
@@ -34,7 +34,9 @@ type EventSubPort interface {
 
 type Stream struct {
 	ID          string
-	IsOnline    bool
+	UserID      string
+	UserLogin   string
+	Username    string
 	ViewerCount int
 	StartedAt   time.Time
 }

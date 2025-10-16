@@ -8,6 +8,7 @@ import (
 	"time"
 	"twitchspam/internal/app/domain"
 	"twitchspam/internal/app/infrastructure/config"
+	"twitchspam/internal/app/infrastructure/storage"
 	"twitchspam/internal/app/ports"
 )
 
@@ -113,8 +114,18 @@ func (a *InfoAntispam) handleAntiSpamInfo(cfg *config.Config) *ports.AnswerType 
 		return sb.String()
 	}
 
+	var mode string
+	switch cfg.Spam.Mode {
+	case config.OnlineMode:
+		mode = "только в онлайне"
+	case config.OfflineMode:
+		mode = "только в оффлайне"
+	default:
+		mode = "всегда"
+	}
+
 	parts := []string{
-		"- режим: " + cfg.Spam.Mode,
+		"- режим: " + mode,
 		"- разрешенные пользователи: " + whitelistUsers,
 		"\nобщие:",
 		"- включен: " + strconv.FormatBool(cfg.Spam.SettingsDefault.Enabled),
@@ -159,14 +170,14 @@ func (a *InfoAntispam) handleAntiSpamInfo(cfg *config.Config) *ports.AnswerType 
 }
 
 type ModeAntispam struct {
-	mode string
+	mode int
 }
 
 func (a *ModeAntispam) Execute(cfg *config.Config, _ *domain.MessageText) *ports.AnswerType {
 	return a.handleAntispamMode(cfg, a.mode)
 }
 
-func (a *ModeAntispam) handleAntispamMode(cfg *config.Config, mode string) *ports.AnswerType {
+func (a *ModeAntispam) handleAntispamMode(cfg *config.Config, mode int) *ports.AnswerType {
 	cfg.Spam.Mode = mode
 	return success
 }
@@ -174,6 +185,7 @@ func (a *ModeAntispam) handleAntispamMode(cfg *config.Config, mode string) *port
 type SimAntispam struct {
 	re       *regexp.Regexp
 	template ports.TemplatePort
+	messages ports.StorePort[storage.Message]
 	typeSpam string
 }
 
@@ -194,7 +206,18 @@ func (a *SimAntispam) handleSim(cfg *config.Config, text *domain.MessageText, ty
 
 	if val, ok := a.template.Parser().ParseFloatArg(strings.TrimSpace(matches[1]), 0.1, 1); ok {
 		*target = val
-		//a.template.Store().SetMessageCapacity(cfg)
+
+		capacity := func() int32 {
+			defLimit := float64(cfg.Spam.SettingsDefault.MessageLimit*cfg.Spam.SettingsDefault.MinGapMessages) / cfg.Spam.SettingsDefault.SimilarityThreshold
+			vipLimit := float64(cfg.Spam.SettingsVIP.MessageLimit*cfg.Spam.SettingsVIP.MinGapMessages) / cfg.Spam.SettingsVIP.SimilarityThreshold
+			emoteLimit := float64(cfg.Spam.SettingsEmotes.MessageLimit) / cfg.Spam.SettingsEmotes.EmoteThreshold
+
+			return int32(max(defLimit, vipLimit, emoteLimit))
+		}()
+
+		if capacity > 50 {
+			a.messages.SetCapacity(capacity)
+		}
 		return success
 	}
 
@@ -207,6 +230,7 @@ func (a *SimAntispam) handleSim(cfg *config.Config, text *domain.MessageText, ty
 type MsgAntispam struct {
 	re       *regexp.Regexp
 	template ports.TemplatePort
+	messages ports.StorePort[storage.Message]
 	typeSpam string
 }
 
@@ -230,7 +254,18 @@ func (a *MsgAntispam) handleMsg(cfg *config.Config, text *domain.MessageText) *p
 
 	if val, ok := a.template.Parser().ParseIntArg(strings.TrimSpace(matches[1]), 2, 15); ok {
 		*target = val
-		//a.template.Store().SetMessageCapacity(cfg)
+
+		capacity := func() int32 {
+			defLimit := float64(cfg.Spam.SettingsDefault.MessageLimit*cfg.Spam.SettingsDefault.MinGapMessages) / cfg.Spam.SettingsDefault.SimilarityThreshold
+			vipLimit := float64(cfg.Spam.SettingsVIP.MessageLimit*cfg.Spam.SettingsVIP.MinGapMessages) / cfg.Spam.SettingsVIP.SimilarityThreshold
+			emoteLimit := float64(cfg.Spam.SettingsEmotes.MessageLimit) / cfg.Spam.SettingsEmotes.EmoteThreshold
+
+			return int32(max(defLimit, vipLimit, emoteLimit))
+		}()
+
+		if capacity > 50 {
+			a.messages.SetCapacity(capacity)
+		}
 		return success
 	}
 
@@ -422,6 +457,7 @@ func (a *MaxPunishmentAntispam) handleMaxPunishment(cfg *config.Config, text *do
 type MinGapAntispam struct {
 	re       *regexp.Regexp
 	template ports.TemplatePort
+	messages ports.StorePort[storage.Message]
 	typeSpam string
 }
 
@@ -442,7 +478,18 @@ func (a *MinGapAntispam) handleMinGap(cfg *config.Config, text *domain.MessageTe
 
 	if val, ok := a.template.Parser().ParseIntArg(strings.TrimSpace(matches[1]), 0, 15); ok {
 		*target = val
-		//a.template.Store().SetMessageCapacity(cfg)
+
+		capacity := func() int32 {
+			defLimit := float64(cfg.Spam.SettingsDefault.MessageLimit*cfg.Spam.SettingsDefault.MinGapMessages) / cfg.Spam.SettingsDefault.SimilarityThreshold
+			vipLimit := float64(cfg.Spam.SettingsVIP.MessageLimit*cfg.Spam.SettingsVIP.MinGapMessages) / cfg.Spam.SettingsVIP.SimilarityThreshold
+			emoteLimit := float64(cfg.Spam.SettingsEmotes.MessageLimit) / cfg.Spam.SettingsEmotes.EmoteThreshold
+
+			return int32(max(defLimit, vipLimit, emoteLimit))
+		}()
+
+		if capacity > 50 {
+			a.messages.SetCapacity(capacity)
+		}
 		return success
 	}
 

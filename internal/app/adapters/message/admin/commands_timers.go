@@ -251,7 +251,12 @@ func (a *AddTimer) AddTimer(key string, cmd *config.Commands) {
 		"timer": cmd.Timer,
 	}, func(args map[string]any) {
 		timer := args["timer"].(*config.Timers)
-		if !timer.Enabled || (!timer.Options.IsAlways && !a.Stream.IsLive()) {
+		if !timer.Enabled {
+			return
+		}
+
+		if ((timer.Options.Mode == config.OnlineMode || timer.Options.Mode == 0) && !a.Stream.IsLive()) ||
+			(timer.Options.Mode == config.OfflineMode && a.Stream.IsLive()) {
 			return
 		}
 

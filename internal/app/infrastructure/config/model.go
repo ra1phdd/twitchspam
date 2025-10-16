@@ -28,6 +28,7 @@ type Config struct {
 
 type App struct {
 	LogLevel    string   `json:"log_level"`
+	GinMode     string   `json:"gin_mode"`
 	OAuth       string   `json:"oauth"`
 	ClientID    string   `json:"client_id"`
 	Username    string   `json:"username"`
@@ -49,7 +50,7 @@ type UserTokens struct {
 }
 
 type Spam struct {
-	Mode            string                         `json:"mode"`
+	Mode            int                            `json:"mode"`
 	WhitelistUsers  map[string]struct{}            `json:"whitelist_users"`
 	SettingsDefault SpamSettings                   `json:"settings_default"`
 	SettingsVIP     SpamSettings                   `json:"settings_vip"`
@@ -153,6 +154,7 @@ type ExceptOptions struct {
 }
 
 type MwordOptions struct {
+	Mode          int  `json:"mode"`
 	IsFirst       bool `json:"is_first"`
 	NoSub         bool `json:"no_sub"`
 	NoVip         bool `json:"no_vip"`
@@ -163,9 +165,9 @@ type MwordOptions struct {
 }
 
 type TimerOptions struct {
+	Mode          int    `json:"mode"`
 	IsAnnounce    bool   `json:"is_announce"`
 	ColorAnnounce string `json:"color_announce"`
-	IsAlways      bool   `json:"is_always"`
 }
 
 type CommandOptions struct {

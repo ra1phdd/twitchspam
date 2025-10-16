@@ -21,6 +21,7 @@ var ExceptOptions = map[string]struct{}{
 }
 
 var MwordOptions = map[string]struct{}{
+	"-always": {}, "-online": {}, "-offline": {},
 	"-first": {}, "-nofirst": {},
 	"-sub": {}, "-nosub": {},
 	"-vip": {}, "-novip": {},
@@ -32,7 +33,7 @@ var MwordOptions = map[string]struct{}{
 
 var TimersOptions = map[string]struct{}{
 	"-a": {}, "-noa": {},
-	"-always": {}, "-online": {},
+	"-always": {}, "-online": {}, "-offline": {},
 	"-blue": {}, "-green": {},
 	"-orange": {}, "-purple": {},
 	"-primary": {},
@@ -42,12 +43,6 @@ var CommandOptions = map[string]struct{}{
 	"-private": {}, "-public": {},
 	"-always": {}, "-online": {}, "-offline": {},
 }
-
-const (
-	AlwaysCommandMode = iota
-	OnlineCommandMode
-	OfflineCommandMode
-)
 
 func (ot *OptionsTemplate) ParseAll(input string, opts map[string]struct{}) (string, map[string]bool) {
 	words := strings.Fields(input)
@@ -136,6 +131,22 @@ func (ot *OptionsTemplate) mergeExcept(dst config.ExceptOptions, src map[string]
 }
 
 func (ot *OptionsTemplate) MergeMword(dst config.MwordOptions, src map[string]bool) config.MwordOptions {
+	if dst == (config.MwordOptions{}) { // значение по умолчанию
+		dst.Mode = config.OnlineMode
+	}
+
+	if _, ok := src["-always"]; ok {
+		dst.Mode = config.AlwaysMode
+	}
+
+	if _, ok := src["-online"]; ok {
+		dst.Mode = config.OnlineMode
+	}
+
+	if _, ok := src["-offline"]; ok {
+		dst.Mode = config.OfflineMode
+	}
+
 	if _, ok := src["-nofirst"]; ok {
 		dst.IsFirst = false
 	}
@@ -196,6 +207,10 @@ func (ot *OptionsTemplate) MergeMword(dst config.MwordOptions, src map[string]bo
 }
 
 func (ot *OptionsTemplate) MergeTimer(dst config.TimerOptions, src map[string]bool) config.TimerOptions {
+	if dst == (config.TimerOptions{}) { // значение по умолчанию
+		dst.Mode = config.OnlineMode
+	}
+
 	if _, ok := src["-noa"]; ok {
 		dst.IsAnnounce = false
 	}
@@ -204,12 +219,16 @@ func (ot *OptionsTemplate) MergeTimer(dst config.TimerOptions, src map[string]bo
 		dst.IsAnnounce = true
 	}
 
-	if _, ok := src["-online"]; ok {
-		dst.IsAlways = false
+	if _, ok := src["-always"]; ok {
+		dst.Mode = config.AlwaysMode
 	}
 
-	if _, ok := src["-always"]; ok {
-		dst.IsAlways = true
+	if _, ok := src["-online"]; ok {
+		dst.Mode = config.OnlineMode
+	}
+
+	if _, ok := src["-offline"]; ok {
+		dst.Mode = config.OfflineMode
 	}
 
 	if _, ok := src["-primary"]; ok {
@@ -240,6 +259,10 @@ func (ot *OptionsTemplate) MergeTimer(dst config.TimerOptions, src map[string]bo
 }
 
 func (ot *OptionsTemplate) MergeCommand(dst config.CommandOptions, src map[string]bool) config.CommandOptions {
+	if dst == (config.CommandOptions{}) { // значение по умолчанию
+		dst.Mode = config.AlwaysMode
+	}
+
 	if _, ok := src["-public"]; ok {
 		dst.IsPrivate = false
 	}
@@ -249,15 +272,15 @@ func (ot *OptionsTemplate) MergeCommand(dst config.CommandOptions, src map[strin
 	}
 
 	if _, ok := src["-always"]; ok {
-		dst.Mode = AlwaysCommandMode
+		dst.Mode = config.AlwaysMode
 	}
 
 	if _, ok := src["-online"]; ok {
-		dst.Mode = OnlineCommandMode
+		dst.Mode = config.OnlineMode
 	}
 
 	if _, ok := src["-offline"]; ok {
-		dst.Mode = OfflineCommandMode
+		dst.Mode = config.OfflineMode
 	}
 
 	return dst
@@ -307,6 +330,16 @@ func (ot *OptionsTemplate) ExceptToString(opts config.ExceptOptions) string {
 
 func (ot *OptionsTemplate) MwordToString(opts config.MwordOptions) string {
 	result := []string{
+		func() string {
+			switch opts.Mode {
+			case config.OnlineMode:
+				return "-online"
+			case config.OfflineMode:
+				return "-offline"
+			default:
+				return "-always"
+			}
+		}(),
 		func() string {
 			if opts.NoRepeat {
 				return "-norepeat"
@@ -362,10 +395,14 @@ func (ot *OptionsTemplate) TimerToString(opts config.TimerOptions) string {
 			return "-noa"
 		}(),
 		func() string {
-			if opts.IsAlways {
+			switch opts.Mode {
+			case config.OnlineMode:
+				return "-online"
+			case config.OfflineMode:
+				return "-offline"
+			default:
 				return "-always"
 			}
-			return "-online"
 		}(),
 		func() string {
 			if opts.ColorAnnounce == "" {
@@ -387,9 +424,9 @@ func (ot *OptionsTemplate) CommandToString(opts config.CommandOptions) string {
 		}(),
 		func() string {
 			switch opts.Mode {
-			case OnlineCommandMode:
+			case config.OnlineMode:
 				return "-online"
-			case OfflineCommandMode:
+			case config.OfflineMode:
 				return "-offline"
 			default:
 				return "-always"

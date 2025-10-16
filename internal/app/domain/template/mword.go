@@ -71,6 +71,10 @@ func (t *MwordTemplate) Update(mwords []config.Mword, mwordGroups map[string]*co
 					"contains":       mw.Options.Contains,
 					"case_sensitive": mw.Options.CaseSensitive,
 				})
+
+				if mw.Options.Mode != 0 {
+					options.Mode = mw.Options.Mode
+				}
 			}
 
 			mws = append(mws, Mwords{
@@ -100,7 +104,7 @@ func (t *MwordTemplate) Update(mwords []config.Mword, mwordGroups map[string]*co
 	t.mwords = mws
 }
 
-func (t *MwordTemplate) Check(msg *domain.ChatMessage) []config.Punishment {
+func (t *MwordTemplate) Check(msg *domain.ChatMessage, isLive bool) []config.Punishment {
 	match, ok := t.cache.Get(t.getCacheKey(msg))
 	if ok {
 		if trueMatch, exists := match[true]; exists && msg.Message.IsFirst() {
@@ -115,7 +119,7 @@ func (t *MwordTemplate) Check(msg *domain.ChatMessage) []config.Punishment {
 	}
 
 	for _, mw := range t.mwords {
-		if !t.matchMwordRule(msg, mw.Word, mw.Regexp, mw.Options) {
+		if !t.matchMwordRule(msg, mw.Word, mw.Regexp, mw.Options, isLive) {
 			continue
 		}
 
@@ -130,7 +134,7 @@ func (t *MwordTemplate) Check(msg *domain.ChatMessage) []config.Punishment {
 	return nil
 }
 
-func (t *MwordTemplate) matchMwordRule(msg *domain.ChatMessage, word string, re *regexp.Regexp, opts config.MwordOptions) bool {
+func (t *MwordTemplate) matchMwordRule(msg *domain.ChatMessage, word string, re *regexp.Regexp, opts config.MwordOptions, isLive bool) bool {
 	if opts.NoVip && msg.Chatter.IsVip {
 		return false
 	}
@@ -141,6 +145,11 @@ func (t *MwordTemplate) matchMwordRule(msg *domain.ChatMessage, word string, re 
 		return false
 	}
 	if opts.OneWord && len(msg.Message.Text.Words()) > 1 {
+		return false
+	}
+
+	if ((opts.Mode == config.OnlineMode || opts.Mode == 0) && !isLive) ||
+		(opts.Mode == config.OfflineMode && isLive) {
 		return false
 	}
 

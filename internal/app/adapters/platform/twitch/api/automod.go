@@ -3,22 +3,23 @@ package api
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 )
 
 func (t *Twitch) ManageHeldAutoModMessage(userID, msgID, action string) error {
 	if userID == "" {
-		return fmt.Errorf("userID is required")
+		return errors.New("userID is required")
 	}
 	if msgID == "" {
-		return fmt.Errorf("msgID is required")
+		return errors.New("msgID is required")
 	}
 	if action == "" {
-		return fmt.Errorf("action is required")
+		return errors.New("action is required")
 	}
 
 	if action != "ALLOW" && action != "DENY" {
-		return fmt.Errorf("action must be either 'ALLOW' or 'DENY'")
+		return errors.New("action must be either 'ALLOW' or 'DENY'")
 	}
 
 	requestBody := struct {

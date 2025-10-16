@@ -2,16 +2,26 @@ package config
 
 import "time"
 
+const (
+	_ = iota
+	AlwaysMode
+	OnlineMode
+	OfflineMode
+)
+
 func (m *Manager) GetDefault() *Config {
 	return &Config{
-		App:        App{},
+		App: App{
+			LogLevel: "info",
+			GinMode:  "release",
+		},
 		WindowSecs: 180,
 		Limiter: Limiter{
 			Requests: 3,
 			Per:      30 * time.Second,
 		},
 		Spam: Spam{
-			Mode:           "online",
+			Mode:           OnlineMode,
 			WhitelistUsers: make(map[string]struct{}),
 			Exceptions:     make(map[string]*ExceptionsSettings),
 			SettingsDefault: SpamSettings{

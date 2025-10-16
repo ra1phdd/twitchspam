@@ -6,8 +6,6 @@ type StreamPort interface {
 	Stats() StatsPort
 	IsLive() bool
 	SetIslive(isLive bool)
-	StreamID() string
-	SetStreamID(streamID string)
 	ChannelID() string
 	SetChannelID(channelID string)
 	ChannelName() string

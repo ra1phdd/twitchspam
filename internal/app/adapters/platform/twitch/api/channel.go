@@ -3,13 +3,13 @@ package api
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
+	"errors"
 	"net/url"
 )
 
 func (t *Twitch) UpdateChannelGameID(broadcasterID string, gameID string) error {
 	if broadcasterID == "" {
-		return fmt.Errorf("broadcasterID is required")
+		return errors.New("broadcasterID is required")
 	}
 
 	params := url.Values{}
@@ -27,7 +27,7 @@ func (t *Twitch) UpdateChannelGameID(broadcasterID string, gameID string) error 
 
 func (t *Twitch) UpdateChannelTitle(broadcasterID string, title string) error {
 	if broadcasterID == "" {
-		return fmt.Errorf("broadcasterID is required")
+		return errors.New("broadcasterID is required")
 	}
 
 	params := url.Values{}

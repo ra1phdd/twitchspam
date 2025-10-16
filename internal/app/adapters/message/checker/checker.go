@@ -117,7 +117,7 @@ func (c *Checker) checkAds(text string, username string) *ports.CheckerAction {
 }
 
 func (c *Checker) checkMwords(msg *domain.ChatMessage) *ports.CheckerAction {
-	punishments := c.template.Mword().Check(msg)
+	punishments := c.template.Mword().Check(msg, c.stream.IsLive())
 	if len(punishments) == 0 {
 		return nil
 	}
@@ -149,7 +149,12 @@ func (c *Checker) checkSpam(msg *domain.ChatMessage) *ports.CheckerAction {
 		settings = c.cfg.Spam.SettingsVIP
 	}
 
-	if !settings.Enabled || !c.template.SpamPause().CanProcess() || (c.cfg.Spam.Mode == "online" && !c.stream.IsLive()) {
+	if !settings.Enabled || !c.template.SpamPause().CanProcess() {
+		return nil
+	}
+
+	if ((c.cfg.Spam.Mode == config.OnlineMode || c.cfg.Spam.Mode == 0) && !c.stream.IsLive()) ||
+		(c.cfg.Spam.Mode == config.OfflineMode && c.stream.IsLive()) {
 		return nil
 	}
 
@@ -205,7 +210,7 @@ func (c *Checker) checkSpam(msg *domain.ChatMessage) *ports.CheckerAction {
 
 func (c *Checker) countSpamMessages(msg *domain.ChatMessage, settings config.SpamSettings) int {
 	var countSpam, gap int
-	hash := domain.WordsToHashes(msg.Message.Text.Words(domain.Lower, domain.RemovePunctuation, domain.RemoveDuplicateLetters))
+	hash := domain.WordsToHashes(msg.Message.Text.Words(domain.RemovePunctuation))
 	c.messages.ForEach(msg.Chatter.Username, func(item *storage.Message) {
 		if item.IgnoreAntispam {
 			return
@@ -213,6 +218,11 @@ func (c *Checker) countSpamMessages(msg *domain.ChatMessage, settings config.Spa
 
 		similarity := domain.JaccardHashSimilarity(hash, item.HashWordsLowerNorm)
 		if similarity >= settings.SimilarityThreshold {
+			_, isOnlyEmotes := c.sevenTV.EmoteStats(item.Data.Message.Text.Words(domain.RemovePunctuation))
+			if isOnlyEmotes || item.Data.Message.EmoteOnly {
+				return
+			}
+
 			if gap < settings.MinGapMessages {
 				countSpam++
 			}
