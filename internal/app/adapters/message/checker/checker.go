@@ -161,7 +161,7 @@ func (c *Checker) checkSpam(msg *domain.ChatMessage) *ports.CheckerAction {
 	if action := c.handleWordLength(msg.Message.Text.Words(domain.LowerOption, domain.RemovePunctuationOption, domain.RemoveDuplicateLettersOption), settings); action != nil {
 		return action
 	}
-	countSpam := c.countSpamMessages(msg, settings)
+	countSpam, _ := c.calculateSpamMessages(msg, settings)
 
 	if action := c.handleEmotes(msg, countSpam); action != nil {
 		if action.Type != None {
@@ -208,8 +208,9 @@ func (c *Checker) checkSpam(msg *domain.ChatMessage) *ports.CheckerAction {
 	}
 }
 
-func (c *Checker) countSpamMessages(msg *domain.ChatMessage, settings config.SpamSettings) int {
+func (c *Checker) calculateSpamMessages(msg *domain.ChatMessage, settings config.SpamSettings) (int, time.Duration) {
 	var countSpam, gap int
+	var timestamps []time.Time
 	hash := domain.WordsToHashes(msg.Message.Text.Words(domain.RemovePunctuationOption))
 	c.messages.ForEach(msg.Chatter.Username, func(item *storage.Message) {
 		if item.IgnoreAntispam {
@@ -225,6 +226,7 @@ func (c *Checker) countSpamMessages(msg *domain.ChatMessage, settings config.Spa
 
 			if gap < settings.MinGapMessages {
 				countSpam++
+				timestamps = append(timestamps, item.Time)
 			}
 			gap = 0
 		} else {
@@ -232,7 +234,13 @@ func (c *Checker) countSpamMessages(msg *domain.ChatMessage, settings config.Spa
 		}
 	})
 
-	return countSpam
+	var total time.Duration
+	for i := 1; i < len(timestamps); i++ {
+		diff := timestamps[i].Sub(timestamps[i-1])
+		total += diff
+	}
+
+	return countSpam, total / time.Duration(len(timestamps)-1)
 }
 
 func (c *Checker) handleWordLength(words []string, settings config.SpamSettings) *ports.CheckerAction {

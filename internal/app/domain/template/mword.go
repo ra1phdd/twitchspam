@@ -38,6 +38,8 @@ func NewMword(options ports.OptionsPort, mwords []config.Mword, mwordGroups map[
 }
 
 func (t *MwordTemplate) Update(mwords []config.Mword, mwordGroups map[string]*config.MwordGroup) {
+	t.cache.ClearAll()
+
 	mws := make([]Mwords, 0, len(mwords)+len(mwordGroups))
 	for _, mw := range mwords {
 		mws = append(mws, Mwords{
