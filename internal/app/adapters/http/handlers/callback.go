@@ -14,8 +14,6 @@ import (
 
 func (h *Handlers) CallbackHandler(c *gin.Context) {
 	code := c.Query("code")
-	state := c.Query("state")
-	fmt.Println(state)
 	if code == "" {
 		c.String(400, "Нет кода авторизации")
 		return
