@@ -34,7 +34,7 @@ func (m *Manager) validate(cfg *Config) error {
 	}
 
 	if cfg.UsersTokens == nil {
-		cfg.UsersTokens = make(map[string]UserTokens)
+		cfg.UsersTokens = make(map[string]*UserTokens)
 	}
 
 	cfg.WindowSecs = 180

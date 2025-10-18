@@ -55,7 +55,7 @@ func (h *Handlers) CallbackHandler(c *gin.Context) {
 	fmt.Println("User login:", userResp.Data[0].Login)
 
 	h.manager.Update(func(cfg *config.Config) {
-		cfg.UsersTokens[userResp.Data[0].ID] = *token
+		cfg.UsersTokens[userResp.Data[0].ID] = token
 	})
 
 	c.String(200, "Успешно!")

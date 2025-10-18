@@ -60,7 +60,6 @@ func (m *Manager) Update(modify func(cfg *Config)) error {
 	if err := m.validate(m.cfg); err != nil {
 		return fmt.Errorf("invalid config update: %w", err)
 	}
-
 	return m.saveLocked()
 }
 

@@ -14,7 +14,6 @@ func (t *Twitch) UpdateChannelGameID(broadcasterID string, gameID string) error 
 
 	params := url.Values{}
 	params.Set("broadcaster_id", broadcasterID)
-
 	opts := ChannelUpdateOptions{GameID: gameID}
 
 	bodyBytes, err := json.Marshal(opts)

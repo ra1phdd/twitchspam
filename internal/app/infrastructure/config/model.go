@@ -9,7 +9,7 @@ import (
 type Config struct {
 	App           App                              `json:"app"`
 	UserAccess    UserAccess                       `json:"user_access"`
-	UsersTokens   map[string]UserTokens            `json:"user_tokens"`
+	UsersTokens   map[string]*UserTokens           `json:"user_tokens"`
 	CertDomains   []string                         `json:"cert_domains"`
 	Enabled       bool                             `json:"enabled"`
 	Limiter       Limiter                          `json:"limiter"`

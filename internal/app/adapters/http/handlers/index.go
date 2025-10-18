@@ -18,7 +18,7 @@ func (h *Handlers) IndexHandler(c *gin.Context) {
 		"https://id.twitch.tv/oauth2/authorize?client_id=%s&redirect_uri=%s&response_type=code&scope=%s&state=%s",
 		url.QueryEscape(cfg.UserAccess.ClientID),
 		url.QueryEscape(cfg.UserAccess.RedirectURL),
-		url.QueryEscape("channel:read:vips channel:manage:vips channel:read:polls channel:manage:polls channel:read:predictions channel:manage:predictions moderator:read:followers channel:read:subscriptions"),
+		url.QueryEscape("channel:manage:broadcast channel:read:vips channel:manage:vips channel:read:polls channel:manage:polls channel:read:predictions channel:manage:predictions moderator:read:followers channel:read:subscriptions"),
 		h.state,
 	)
 
