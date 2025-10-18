@@ -1,8 +1,6 @@
 package handlers
 
 import (
-	"crypto/rand"
-	"encoding/base64"
 	"fmt"
 	"github.com/gin-gonic/gin"
 	"net/http"
@@ -12,7 +10,6 @@ import (
 func (h *Handlers) IndexHandler(c *gin.Context) {
 	if c.Query("code") != "" && c.Query("state") == h.state {
 		h.CallbackHandler(c)
-		c.JSON(http.StatusOK, gin.H{"status": "успешно"})
 		return
 	}
 
@@ -55,12 +52,4 @@ func (h *Handlers) IndexHandler(c *gin.Context) {
 		</html>`, authURL)
 
 	c.Data(http.StatusOK, "text/html; charset=utf-8", []byte(html))
-}
-
-func generateSecureRandomString(length int) (string, error) {
-	bytes := make([]byte, (length*3)/4)
-	if _, err := rand.Read(bytes); err != nil {
-		return "", err
-	}
-	return base64.URLEncoding.EncodeToString(bytes)[:length], nil
 }

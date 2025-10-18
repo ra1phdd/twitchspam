@@ -16,7 +16,7 @@ func (t *Twitch) GetUrlVOD(channelID string, streams []*config.Markers) (map[str
 	params.Set("first", "100")
 
 	var videosResp VideoResponse
-	err := t.doTwitchRequest("GET", "https://api.twitch.tv/helix/videos?"+params.Encode(), nil, &videosResp)
+	err := t.doTwitchRequest("GET", "https://api.twitch.tv/helix/videos?"+params.Encode(), nil, nil, &videosResp)
 	if err != nil {
 		return vods, err
 	}

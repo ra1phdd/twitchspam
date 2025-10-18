@@ -11,7 +11,7 @@ import (
 
 func (t *Twitch) GetChannelID(username string) (string, error) {
 	var userResp UserResponse
-	if err := t.doTwitchRequest("GET", "https://api.twitch.tv/helix/users?login="+username, nil, &userResp); err != nil {
+	if err := t.doTwitchRequest("GET", "https://api.twitch.tv/helix/users?login="+username, nil, nil, &userResp); err != nil {
 		return "", err
 	}
 	if len(userResp.Data) == 0 {
@@ -36,7 +36,7 @@ func (t *Twitch) SendChatMessages(channelID string, msgs *ports.AnswerType) {
 func (t *Twitch) SendChatMessage(channelID, message string) error {
 	reqBody := ChatMessageRequest{
 		BroadcasterID: channelID,
-		SenderID:      t.cfg.App.UserID,
+		SenderID:      t.manager.Get().App.UserID,
 		Message:       message,
 	}
 
@@ -46,7 +46,7 @@ func (t *Twitch) SendChatMessage(channelID, message string) error {
 	}
 
 	var chatResp ChatMessageResponse
-	err = t.doTwitchRequest("POST", "https://api.twitch.tv/helix/chat/messages", bytes.NewReader(bodyBytes), &chatResp)
+	err = t.doTwitchRequest("POST", "https://api.twitch.tv/helix/chat/messages", nil, bytes.NewReader(bodyBytes), &chatResp)
 	if err != nil {
 		return err
 	}
@@ -71,9 +71,9 @@ func (t *Twitch) SendChatAnnouncement(channelID, message, color string) error {
 
 	queryParams := url.Values{}
 	queryParams.Add("broadcaster_id", channelID)
-	queryParams.Add("moderator_id", t.cfg.App.UserID)
+	queryParams.Add("moderator_id", t.manager.Get().App.UserID)
 
-	err = t.doTwitchRequest("POST", "https://api.twitch.tv/helix/chat/announcements?"+queryParams.Encode(), bytes.NewReader(bodyBytes), nil)
+	err = t.doTwitchRequest("POST", "https://api.twitch.tv/helix/chat/announcements?"+queryParams.Encode(), nil, bytes.NewReader(bodyBytes), nil)
 	if err != nil {
 		return err
 	}
@@ -89,12 +89,12 @@ type AnnouncementRequest struct {
 func (t *Twitch) DeleteChatMessage(channelID, messageID string) error {
 	params := url.Values{}
 	params.Set("broadcaster_id", channelID)
-	params.Set("moderator_id", t.cfg.App.UserID)
+	params.Set("moderator_id", t.manager.Get().App.UserID)
 	if messageID != "" {
 		params.Set("message_id", messageID)
 	}
 
-	err := t.doTwitchRequest("DELETE", "https://api.twitch.tv/helix/moderation/chat?"+params.Encode(), nil, nil)
+	err := t.doTwitchRequest("DELETE", "https://api.twitch.tv/helix/moderation/chat?"+params.Encode(), nil, nil, nil)
 	if err != nil {
 		return err
 	}
@@ -117,9 +117,9 @@ func (t *Twitch) TimeoutUser(channelID, userID string, duration int, reason stri
 
 	params := url.Values{}
 	params.Set("broadcaster_id", channelID)
-	params.Set("moderator_id", t.cfg.App.UserID)
+	params.Set("moderator_id", t.manager.Get().App.UserID)
 
-	err = t.doTwitchRequest("POST", "https://api.twitch.tv/helix/moderation/bans?"+params.Encode(), bytes.NewReader(bodyBytes), nil)
+	err = t.doTwitchRequest("POST", "https://api.twitch.tv/helix/moderation/bans?"+params.Encode(), nil, bytes.NewReader(bodyBytes), nil)
 	if err != nil {
 		t.log.Error("Failed to send timeout request", err)
 	}

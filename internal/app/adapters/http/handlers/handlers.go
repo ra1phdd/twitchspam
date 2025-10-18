@@ -1,6 +1,10 @@
 package handlers
 
-import "twitchspam/internal/app/infrastructure/config"
+import (
+	"crypto/rand"
+	"encoding/base64"
+	"twitchspam/internal/app/infrastructure/config"
+)
 
 type Handlers struct {
 	manager *config.Manager
@@ -17,4 +21,12 @@ func New(manager *config.Manager) *Handlers {
 		manager: manager,
 		state:   s,
 	}
+}
+
+func generateSecureRandomString(length int) (string, error) {
+	bytes := make([]byte, (length*3)/4)
+	if _, err := rand.Read(bytes); err != nil {
+		return "", err
+	}
+	return base64.URLEncoding.EncodeToString(bytes)[:length], nil
 }

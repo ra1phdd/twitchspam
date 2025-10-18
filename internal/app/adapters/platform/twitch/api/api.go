@@ -2,10 +2,12 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"strconv"
 	"sync"
 	"time"
@@ -15,10 +17,10 @@ import (
 )
 
 type Twitch struct {
-	log    logger.Logger
-	cfg    *config.Config
-	client *http.Client
-	pool   *TwitchPool
+	log     logger.Logger
+	manager *config.Manager
+	client  *http.Client
+	pool    *TwitchPool
 }
 
 type TwitchPool struct {
@@ -27,11 +29,11 @@ type TwitchPool struct {
 	shutdown chan struct{}
 }
 
-func NewTwitch(log logger.Logger, cfg *config.Config, client *http.Client, workerCount int) *Twitch {
+func NewTwitch(log logger.Logger, manager *config.Manager, client *http.Client, workerCount int) *Twitch {
 	t := &Twitch{
-		log:    log,
-		cfg:    cfg,
-		client: client,
+		log:     log,
+		manager: manager,
+		client:  client,
 		pool: &TwitchPool{
 			tasks:    make(chan func()),
 			shutdown: make(chan struct{}),
@@ -84,14 +86,22 @@ const (
 	maxBackoff  = 30 * time.Second
 )
 
-func (t *Twitch) doTwitchRequest(method, url string, body io.Reader, target interface{}) error {
+func (t *Twitch) doTwitchRequest(method, url string, token *config.UserTokens, body io.Reader, target interface{}) error {
 	req, err := http.NewRequest(method, url, body)
 	if err != nil {
 		return err
 	}
+	cfg := t.manager.Get()
 
-	req.Header.Set("Authorization", "Bearer "+t.cfg.App.OAuth)
-	req.Header.Set("Client-Id", t.cfg.App.ClientID)
+	auth := cfg.App.OAuth
+	clientID := cfg.App.ClientID
+	if token != nil {
+		auth = token.AccessToken
+		clientID = cfg.UserAccess.ClientID
+	}
+
+	req.Header.Set("Authorization", "Bearer "+auth)
+	req.Header.Set("Client-Id", clientID)
 	req.Header.Set("Content-Type", "application/json")
 
 	var resp *http.Response
@@ -107,22 +117,25 @@ func (t *Twitch) doTwitchRequest(method, url string, body io.Reader, target inte
 			return err
 		}
 
-		if resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusNoContent {
+		switch resp.StatusCode {
+		case http.StatusOK, http.StatusNoContent:
 			if target == nil {
 				_, _ = io.Copy(io.Discard, resp.Body)
 				return nil
 			}
 			return json.NewDecoder(resp.Body).Decode(target)
-		}
 
-		if resp.StatusCode == http.StatusTooManyRequests {
+		case http.StatusUnauthorized:
+			t.log.Warn("Access token expired")
+			continue
+
+		case http.StatusTooManyRequests:
 			resetHeader := resp.Header.Get("Ratelimit-Reset")
 			wait := calcWaitDuration(resetHeader)
 
 			if wait <= 0 {
 				wait = time.Duration(attempt) * baseBackoff
 			}
-
 			if wait > maxBackoff {
 				wait = maxBackoff
 			}
@@ -131,13 +144,13 @@ func (t *Twitch) doTwitchRequest(method, url string, body io.Reader, target inte
 				slog.Int("attempt", attempt),
 				slog.String("wait", wait.String()),
 			)
-
 			time.Sleep(wait)
 			continue
-		}
 
-		raw, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("twitch returned %s: %s", resp.Status, string(raw))
+		default:
+			raw, _ := io.ReadAll(resp.Body)
+			return fmt.Errorf("twitch returned %s: %s", resp.Status, string(raw))
+		}
 	}
 
 	return fmt.Errorf("twitch request failed after %d retries", maxRetries)
@@ -160,4 +173,69 @@ func calcWaitDuration(resetHeader string) time.Duration {
 		return 0
 	}
 	return resetTime.Sub(now)
+}
+
+func (t *Twitch) ensureUserToken(broadcasterID string) (*config.UserTokens, error) {
+	cfg := t.manager.Get()
+	token, ok := cfg.UsersTokens[broadcasterID]
+	if !ok {
+		return nil, errors.New("user auth failed")
+	}
+
+	if time.Now().After(token.ObtainedAt.Add(time.Duration(token.ExpiresIn) * time.Second)) {
+		resp, err := t.refreshUserToken(&token)
+		if err != nil {
+			return nil, fmt.Errorf("failed to refresh user token: %w", err)
+		}
+
+		newToken := config.UserTokens{
+			AccessToken:  resp.AccessToken,
+			RefreshToken: resp.RefreshToken,
+			ExpiresIn:    resp.ExpiresIn,
+			ObtainedAt:   time.Now(),
+		}
+
+		t.manager.Update(func(cfg *config.Config) {
+			cfg.UsersTokens[broadcasterID] = newToken
+		})
+		token = newToken
+	}
+	return &token, nil
+}
+
+type TokenResponse struct {
+	AccessToken  string `json:"access_token"`
+	RefreshToken string `json:"refresh_token"`
+	ExpiresIn    int    `json:"expires_in"`
+}
+
+func (t *Twitch) refreshUserToken(token *config.UserTokens) (*TokenResponse, error) {
+	if token == nil {
+		return nil, fmt.Errorf("token is nil")
+	}
+	cfg := t.manager.Get()
+
+	data := url.Values{}
+	data.Set("grant_type", "refresh_token")
+	data.Set("refresh_token", token.RefreshToken)
+	data.Set("client_id", cfg.UserAccess.ClientID)
+	data.Set("client_secret", cfg.UserAccess.ClientSecret)
+
+	resp, err := t.client.PostForm("https://id.twitch.tv/oauth2/token", data)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		raw, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("failed to refresh token: %s", string(raw))
+	}
+
+	var tokenResp TokenResponse
+	if err := json.NewDecoder(resp.Body).Decode(&tokenResp); err != nil {
+		return nil, err
+	}
+
+	return &tokenResp, nil
 }

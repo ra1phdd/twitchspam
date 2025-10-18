@@ -22,7 +22,12 @@ func (t *Twitch) UpdateChannelGameID(broadcasterID string, gameID string) error 
 		return err
 	}
 
-	return t.doTwitchRequest("PATCH", "https://api.twitch.tv/helix/channels?"+params.Encode(), bytes.NewReader(bodyBytes), nil)
+	token, err := t.ensureUserToken(broadcasterID)
+	if err != nil {
+		return err
+	}
+
+	return t.doTwitchRequest("PATCH", "https://api.twitch.tv/helix/channels?"+params.Encode(), token, bytes.NewReader(bodyBytes), nil)
 }
 
 func (t *Twitch) UpdateChannelTitle(broadcasterID string, title string) error {
@@ -40,5 +45,10 @@ func (t *Twitch) UpdateChannelTitle(broadcasterID string, title string) error {
 		return err
 	}
 
-	return t.doTwitchRequest("PATCH", "https://api.twitch.tv/helix/channels?"+params.Encode(), bytes.NewReader(bodyBytes), nil)
+	token, err := t.ensureUserToken(broadcasterID)
+	if err != nil {
+		return err
+	}
+
+	return t.doTwitchRequest("PATCH", "https://api.twitch.tv/helix/channels?"+params.Encode(), token, bytes.NewReader(bodyBytes), nil)
 }

@@ -14,7 +14,7 @@ func (t *Twitch) GetLiveStreams(channelIDs []string) ([]*ports.Stream, error) {
 	params.Set("type", "live")
 
 	var streamResp StreamResponse
-	err := t.doTwitchRequest("GET", "https://api.twitch.tv/helix/streams?"+params.Encode(), nil, &streamResp)
+	err := t.doTwitchRequest("GET", "https://api.twitch.tv/helix/streams?"+params.Encode(), nil, nil, &streamResp)
 	if err != nil {
 		return nil, err
 	}

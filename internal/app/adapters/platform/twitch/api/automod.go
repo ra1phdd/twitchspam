@@ -37,5 +37,5 @@ func (t *Twitch) ManageHeldAutoModMessage(userID, msgID, action string) error {
 		return fmt.Errorf("failed to marshal request body: %w", err)
 	}
 
-	return t.doTwitchRequest("POST", "https://api.twitch.tv/helix/moderation/automod/message", bytes.NewReader(bodyBytes), nil)
+	return t.doTwitchRequest("POST", "https://api.twitch.tv/helix/moderation/automod/message", nil, bytes.NewReader(bodyBytes), nil)
 }

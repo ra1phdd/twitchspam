@@ -12,7 +12,7 @@ func (t *Twitch) SearchCategory(categoryName string) (string, string, error) {
 	params.Set("query", categoryName)
 
 	var searchResp SearchCategoriesResponse
-	err := t.doTwitchRequest("GET", "https://api.twitch.tv/helix/search/categories?"+params.Encode(), nil, &searchResp)
+	err := t.doTwitchRequest("GET", "https://api.twitch.tv/helix/search/categories?"+params.Encode(), nil, nil, &searchResp)
 	if err != nil {
 		t.log.Error("Failed to twitch request", err)
 		return "", "", err
