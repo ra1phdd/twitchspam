@@ -30,8 +30,6 @@ func NewRouter(log logger.Logger, manager *config.Manager) *Router {
 	}
 
 	r.router.GET("/", r.handlers.IndexHandler)
-	r.router.GET("/callback", r.handlers.CallbackHandler)
-
 	return r
 }
 

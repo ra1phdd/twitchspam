@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"crypto/rand"
+	"encoding/base64"
 	"fmt"
 	"github.com/gin-gonic/gin"
 	"net/http"
@@ -8,11 +10,19 @@ import (
 )
 
 func (h *Handlers) IndexHandler(c *gin.Context) {
+	if c.Query("code") != "" && c.Query("state") == h.state {
+		h.CallbackHandler(c)
+		c.JSON(http.StatusOK, gin.H{"status": "успешно"})
+		return
+	}
+
 	cfg := h.manager.Get()
 	authURL := fmt.Sprintf(
-		"https://id.twitch.tv/oauth2/authorize?client_id=%s&redirect_uri=%s&response_type=code&channel:read:vips+channel:manage:vips+channel:read:polls+channel:manage:polls+channel:read:predictions+channel:manage:predictions+moderator:read:followers+channel:read:subscriptions&state=RANDOM_STRING",
+		"https://id.twitch.tv/oauth2/authorize?client_id=%s&redirect_uri=%s&response_type=code&scope=%s&state=%s",
 		url.QueryEscape(cfg.UserAccess.ClientID),
 		url.QueryEscape(cfg.UserAccess.RedirectURL),
+		url.QueryEscape("channel:read:vips channel:manage:vips channel:read:polls channel:manage:polls channel:read:predictions channel:manage:predictions moderator:read:followers channel:read:subscriptions"),
+		h.state,
 	)
 
 	html := fmt.Sprintf(`<!DOCTYPE html>
@@ -45,4 +55,12 @@ func (h *Handlers) IndexHandler(c *gin.Context) {
 		</html>`, authURL)
 
 	c.Data(http.StatusOK, "text/html; charset=utf-8", []byte(html))
+}
+
+func generateSecureRandomString(length int) (string, error) {
+	bytes := make([]byte, (length*3)/4)
+	if _, err := rand.Read(bytes); err != nil {
+		return "", err
+	}
+	return base64.URLEncoding.EncodeToString(bytes)[:length], nil
 }
