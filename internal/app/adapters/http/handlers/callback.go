@@ -40,8 +40,8 @@ func (h *Handlers) CallbackHandler(c *gin.Context) {
 	var userResp struct {
 		Data []struct {
 			ID          string `json:"id"`
-			Login       string `json:"login"`        // ← это имя канала
-			DisplayName string `json:"display_name"` // ← красивое имя
+			Login       string `json:"login"`
+			DisplayName string `json:"display_name"`
 			Email       string `json:"email"`
 		} `json:"data"`
 	}
@@ -55,7 +55,7 @@ func (h *Handlers) CallbackHandler(c *gin.Context) {
 	fmt.Println("User login:", userResp.Data[0].Login)
 
 	h.manager.Update(func(cfg *config.Config) {
-		cfg.UsersTokens[userResp.Data[0].Login] = *token
+		cfg.UsersTokens[userResp.Data[0].ID] = *token
 	})
 
 	c.String(200, "Успешно!")

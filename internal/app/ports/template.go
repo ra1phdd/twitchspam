@@ -68,7 +68,7 @@ type MwordPort interface {
 }
 
 type NukePort interface {
-	Start(punishment config.Punishment, containsWords, words []string, regexp *regexp.Regexp)
+	Start(punishment config.Punishment, duration time.Duration, containsWords, words []string, regexp *regexp.Regexp)
 	Cancel()
 	Check(text *domain.MessageText) *CheckerAction
 }

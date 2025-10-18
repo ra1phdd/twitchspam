@@ -52,7 +52,7 @@ func (u *User) FindMessages(msg *domain.ChatMessage) *ports.AnswerType {
 }
 
 func (u *User) handleStats(msg *domain.ChatMessage) *ports.AnswerType {
-	if !strings.HasPrefix(msg.Message.Text.Text(domain.Lower), "!stats") {
+	if !strings.HasPrefix(msg.Message.Text.Text(domain.LowerOption), "!stats") {
 		return nil
 	}
 
@@ -61,7 +61,7 @@ func (u *User) handleStats(msg *domain.ChatMessage) *ports.AnswerType {
 	}
 
 	target := msg.Chatter.Username
-	words := msg.Message.Text.Words(domain.Lower)
+	words := msg.Message.Text.Words(domain.LowerOption)
 
 	if len(words) > 1 {
 		switch words[1] {
@@ -82,12 +82,15 @@ func (u *User) handleStats(msg *domain.ChatMessage) *ports.AnswerType {
 }
 
 func (u *User) handleCommands(msg *domain.ChatMessage) *ports.AnswerType {
-	var text, replyUsername string
+	var replyUsername string
 	if msg.Reply != nil {
 		replyUsername = msg.Reply.ParentChatter.Username
 	}
 
+	text, count := "", 1
+	cfg := u.manager.Get()
 	words := msg.Message.Text.Words()
+
 	for _, word := range words {
 		word = strings.TrimSpace(word)
 		if word == "" {
@@ -98,7 +101,6 @@ func (u *User) handleCommands(msg *domain.ChatMessage) *ports.AnswerType {
 			replyUsername = strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(word, "@"), ","))
 		}
 
-		cfg := u.manager.Get()
 		cmd, ok := cfg.Commands[strings.ToLower(word)]
 		if !ok {
 			continue
@@ -106,6 +108,19 @@ func (u *User) handleCommands(msg *domain.ChatMessage) *ports.AnswerType {
 
 		if cmd.Options.IsPrivate && !msg.Chatter.IsBroadcaster && !msg.Chatter.IsMod {
 			return nil
+		}
+
+		if msg.Chatter.IsBroadcaster || msg.Chatter.IsMod {
+			for _, w := range msg.Message.Text.Words(domain.RemovePunctuationOption) {
+				c, err := strconv.Atoi(strings.TrimSpace(w))
+				if err == nil && c > 0 {
+					if c > 100 {
+						c = 100
+					}
+
+					count = c
+				}
+			}
 		}
 
 		if (cmd.Options.Mode == config.OnlineMode && !u.stream.IsLive()) ||
@@ -131,9 +146,15 @@ func (u *User) handleCommands(msg *domain.ChatMessage) *ports.AnswerType {
 		return nil
 	}
 
+	var msgs []string
+	for range count {
+		msgs = append(msgs, text)
+	}
+
+	noReply := ((msg.Chatter.IsBroadcaster || msg.Chatter.IsMod) && replyUsername == "") || count > 1
 	return &ports.AnswerType{
-		Text:          []string{text},
-		IsReply:       true,
+		Text:          msgs,
+		IsReply:       !noReply,
 		ReplyUsername: replyUsername,
 	}
 }

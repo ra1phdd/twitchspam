@@ -29,7 +29,7 @@ func NewNuke() *NukeTemplate {
 	return &NukeTemplate{}
 }
 
-func (n *NukeTemplate) Start(punishment config.Punishment, containsWords, words []string, regexp *regexp.Regexp) {
+func (n *NukeTemplate) Start(punishment config.Punishment, duration time.Duration, containsWords, words []string, regexp *regexp.Regexp) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 
@@ -39,7 +39,7 @@ func (n *NukeTemplate) Start(punishment config.Punishment, containsWords, words 
 	}
 
 	n.nuke = &Nuke{
-		expiresAt:     time.Now().Add(5 * time.Minute),
+		expiresAt:     time.Now().Add(duration),
 		punishment:    punishment,
 		containsWords: containsWords,
 		words:         words,
@@ -77,18 +77,20 @@ func (n *NukeTemplate) Check(text *domain.MessageText) *ports.CheckerAction {
 		}
 	}
 
-	if n.nuke.regexp != nil && n.nuke.regexp.MatchString(text.Text(domain.RemoveDuplicateLetters)) {
+	if n.nuke.regexp != nil && n.nuke.regexp.MatchString(text.Text()) {
 		return apply()
 	}
 
 	for _, w := range n.nuke.containsWords {
-		if strings.Contains(text.Text(domain.RemoveDuplicateLetters), w) {
+		w = domain.LowerOption.Fn(domain.RemoveDuplicateLettersOption.Fn(w))
+		if strings.Contains(text.Text(domain.LowerOption, domain.RemoveDuplicateLettersOption), w) {
 			return apply()
 		}
 	}
 
 	for _, w := range n.nuke.words {
-		if slices.Contains(text.Words(domain.RemoveDuplicateLetters), w) {
+		w = domain.LowerOption.Fn(domain.RemoveDuplicateLettersOption.Fn(w))
+		if slices.Contains(text.Words(domain.LowerOption, domain.RemoveDuplicateLettersOption), w) {
 			return apply()
 		}
 	}

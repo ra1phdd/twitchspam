@@ -5,7 +5,13 @@ import (
 	"twitchspam/internal/app/infrastructure/config"
 )
 
+type APIPollPort interface {
+	Submit(task func()) error
+	Stop()
+}
+
 type APIPort interface {
+	Pool() APIPollPort
 	GetChannelID(username string) (string, error)
 	GetLiveStreams(channelIDs []string) ([]*Stream, error)
 	GetUrlVOD(channelID string, streams []*config.Markers) (map[string]string, error)

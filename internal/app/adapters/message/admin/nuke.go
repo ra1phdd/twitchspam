@@ -28,9 +28,9 @@ func (n *Nuke) Execute(_ *config.Config, text *domain.MessageText) *ports.Answer
 }
 
 func (n *Nuke) handleNuke(text *domain.MessageText) *ports.AnswerType {
-	// !am nuke <*наказание> <*scrollback> <слова/фразы через запятую или regex>
+	// !am nuke <*наказание> <*длительность> <*scrollback> <слова/фразы через запятую или regex>
 	matches := n.re.FindStringSubmatch(text.Text())
-	if len(matches) != 4 {
+	if len(matches) != 5 {
 		return nonParametr
 	}
 
@@ -39,7 +39,8 @@ func (n *Nuke) handleNuke(text *domain.MessageText) *ports.AnswerType {
 		Action:   "timeout",
 		Duration: 60,
 	}
-	scrollback := n.messages.GetTTL()
+	duration := 5 * time.Minute
+	scrollback := min(n.messages.GetTTL(), 60)
 
 	if strings.TrimSpace(matches[1]) != "" {
 		p, err := n.template.Punishment().Parse(strings.TrimSpace(matches[1]), false)
@@ -51,18 +52,24 @@ func (n *Nuke) handleNuke(text *domain.MessageText) *ports.AnswerType {
 	}
 
 	if strings.TrimSpace(matches[2]) != "" {
-		if val, ok := n.template.Parser().ParseIntArg(strings.TrimSpace(matches[2]), 1, 180); ok {
+		if val, ok := n.template.Parser().ParseIntArg(strings.TrimSpace(matches[2]), 1, 3600); ok {
+			duration = time.Duration(val) * time.Second
+		}
+	}
+
+	if strings.TrimSpace(matches[3]) != "" {
+		if val, ok := n.template.Parser().ParseIntArg(strings.TrimSpace(matches[3]), 1, 180); ok {
 			scrollback = time.Duration(val) * time.Second
 		}
 	}
 
-	if strings.TrimSpace(matches[3]) == "" {
+	if strings.TrimSpace(matches[4]) == "" {
 		return &ports.AnswerType{
 			Text:    []string{"не указаны слова для массбана!"},
 			IsReply: true,
 		}
 	}
-	wordsMatches := n.reWords.FindAllStringSubmatch(strings.TrimSpace(matches[3]), -1)
+	wordsMatches := n.reWords.FindAllStringSubmatch(strings.TrimSpace(matches[4]), -1)
 
 	var containsWords, words []string
 	var re *regexp.Regexp
@@ -89,40 +96,45 @@ func (n *Nuke) handleNuke(text *domain.MessageText) *ports.AnswerType {
 		}
 	}
 
-	dur := time.Duration(punishment.Duration) * time.Second
-	apply := func(msgID, userID, username, text string) {
-		switch punishment.Action {
-		case checker.Ban:
-			n.log.Warn("Ban user", slog.String("username", username), slog.String("text", text))
-			n.api.BanUser(n.stream.ChannelID(), userID, "массбан")
-		case checker.Timeout:
-			n.log.Warn("Timeout user", slog.String("username", username), slog.String("text", text), slog.Int("duration", int(dur.Seconds())))
-			n.api.TimeoutUser(n.stream.ChannelID(), userID, int(dur.Seconds()), "массбан")
-		case checker.Delete:
-			n.log.Warn("Delete message", slog.String("username", username), slog.String("text", text))
-			if err := n.api.DeleteChatMessage(n.stream.ChannelID(), msgID); err != nil {
-				n.log.Error("Failed to delete message on chat", err)
-			}
-		}
-	}
+	go func() {
+		now := time.Now()
+		dur := time.Duration(punishment.Duration) * time.Second
 
-	now := time.Now()
-	n.template.Nuke().Start(punishment, containsWords, words, re)
-	for username, msgs := range n.messages.GetAllData() {
-		for messageID, msg := range msgs {
-			if now.Sub(msg.Time) >= scrollback {
-				continue
-			}
+		n.template.Nuke().Start(punishment, duration, containsWords, words, re)
+		for username, msgs := range n.messages.GetAllData() {
+			for messageID, msg := range msgs {
+				if now.Sub(msg.Time) >= scrollback {
+					continue
+				}
 
-			action := n.template.Nuke().Check(&msg.Data.Message.Text)
-			if action != nil && !msg.Data.Chatter.IsBroadcaster && !msg.Data.Chatter.IsMod {
-				apply(messageID, msg.Data.Chatter.UserID, username, msg.Data.Message.Text.Text())
-				if punishment.Action != "delete" {
-					break
+				action := n.template.Nuke().Check(&msg.Data.Message.Text)
+				if action != nil && !msg.Data.Chatter.IsBroadcaster && !msg.Data.Chatter.IsMod {
+					err := n.api.Pool().Submit(func() {
+						switch punishment.Action {
+						case checker.Ban:
+							n.log.Warn("Ban user", slog.String("username", username), slog.String("text", msg.Data.Message.Text.Text()))
+							n.api.BanUser(n.stream.ChannelID(), msg.Data.Chatter.UserID, "массбан")
+						case checker.Timeout:
+							n.log.Warn("Timeout user", slog.String("username", username), slog.String("text", msg.Data.Message.Text.Text()), slog.Int("duration", int(dur.Seconds())))
+							n.api.TimeoutUser(n.stream.ChannelID(), msg.Data.Chatter.UserID, int(duration.Seconds()), "массбан")
+						case checker.Delete:
+							n.log.Warn("Delete message", slog.String("username", username), slog.String("text", msg.Data.Message.Text.Text()))
+							if err := n.api.DeleteChatMessage(n.stream.ChannelID(), messageID); err != nil {
+								n.log.Error("Failed to delete message on chat", err)
+							}
+						}
+					})
+					if err != nil {
+						n.log.Error("Failed to submit request", err)
+					}
+
+					if punishment.Action != "delete" {
+						break
+					}
 				}
 			}
 		}
-	}
+	}()
 
 	if len(globalErrs) != 0 {
 		return &ports.AnswerType{
@@ -140,6 +152,7 @@ type NukeStop struct {
 func (n *NukeStop) Execute(_ *config.Config, _ *domain.MessageText) *ports.AnswerType {
 	return n.handleNukeStop()
 }
+
 func (n *NukeStop) handleNukeStop() *ports.AnswerType {
 	// !am nuke stop
 	n.template.Nuke().Cancel()

@@ -126,11 +126,11 @@ func New(log logger.Logger, manager *config.Manager, stream ports.StreamPort, ap
 var startApp = time.Now()
 
 func (a *Admin) FindMessages(msg *domain.ChatMessage) *ports.AnswerType {
-	if (!msg.Chatter.IsBroadcaster && !msg.Chatter.IsMod) || !strings.HasPrefix(msg.Message.Text.Text(domain.Lower), "!am") {
+	if (!msg.Chatter.IsBroadcaster && !msg.Chatter.IsMod) || !strings.HasPrefix(msg.Message.Text.Text(domain.LowerOption), "!am") {
 		return nil
 	}
 
-	words := msg.Message.Text.Words(domain.Lower)
+	words := msg.Message.Text.Words(domain.LowerOption)
 	if len(words) < 2 {
 		return notFoundCmd
 	}
@@ -157,7 +157,7 @@ func (a *Admin) FindMessages(msg *domain.ChatMessage) *ports.AnswerType {
 }
 
 func (c *CompositeCommand) Execute(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
-	words := text.Words(domain.Lower)
+	words := text.Words(domain.LowerOption)
 	if c.cursor >= len(words) {
 		if c.defaultCmd != nil {
 			return c.defaultCmd.Execute(cfg, text)
@@ -178,6 +178,7 @@ func (c *CompositeCommand) Execute(cfg *config.Config, text *domain.MessageText)
 
 func (a *Admin) buildCommandTree() ports.Command {
 	timer := &AddTimer{
+		Cfg:    a.manager.Get(),
 		Timers: a.timers,
 		Stream: a.stream,
 		Api:    a.api,
@@ -218,7 +219,7 @@ func (a *Admin) buildCommandTree() ports.Command {
 				subcommands: map[string]ports.Command{
 					"stop": &NukeStop{template: a.template},
 				},
-				defaultCmd: &Nuke{re: regexp.MustCompile(`(?i)^!am nuke(?:\s+(\S+))?(?:\s+(\S+))?\s+(.+)$`),
+				defaultCmd: &Nuke{re: regexp.MustCompile(`(?i)^!am nuke(?:\s+(\S+))?(?:\s+(\S+))?(?:\s+(\S+))?\s+(.+)$`),
 					reWords: regexp.MustCompile(`(?i)r'(.*?)'|r"(.*?)"|'(.*?)'|"(.*?)"|([^,'"\s]+)`),
 					log:     a.log, api: a.api, template: a.template, stream: a.stream, messages: a.messages},
 				cursor: 2,

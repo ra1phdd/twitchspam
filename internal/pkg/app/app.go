@@ -33,18 +33,16 @@ func New() error {
 	t := twitch.New(log, manager, client)
 
 	for _, channel := range cfg.App.ModChannels {
-		go func() {
-			prefixedLog := logger.NewPrefixedLogger(log, channel)
-			streams[channel] = stream.NewStream(channel, fs)
-			msg := message.New(prefixedLog, manager, streams[channel], t.API(), client)
+		prefixedLog := logger.NewPrefixedLogger(log, channel)
+		streams[channel] = stream.NewStream(channel, fs)
+		msg := message.New(prefixedLog, manager, streams[channel], t.API(), client)
 
-			if err := t.AddChannel(channel, streams[channel], msg); err != nil {
-				log.Info(fmt.Sprintf("[%s] Failed add channel", channel))
-				return
-			}
+		if err := t.AddChannel(channel, streams[channel], msg); err != nil {
+			log.Info(fmt.Sprintf("[%s] Failed add channel", channel))
+			continue
+		}
 
-			log.Info(fmt.Sprintf("[%s] Chatbot started", channel))
-		}()
+		log.Info(fmt.Sprintf("[%s] Chatbot started", channel))
 	}
 
 	go func() {

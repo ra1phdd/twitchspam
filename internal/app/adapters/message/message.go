@@ -59,7 +59,7 @@ func New(log logger.Logger, manager *config.Manager, stream ports.StreamPort, ap
 			continue
 		}
 
-		(&admin.AddTimer{Timers: timer, Stream: stream, Api: api}).AddTimer(cmd, data)
+		(&admin.AddTimer{Cfg: cfg, Timers: timer, Stream: stream, Api: api}).AddTimer(cmd, data)
 	}
 
 	return m
@@ -73,7 +73,7 @@ func (m *Message) Check(msg *domain.ChatMessage) {
 	m.messages.Push(msg.Chatter.Username, msg.Message.ID, storage.Message{
 		Data:               msg,
 		Time:               time.Now(),
-		HashWordsLowerNorm: domain.WordsToHashes(msg.Message.Text.Words(domain.RemovePunctuation)),
+		HashWordsLowerNorm: domain.WordsToHashes(msg.Message.Text.Words(domain.RemovePunctuationOption)),
 		IgnoreAntispam:     !m.cfg.Enabled || !m.template.SpamPause().CanProcess() || !m.cfg.Spam.SettingsDefault.Enabled,
 	})
 
@@ -115,7 +115,7 @@ func (m *Message) CheckAutomod(msg *domain.ChatMessage) {
 		time.Sleep(time.Duration(m.cfg.Automod.Delay) * time.Second)
 	}
 
-	if msg.Message.Text.Text(domain.RemoveDuplicateLetters) == "(" {
+	if msg.Message.Text.Text(domain.RemoveDuplicateLettersOption) == "(" {
 		err := m.api.ManageHeldAutoModMessage(m.cfg.App.UserID, msg.Message.ID, "ALLOW")
 		if err != nil {
 			m.log.Error("Failed to manage held automod", err)

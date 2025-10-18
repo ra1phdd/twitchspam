@@ -3,7 +3,6 @@ package domain
 import (
 	"strings"
 	"unicode"
-	"unsafe"
 )
 
 type ChatMessage struct {
@@ -45,19 +44,17 @@ type Message struct {
 type MessageText struct {
 	Original string
 
-	cacheText  map[uintptr]string
-	cacheWords map[uintptr][]string
+	cacheText  map[uint64]string
+	cacheWords map[uint64][]string
 }
 
 func (m *MessageText) ReplaceOriginal(text string) {
 	m.Original = text
-	m.cacheText = make(map[uintptr]string)
-	m.cacheWords = make(map[uintptr][]string)
+	m.cacheText = make(map[uint64]string)
+	m.cacheWords = make(map[uint64][]string)
 }
 
-type TextOptionFunc func(string) string
-
-func Lower(s string) string {
+func lower(s string) string {
 	return strings.ToLower(s)
 }
 
@@ -124,7 +121,7 @@ func isInvisibleRune(r rune) bool {
 	}
 }
 
-func RemovePunctuation(s string) string {
+func removePunctuation(s string) string {
 	var b strings.Builder
 	b.Grow(len(s))
 
@@ -166,7 +163,7 @@ func RemovePunctuation(s string) string {
 	return b.String()
 }
 
-func RemoveDuplicateLetters(s string) string {
+func removeDuplicateLetters(s string) string {
 	var b strings.Builder
 	b.Grow(len(s))
 	var prev rune
@@ -180,14 +177,34 @@ func RemoveDuplicateLetters(s string) string {
 	return b.String()
 }
 
-func (m *MessageText) Text(opts ...TextOptionFunc) string {
+type TextOptionFuncWithID struct {
+	Fn func(string) string
+	ID uint64
+}
+
+var LowerOption = TextOptionFuncWithID{
+	Fn: lower,
+	ID: 1,
+}
+
+var RemovePunctuationOption = TextOptionFuncWithID{
+	Fn: removePunctuation,
+	ID: 2,
+}
+
+var RemoveDuplicateLettersOption = TextOptionFuncWithID{
+	Fn: removeDuplicateLetters,
+	ID: 3,
+}
+
+func (m *MessageText) Text(opts ...TextOptionFuncWithID) string {
 	if m.cacheText == nil {
-		m.cacheText = make(map[uintptr]string)
+		m.cacheText = make(map[uint64]string)
 	}
 
-	var key uintptr
+	var key uint64
 	for _, opt := range opts {
-		key ^= uintptr(unsafe.Pointer(&opt))
+		key = key*31 + opt.ID
 	}
 
 	if val, ok := m.cacheText[key]; ok {
@@ -196,21 +213,21 @@ func (m *MessageText) Text(opts ...TextOptionFunc) string {
 
 	result := m.Original
 	for _, opt := range opts {
-		result = opt(result)
+		result = opt.Fn(result)
 	}
 
 	m.cacheText[key] = result
 	return result
 }
 
-func (m *MessageText) Words(opts ...TextOptionFunc) []string {
+func (m *MessageText) Words(opts ...TextOptionFuncWithID) []string {
 	if m.cacheWords == nil {
-		m.cacheWords = make(map[uintptr][]string)
+		m.cacheWords = make(map[uint64][]string)
 	}
 
-	var key uintptr
+	var key uint64
 	for _, opt := range opts {
-		key ^= uintptr(unsafe.Pointer(&opt))
+		key = key*31 + opt.ID
 	}
 
 	if val, ok := m.cacheWords[key]; ok {

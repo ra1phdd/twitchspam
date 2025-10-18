@@ -54,11 +54,11 @@ func (c *Checker) Check(msg *domain.ChatMessage, checkSpam bool) *ports.CheckerA
 		return action
 	}
 
-	if action := c.checkBanwords(msg.Message.Text.Text(domain.Lower, domain.RemovePunctuation, domain.RemoveDuplicateLetters), msg.Message.Text.Words()); action != nil {
+	if action := c.checkBanwords(msg.Message.Text.Text(domain.LowerOption, domain.RemovePunctuationOption, domain.RemoveDuplicateLettersOption), msg.Message.Text.Words()); action != nil {
 		return action
 	}
 
-	if action := c.checkAds(msg.Message.Text.Text(domain.Lower), msg.Chatter.Username); action != nil {
+	if action := c.checkAds(msg.Message.Text.Text(domain.LowerOption), msg.Chatter.Username); action != nil {
 		return action
 	}
 
@@ -158,7 +158,7 @@ func (c *Checker) checkSpam(msg *domain.ChatMessage) *ports.CheckerAction {
 		return nil
 	}
 
-	if action := c.handleWordLength(msg.Message.Text.Words(domain.Lower, domain.RemovePunctuation, domain.RemoveDuplicateLetters), settings); action != nil {
+	if action := c.handleWordLength(msg.Message.Text.Words(domain.LowerOption, domain.RemovePunctuationOption, domain.RemoveDuplicateLettersOption), settings); action != nil {
 		return action
 	}
 	countSpam := c.countSpamMessages(msg, settings)
@@ -210,7 +210,7 @@ func (c *Checker) checkSpam(msg *domain.ChatMessage) *ports.CheckerAction {
 
 func (c *Checker) countSpamMessages(msg *domain.ChatMessage, settings config.SpamSettings) int {
 	var countSpam, gap int
-	hash := domain.WordsToHashes(msg.Message.Text.Words(domain.RemovePunctuation))
+	hash := domain.WordsToHashes(msg.Message.Text.Words(domain.RemovePunctuationOption))
 	c.messages.ForEach(msg.Chatter.Username, func(item *storage.Message) {
 		if item.IgnoreAntispam {
 			return
@@ -218,7 +218,7 @@ func (c *Checker) countSpamMessages(msg *domain.ChatMessage, settings config.Spa
 
 		similarity := domain.JaccardHashSimilarity(hash, item.HashWordsLowerNorm)
 		if similarity >= settings.SimilarityThreshold {
-			_, isOnlyEmotes := c.sevenTV.EmoteStats(item.Data.Message.Text.Words(domain.RemovePunctuation))
+			_, isOnlyEmotes := c.sevenTV.EmoteStats(item.Data.Message.Text.Words(domain.RemovePunctuationOption))
 			if isOnlyEmotes || item.Data.Message.EmoteOnly {
 				return
 			}
@@ -250,7 +250,7 @@ func (c *Checker) handleWordLength(words []string, settings config.SpamSettings)
 }
 
 func (c *Checker) handleEmotes(msg *domain.ChatMessage, countSpam int) *ports.CheckerAction {
-	count, isOnlyEmotes := c.sevenTV.EmoteStats(msg.Message.Text.Words(domain.RemovePunctuation))
+	count, isOnlyEmotes := c.sevenTV.EmoteStats(msg.Message.Text.Words(domain.RemovePunctuationOption))
 
 	emoteOnly := msg.Message.EmoteOnly || isOnlyEmotes
 	if !emoteOnly {
@@ -361,11 +361,11 @@ func (c *Checker) matchExceptRule(msg *domain.ChatMessage, word string, re *rege
 		text = msg.Message.Text.Text()
 		words = msg.Message.Text.Words()
 	case opts.CaseSensitive:
-		text = msg.Message.Text.Text(domain.RemovePunctuation, domain.RemoveDuplicateLetters)
-		words = msg.Message.Text.Words(domain.RemovePunctuation, domain.RemoveDuplicateLetters)
+		text = msg.Message.Text.Text(domain.RemovePunctuationOption, domain.RemoveDuplicateLettersOption)
+		words = msg.Message.Text.Words(domain.RemovePunctuationOption, domain.RemoveDuplicateLettersOption)
 	default:
-		text = msg.Message.Text.Text(domain.Lower, domain.RemovePunctuation, domain.RemoveDuplicateLetters)
-		words = msg.Message.Text.Words(domain.Lower, domain.RemovePunctuation, domain.RemoveDuplicateLetters)
+		text = msg.Message.Text.Text(domain.LowerOption, domain.RemovePunctuationOption, domain.RemoveDuplicateLettersOption)
+		words = msg.Message.Text.Words(domain.LowerOption, domain.RemovePunctuationOption, domain.RemoveDuplicateLettersOption)
 	}
 
 	if re != nil {

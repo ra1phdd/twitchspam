@@ -240,6 +240,7 @@ func (c *SetCommandTimer) handleCommandTimersSet(cfg *config.Config, text *domai
 }
 
 type AddTimer struct {
+	Cfg    *config.Config
 	Timers ports.TimersPort
 	Stream ports.StreamPort
 	Api    ports.APIPort
@@ -265,10 +266,11 @@ func (a *AddTimer) AddTimer(key string, cmd *config.Commands) {
 			msg.Text = append(msg.Text, args["text"].(string))
 		}
 
-		if timer.Options.IsAnnounce {
+		if _, ok := a.Cfg.UsersTokens[a.Stream.ChannelID()]; ok && timer.Options.IsAnnounce {
 			_ = a.Api.SendChatAnnouncement(a.Stream.ChannelID(), args["text"].(string), timer.Options.ColorAnnounce)
-		} else {
-			a.Api.SendChatMessages(a.Stream.ChannelID(), msg)
+			return
 		}
+
+		a.Api.SendChatMessages(a.Stream.ChannelID(), msg)
 	})
 }

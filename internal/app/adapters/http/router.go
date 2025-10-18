@@ -36,10 +36,6 @@ func NewRouter(log logger.Logger, manager *config.Manager) *Router {
 }
 
 func (r *Router) Run() error {
-	return nil
-}
-
-func (r *Router) RunUnreleased() error {
 	cfg := r.manager.Get()
 	certManager := &autocert.Manager{
 		Prompt:     autocert.AcceptTOS,
@@ -66,7 +62,7 @@ func (r *Router) RunUnreleased() error {
 		return err
 	}
 
-	return r.router.Run(":7777")
+	return nil
 }
 
 func (r *Router) newServer(addr string, handler http.Handler) *http.Server {

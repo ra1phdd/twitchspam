@@ -160,17 +160,17 @@ func (t *MwordTemplate) matchMwordRule(msg *domain.ChatMessage, word string, re 
 		text = msg.Message.Text.Text()
 		words = msg.Message.Text.Words()
 	case opts.NoRepeat:
-		text = msg.Message.Text.Text(domain.Lower)
-		words = msg.Message.Text.Words(domain.Lower)
+		text = msg.Message.Text.Text(domain.LowerOption)
+		words = msg.Message.Text.Words(domain.LowerOption)
 	case opts.CaseSensitive:
-		text = msg.Message.Text.Text(domain.RemovePunctuation, domain.RemoveDuplicateLetters)
-		words = msg.Message.Text.Words(domain.RemovePunctuation, domain.RemoveDuplicateLetters)
+		text = msg.Message.Text.Text(domain.RemovePunctuationOption, domain.RemoveDuplicateLettersOption)
+		words = msg.Message.Text.Words(domain.RemovePunctuationOption, domain.RemoveDuplicateLettersOption)
 	case opts.Contains:
-		text = msg.Message.Text.Text(domain.Lower)
-		words = msg.Message.Text.Words(domain.Lower)
+		text = msg.Message.Text.Text(domain.LowerOption)
+		words = msg.Message.Text.Words(domain.LowerOption)
 	default:
-		text = msg.Message.Text.Text(domain.Lower, domain.RemovePunctuation, domain.RemoveDuplicateLetters)
-		words = msg.Message.Text.Words(domain.Lower, domain.RemovePunctuation, domain.RemoveDuplicateLetters)
+		text = msg.Message.Text.Text(domain.LowerOption, domain.RemovePunctuationOption, domain.RemoveDuplicateLettersOption)
+		words = msg.Message.Text.Words(domain.LowerOption, domain.RemovePunctuationOption, domain.RemoveDuplicateLettersOption)
 	}
 
 	if re != nil {
@@ -188,6 +188,6 @@ func (t *MwordTemplate) matchMwordRule(msg *domain.ChatMessage, word string, re 
 }
 
 func (t *MwordTemplate) getCacheKey(msg *domain.ChatMessage) string {
-	return fmt.Sprintf("%s_%v_%v", msg.Message.Text.Text(domain.RemovePunctuation),
+	return fmt.Sprintf("%s_%v_%v", msg.Message.Text.Text(domain.RemovePunctuationOption),
 		msg.Chatter.IsVip, msg.Chatter.IsSubscriber)
 }
