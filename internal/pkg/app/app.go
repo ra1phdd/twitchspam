@@ -51,6 +51,7 @@ func New() error {
 			continue
 		}
 
+		metrics.MessagesPerStream.With(prometheus.Labels{"channel": channel}).Add(0)
 		metrics.ModerationActions.With(prometheus.Labels{"channel": channel, "action": "delete"}).Set(0)
 		metrics.ModerationActions.With(prometheus.Labels{"channel": channel, "action": "timeout"}).Set(0)
 		metrics.ModerationActions.With(prometheus.Labels{"channel": channel, "action": "ban"}).Set(0)

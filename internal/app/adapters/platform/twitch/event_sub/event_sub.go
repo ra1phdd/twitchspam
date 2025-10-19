@@ -181,7 +181,8 @@ func (es *EventSub) handleMessage(cancel context.CancelFunc, msgBytes []byte) {
 			if c, ok := es.channels[msgEvent.BroadcasterUserID]; ok {
 				startProcessing := time.Now()
 				c.message.Check(es.convertMap(msgEvent))
-				metrics.MessageProcessingTime.Observe(time.Since(startProcessing).Seconds())
+				endProcessing := time.Since(startProcessing).Seconds()
+				metrics.MessageProcessingTime.Observe(endProcessing)
 			}
 		case "automod.message.hold":
 			var am AutomodHoldEvent
@@ -211,7 +212,8 @@ func (es *EventSub) handleMessage(cancel context.CancelFunc, msgBytes []byte) {
 				go func() {
 					startProcessing := time.Now()
 					c.message.CheckAutomod(msg)
-					metrics.MessageProcessingTime.Observe(float64(time.Since(startProcessing).Milliseconds()))
+					endProcessing := time.Since(startProcessing).Seconds()
+					metrics.MessageProcessingTime.Observe(endProcessing)
 				}()
 			}
 		case "stream.online":
