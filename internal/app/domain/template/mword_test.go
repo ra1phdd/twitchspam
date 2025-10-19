@@ -8,7 +8,9 @@ import (
 )
 
 func TestMatchMwordRule_CaseSensitiveAlwaysMode(t *testing.T) {
-	tmpl := &MwordTemplate{}
+	tmpl := New(
+		WithMword([]config.Mword{}, make(map[string]*config.MwordGroup)),
+	)
 
 	msg := &domain.ChatMessage{
 		Message: domain.Message{
@@ -16,18 +18,34 @@ func TestMatchMwordRule_CaseSensitiveAlwaysMode(t *testing.T) {
 		},
 	}
 
-	opts := config.MwordOptions{
-		CaseSensitive: true,
-		Mode:          config.AlwaysMode,
+	matched := tmpl.Mword().Check(msg, true)
+	assert.False(t, len(matched) > 0, "issuing punishments without mwords")
+
+	tmpl.Mword().Update([]config.Mword{
+		{
+			Punishments: []config.Punishment{
+				{
+					Action:   "timeout",
+					Duration: 600,
+				},
+			},
+			Options: config.MwordOptions{
+				CaseSensitive: true,
+				Mode:          config.AlwaysMode,
+			},
+			Word: "беZ пОлитики",
+		},
+	}, make(map[string]*config.MwordGroup))
+
+	matched = tmpl.Mword().Check(msg, true)
+	assert.True(t, len(matched) > 0, "the punishment was not issued under the current law")
+
+	msg = &domain.ChatMessage{
+		Message: domain.Message{
+			Text: domain.MessageText{Original: "беz политики"},
+		},
 	}
 
-	word := "беZ пОлитики"
-
-	matched := tmpl.matchMwordRule(msg, word, nil, opts, true)
-	assert.True(t, matched, "ожидалось, что слово 'беZ' будет найдено при CaseSensitive=true и AlwaysMode")
-
-	// Проверяем, что при изменённом регистре не совпадает
-	word = "беz политики"
-	matched = tmpl.matchMwordRule(msg, word, nil, opts, true)
-	assert.False(t, matched, "ожидалось, что слово 'Без' не совпадёт при CaseSensitive=true")
+	matched = tmpl.Mword().Check(msg, true)
+	assert.False(t, len(matched) > 0, "the punishment was given for a word with a mismatched case")
 }

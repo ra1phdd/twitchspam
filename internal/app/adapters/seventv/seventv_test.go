@@ -19,7 +19,7 @@ func TestEmoteStats(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	a := api.NewTwitch(logger.New(), manager.Get(), &http.Client{})
+	a := api.NewTwitch(logger.New(), manager, &http.Client{}, 5)
 	channelID, err := a.GetChannelID("stintik")
 	if err != nil {
 		t.Fatal(err)

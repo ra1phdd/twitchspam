@@ -240,6 +240,13 @@ func (t *SetTitle) handleSetTitle(text *domain.MessageText) *ports.AnswerType {
 		return nonParametr
 	}
 
+	if len(strings.TrimSpace(matches[1])) > 140 {
+		return &ports.AnswerType{
+			Text:    []string{"название стрима не может быть длиннее 140 символов!"},
+			IsReply: true,
+		}
+	}
+
 	err := t.api.UpdateChannelTitle(t.stream.ChannelID(), strings.TrimSpace(matches[1]))
 	if err != nil {
 		t.log.Error("Failed to update channel title", err)

@@ -130,17 +130,19 @@ func (m *SetMword) handleMwSet(cfg *config.Config, text *domain.MessageText) *po
 	}
 
 	var punishments []config.Punishment
-	for _, pa := range strings.Split(strings.TrimSpace(matches[1]), ",") {
-		pa = strings.TrimSpace(pa)
-		if pa == "" {
-			continue
-		}
+	if strings.TrimSpace(matches[1]) != "" {
+		for _, pa := range strings.Split(strings.TrimSpace(matches[1]), ",") {
+			pa = strings.TrimSpace(pa)
+			if pa == "" {
+				continue
+			}
 
-		p, err := m.template.Punishment().Parse(pa, false)
-		if err != nil {
-			return errorPunishmentParse
+			p, err := m.template.Punishment().Parse(pa, false)
+			if err != nil {
+				return errorPunishmentParse
+			}
+			punishments = append(punishments, p)
 		}
-		punishments = append(punishments, p)
 	}
 
 	var edited, notFound []string
@@ -293,11 +295,9 @@ func (m *AddMwordGroup) Execute(cfg *config.Config, text *domain.MessageText) *p
 }
 
 func (m *AddMwordGroup) handleMwgAdd(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
-	textWithoutOpts, opts := m.template.Options().ParseAll(text.Text(), template.MwordOptions)
-
 	// !am mwg add <название_группы> <слова/фразы через запятую>
 	// или !am mwg add <название_группы> re <name> <regex>
-	matches := m.re.FindStringSubmatch(textWithoutOpts)
+	matches := m.re.FindStringSubmatch(text.Text())
 	if len(matches) != 6 {
 		return nonParametr
 	}
@@ -307,11 +307,8 @@ func (m *AddMwordGroup) handleMwgAdd(cfg *config.Config, text *domain.MessageTex
 		return notFoundMwordGroup
 	}
 
-	var punishments []config.Punishment
-	// если matches не равен пустоте то записывать
-
-	if strings.ToLower(strings.TrimSpace(matches[2])) == "re" {
-		name, reStr := strings.TrimSpace(matches[3]), strings.TrimSpace(matches[4])
+	if strings.ToLower(strings.TrimSpace(matches[3])) == "re" {
+		name, reStr := strings.TrimSpace(matches[4]), strings.TrimSpace(matches[5])
 
 		re, err := regexp.Compile(reStr)
 		if err != nil {
@@ -319,17 +316,15 @@ func (m *AddMwordGroup) handleMwgAdd(cfg *config.Config, text *domain.MessageTex
 		}
 
 		cfg.MwordGroup[groupName].Words = append(cfg.MwordGroup[groupName].Words, config.Mword{
-			Punishments: punishments,
-			Options:     m.template.Options().MergeMword(config.MwordOptions{}, opts),
-			NameRegexp:  name,
-			Regexp:      re,
+			NameRegexp: name,
+			Regexp:     re,
 		})
 		m.template.Mword().Update(cfg.Mword, cfg.MwordGroup)
 		return success
 	}
 
 	var added, exists []string
-	for _, word := range strings.Split(strings.TrimSpace(matches[5]), ",") {
+	for _, word := range strings.Split(strings.TrimSpace(matches[6]), ",") {
 		word = strings.TrimSpace(word)
 		if word == "" {
 			continue
@@ -341,15 +336,61 @@ func (m *AddMwordGroup) handleMwgAdd(cfg *config.Config, text *domain.MessageTex
 		}
 
 		cfg.MwordGroup[groupName].Words = append(cfg.MwordGroup[groupName].Words, config.Mword{
-			Punishments: punishments,
-			Options:     m.template.Options().MergeMword(config.MwordOptions{}, opts),
-			Word:        word,
+			Word: word,
 		})
 		added = append(added, word)
 	}
 
 	m.template.Mword().Update(cfg.Mword, cfg.MwordGroup)
 	return buildResponse("мворды не указаны", RespArg{Items: added, Name: "добавлены"}, RespArg{Items: exists, Name: "уже существуют"})
+}
+
+type GlobalSetMwordGroup struct {
+	re       *regexp.Regexp
+	template ports.TemplatePort
+}
+
+func (m *GlobalSetMwordGroup) Execute(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
+	return m.handleMwgGlobalSet(cfg, text)
+}
+
+func (m *GlobalSetMwordGroup) handleMwgGlobalSet(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
+	textWithoutOpts, opts := m.template.Options().ParseAll(text.Text(), template.MwordOptions)
+
+	// !am mwg set <название_группы> <*наказания через запятую> <*опции>
+	matches := m.re.FindStringSubmatch(textWithoutOpts)
+	if len(matches) != 3 {
+		return nonParametr
+	}
+
+	groupName := strings.TrimSpace(matches[1])
+	if _, exists := cfg.MwordGroup[groupName]; !exists {
+		return notFoundMwordGroup
+	}
+
+	var punishments []config.Punishment
+	if strings.TrimSpace(matches[2]) != "" {
+		for _, pa := range strings.Split(strings.TrimSpace(matches[2]), ",") {
+			pa = strings.TrimSpace(pa)
+			if pa == "" {
+				continue
+			}
+
+			p, err := m.template.Punishment().Parse(pa, false)
+			if err != nil {
+				return errorPunishmentParse
+			}
+			punishments = append(punishments, p)
+		}
+	}
+
+	cfg.MwordGroup[groupName].Options = m.template.Options().MergeMword(cfg.MwordGroup[groupName].Options, opts)
+	if len(punishments) != 0 {
+		cfg.MwordGroup[groupName].Punishments = punishments
+	}
+
+	m.template.Mword().Update(cfg.Mword, cfg.MwordGroup)
+	return success
 }
 
 type SetMwordGroup struct {
@@ -364,10 +405,9 @@ func (m *SetMwordGroup) Execute(cfg *config.Config, text *domain.MessageText) *p
 func (m *SetMwordGroup) handleMwgSet(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
 	textWithoutOpts, opts := m.template.Options().ParseAll(text.Text(), template.MwordOptions)
 
-	// !am mwg set <название_группы> <наказания через запятую>
-	// или !am mwg set <название_группы>
+	// !am mwg set <название_группы> <*наказания через запятую> <слова/фразы или regex> <*опции>
 	matches := m.re.FindStringSubmatch(textWithoutOpts)
-	if len(matches) != 3 {
+	if len(matches) != 4 {
 		return nonParametr
 	}
 
@@ -375,27 +415,46 @@ func (m *SetMwordGroup) handleMwgSet(cfg *config.Config, text *domain.MessageTex
 	if _, exists := cfg.MwordGroup[groupName]; !exists {
 		return notFoundMwordGroup
 	}
-	cfg.MwordGroup[groupName].Options = m.template.Options().MergeMword(cfg.MwordGroup[groupName].Options, opts)
 
 	var punishments []config.Punishment
-	for _, pa := range strings.Split(strings.TrimSpace(matches[2]), ",") {
-		pa = strings.TrimSpace(pa)
-		if pa == "" {
+	if strings.TrimSpace(matches[2]) != "" {
+		for _, pa := range strings.Split(strings.TrimSpace(matches[2]), ",") {
+			pa = strings.TrimSpace(pa)
+			if pa == "" {
+				continue
+			}
+
+			p, err := m.template.Punishment().Parse(pa, false)
+			if err != nil {
+				return errorPunishmentParse
+			}
+			punishments = append(punishments, p)
+		}
+	}
+
+	var edited, notFound []string
+	for _, word := range strings.Split(strings.TrimSpace(matches[3]), ",") {
+		word = strings.TrimSpace(word)
+		if word == "" {
 			continue
 		}
 
-		p, err := m.template.Punishment().Parse(pa, false)
-		if err != nil {
-			return errorPunishmentParse
+		i := slices.IndexFunc(cfg.MwordGroup[groupName].Words, func(w config.Mword) bool { return w.Word == word })
+		if i == -1 {
+			notFound = append(notFound, word)
+			continue
 		}
-		punishments = append(punishments, p)
+
+		if len(punishments) != 0 {
+			cfg.MwordGroup[groupName].Words[i].Punishments = punishments
+		}
+		cfg.MwordGroup[groupName].Words[i].Options = m.template.Options().MergeMword(cfg.MwordGroup[groupName].Words[i].Options, opts)
+
+		edited = append(edited, word)
 	}
 
-	if len(punishments) != 0 {
-		cfg.MwordGroup[groupName].Punishments = punishments
-	}
 	m.template.Mword().Update(cfg.Mword, cfg.MwordGroup)
-	return success
+	return buildResponse("мворды не указаны", RespArg{Items: edited, Name: "изменены"}, RespArg{Items: notFound, Name: "не найдены"})
 }
 
 type DelMwordGroup struct {
