@@ -18,7 +18,7 @@ import (
 func New() error {
 	log := logger.New()
 	client := &http.Client{Timeout: 10 * time.Second}
-	fs := file_server.New(client)
+	fs := file_server.New(log, client)
 
 	manager, err := config.New("config.json")
 	if err != nil {
@@ -99,6 +99,9 @@ func New() error {
 		}
 	}()
 
-	r := router.NewRouter(log, manager)
+	r, err := router.NewRouter(log, manager)
+	if err != nil {
+		return err
+	}
 	return r.Run()
 }

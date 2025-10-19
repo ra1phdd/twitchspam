@@ -24,7 +24,7 @@ func TestEmoteStats(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	s := stream.NewStream("stintik", file_server.New(&http.Client{}))
+	s := stream.NewStream("stintik", file_server.New(logger.New(), &http.Client{}))
 	s.SetChannelID(channelID)
 
 	sv := seventv.New(logger.New(), manager.Get(), s)
@@ -42,8 +42,8 @@ func TestEmoteStats(t *testing.T) {
 			wantOnlyEmo: false,
 		},
 		{
-			name:        "LL",
-			words:       []string{"LL"},
+			name:        "zxc",
+			words:       []string{"zxc"},
 			wantCount:   1,
 			wantOnlyEmo: true,
 		},

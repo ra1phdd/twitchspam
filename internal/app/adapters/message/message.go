@@ -33,7 +33,7 @@ type Message struct {
 
 func New(log logger.Logger, manager *config.Manager, stream ports.StreamPort, api ports.APIPort, client *http.Client) *Message {
 	cfg := manager.Get()
-	fs := file_server.New(client)
+	fs := file_server.New(log, client)
 	timer := timers.NewTimingWheel(100*time.Millisecond, 600)
 
 	m := &Message{

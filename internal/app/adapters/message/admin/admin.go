@@ -186,9 +186,14 @@ func (a *Admin) buildCommandTree() ports.Command {
 
 	return &CompositeCommand{
 		subcommands: map[string]ports.Command{
-			"ping":   &Ping{},
-			"on":     &OnOff{enabled: true, template: a.template},
-			"off":    &OnOff{enabled: false, template: a.template},
+			"ping": &Ping{},
+			"main": &CompositeCommand{
+				subcommands: map[string]ports.Command{
+					"on":  &OnOff{enabled: true, template: a.template},
+					"off": &OnOff{enabled: false, template: a.template},
+				},
+				cursor: 2,
+			},
 			"status": &Status{},
 			"say":    &Say{re: regexp.MustCompile(`(?i)^!am\s+say\s+(.+)$`)},
 			"spam":   &Spam{re: regexp.MustCompile(`(?i)^!am\s+spam\s+(.+)\s+(.+)$`)},

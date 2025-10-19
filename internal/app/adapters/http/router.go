@@ -21,16 +21,21 @@ type Router struct {
 	manager *config.Manager
 }
 
-func NewRouter(log logger.Logger, manager *config.Manager) *Router {
+func NewRouter(log logger.Logger, manager *config.Manager) (*Router, error) {
+	h, err := handlers.New(log, manager)
+	if err != nil {
+		return nil, err
+	}
+
 	r := &Router{
 		router:   gin.Default(),
-		handlers: handlers.New(manager),
+		handlers: h,
 		log:      log,
 		manager:  manager,
 	}
 
 	r.router.GET("/", r.handlers.IndexHandler)
-	return r
+	return r, nil
 }
 
 func (r *Router) Run() error {
