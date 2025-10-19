@@ -70,7 +70,7 @@ var (
 		prometheus.HistogramOpts{
 			Name:    "bot_message_processing_milliseconds",
 			Help:    "Average time to process a message",
-			Buckets: prometheus.DefBuckets,
+			Buckets: prometheus.ExponentialBuckets(0.00005, 1.5, 25),
 		},
 	)
 

@@ -68,9 +68,6 @@ func New(log logger.Logger, manager *config.Manager, stream ports.StreamPort, ap
 }
 
 func (m *Message) Check(msg *domain.ChatMessage) {
-	startProcessing := time.Now()
-	defer metrics.MessageProcessingTime.Observe(float64(time.Since(startProcessing).Milliseconds()))
-
 	if m.stream.IsLive() {
 		m.stream.Stats().AddMessage(msg.Chatter.Username)
 		metrics.MessagesPerStream.With(prometheus.Labels{"channel": m.stream.ChannelName()}).Inc()
@@ -109,9 +106,6 @@ func (m *Message) Check(msg *domain.ChatMessage) {
 }
 
 func (m *Message) CheckAutomod(msg *domain.ChatMessage) {
-	startProcessing := time.Now()
-	defer metrics.MessageProcessingTime.Observe(float64(time.Since(startProcessing).Milliseconds()))
-
 	if m.stream.IsLive() {
 		m.stream.Stats().AddMessage(msg.Chatter.Username)
 		metrics.MessagesPerStream.With(prometheus.Labels{"channel": m.stream.ChannelName()}).Inc()
