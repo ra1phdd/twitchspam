@@ -31,6 +31,12 @@ func New() error {
 	log.SetLogLevel(cfg.App.LogLevel)
 	gin.SetMode(cfg.App.GinMode)
 
+	prometheus.MustRegister(
+		metrics.BotEnabled, metrics.AntiSpamEnabled, metrics.StreamActive,
+		metrics.OnlineViewers, metrics.StreamStartTime, metrics.StreamEndTime, metrics.MessagesPerStream,
+		metrics.MessageProcessingTime, metrics.ModerationActions, metrics.UserCommands,
+	)
+
 	metrics.BotEnabled.Set(map[bool]float64{true: 1, false: 0}[cfg.Enabled])
 	metrics.AntiSpamEnabled.With(prometheus.Labels{"type": "default"}).Set(map[bool]float64{true: 1, false: 0}[cfg.Spam.SettingsDefault.Enabled])
 	metrics.AntiSpamEnabled.With(prometheus.Labels{"type": "vip"}).Set(map[bool]float64{true: 1, false: 0}[cfg.Spam.SettingsVIP.Enabled])
