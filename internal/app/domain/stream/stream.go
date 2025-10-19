@@ -1,14 +1,17 @@
 package stream
 
 import (
+	"github.com/prometheus/client_golang/prometheus"
 	"sync"
 	"sync/atomic"
 	"time"
+	"twitchspam/internal/app/adapters/metrics"
 	"twitchspam/internal/app/ports"
 )
 
 type Stream struct {
-	mu sync.RWMutex
+	mu        sync.RWMutex
+	onceStart sync.Once
 
 	channelID   string
 	channelName string
@@ -20,7 +23,7 @@ type Stream struct {
 
 func NewStream(channelName string, fs ports.FileServerPort) *Stream {
 	s := &Stream{
-		stats: newStats(fs),
+		stats: newStats(channelName, fs),
 	}
 
 	s.SetChannelName(channelName)
@@ -37,6 +40,7 @@ func (s *Stream) IsLive() bool {
 
 func (s *Stream) SetIslive(v bool) {
 	s.isLive.Store(v)
+	metrics.StreamActive.With(prometheus.Labels{"channel": s.channelName}).Set(map[bool]float64{true: 1, false: 0}[v])
 }
 
 func (s *Stream) ChannelID() string {
@@ -81,4 +85,8 @@ func (s *Stream) Category() string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.category
+}
+
+func (s *Stream) OnceStart() *sync.Once {
+	return &s.onceStart
 }

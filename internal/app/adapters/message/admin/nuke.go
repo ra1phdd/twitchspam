@@ -113,13 +113,13 @@ func (n *Nuke) handleNuke(text *domain.MessageText) *ports.AnswerType {
 						switch punishment.Action {
 						case checker.Ban:
 							n.log.Warn("Ban user", slog.String("username", username), slog.String("text", msg.Data.Message.Text.Text()))
-							n.api.BanUser(n.stream.ChannelID(), msg.Data.Chatter.UserID, "массбан")
+							n.api.BanUser(n.stream.ChannelName(), n.stream.ChannelID(), msg.Data.Chatter.UserID, "массбан")
 						case checker.Timeout:
 							n.log.Warn("Timeout user", slog.String("username", username), slog.String("text", msg.Data.Message.Text.Text()), slog.Int("duration", int(dur.Seconds())))
-							n.api.TimeoutUser(n.stream.ChannelID(), msg.Data.Chatter.UserID, int(duration.Seconds()), "массбан")
+							n.api.TimeoutUser(n.stream.ChannelName(), n.stream.ChannelID(), msg.Data.Chatter.UserID, int(duration.Seconds()), "массбан")
 						case checker.Delete:
 							n.log.Warn("Delete message", slog.String("username", username), slog.String("text", msg.Data.Message.Text.Text()))
-							if err := n.api.DeleteChatMessage(n.stream.ChannelID(), messageID); err != nil {
+							if err := n.api.DeleteChatMessage(n.stream.ChannelName(), n.stream.ChannelID(), messageID); err != nil {
 								n.log.Error("Failed to delete message on chat", err)
 							}
 						}

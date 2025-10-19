@@ -2,18 +2,21 @@ package stream
 
 import (
 	"fmt"
+	"github.com/prometheus/client_golang/prometheus"
 	"math"
 	"sort"
 	"strings"
 	"sync"
 	"time"
+	"twitchspam/internal/app/adapters/metrics"
 	"twitchspam/internal/app/domain"
 	"twitchspam/internal/app/ports"
 )
 
 type Stats struct {
-	fs ports.FileServerPort
-	mu sync.Mutex
+	channelName string
+	fs          ports.FileServerPort
+	mu          sync.Mutex
 
 	startTime       time.Time
 	startStreamTime time.Time
@@ -37,8 +40,11 @@ type CategoryInterval struct {
 	EndTime   time.Time
 }
 
-func newStats(fs ports.FileServerPort) *Stats {
-	return &Stats{fs: fs}
+func newStats(channelName string, fs ports.FileServerPort) *Stats {
+	return &Stats{
+		channelName: channelName,
+		fs:          fs,
+	}
 }
 
 func (s *Stats) SetStartTime(t time.Time) {
@@ -57,6 +63,8 @@ func (s *Stats) SetStartTime(t time.Time) {
 	s.countDeletes = make(map[string]int)
 	s.countTimeouts = make(map[string]int)
 	s.countBans = make(map[string]int)
+
+	metrics.StreamStartTime.With(prometheus.Labels{"channel": s.channelName}).Set(float64(s.startStreamTime.Unix()))
 }
 
 func (s *Stats) GetStartTime() time.Time {
@@ -70,6 +78,8 @@ func (s *Stats) SetEndTime(t time.Time) {
 	s.mu.Lock()
 	s.endStreamTime = t
 	s.mu.Unlock()
+
+	metrics.StreamEndTime.With(prometheus.Labels{"channel": s.channelName}).Set(float64(s.endStreamTime.Unix()))
 }
 
 func (s *Stats) GetEndTime() time.Time {
@@ -92,6 +102,8 @@ func (s *Stats) SetOnline(viewers int) {
 	s.online.sumViewers += int64(viewers)
 	s.online.count++
 	s.mu.Unlock()
+
+	metrics.OnlineViewers.With(prometheus.Labels{"channel": s.channelName}).Set(float64(viewers))
 }
 
 func (s *Stats) AddMessage(username string) {

@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"github.com/prometheus/client_golang/prometheus"
 	"log/slog"
 	"net/url"
+	"twitchspam/internal/app/adapters/metrics"
 	"twitchspam/internal/app/ports"
 )
 
@@ -86,7 +88,7 @@ type AnnouncementRequest struct {
 	Color   string `json:"color,omitempty"`
 }
 
-func (t *Twitch) DeleteChatMessage(channelID, messageID string) error {
+func (t *Twitch) DeleteChatMessage(channelName, channelID, messageID string) error {
 	params := url.Values{}
 	params.Set("broadcaster_id", channelID)
 	params.Set("moderator_id", t.cfg.App.UserID)
@@ -98,10 +100,12 @@ func (t *Twitch) DeleteChatMessage(channelID, messageID string) error {
 	if err != nil {
 		return err
 	}
+
+	metrics.ModerationActions.With(prometheus.Labels{"channel": channelName, "action": "delete"}).Inc()
 	return nil
 }
 
-func (t *Twitch) TimeoutUser(channelID, userID string, duration int, reason string) {
+func (t *Twitch) TimeoutUser(channelName, channelID, userID string, duration int, reason string) {
 	reqBody := TimeoutRequest{
 		Data: TimeoutData{
 			UserID:   userID,
@@ -113,6 +117,7 @@ func (t *Twitch) TimeoutUser(channelID, userID string, duration int, reason stri
 	bodyBytes, err := json.Marshal(reqBody)
 	if err != nil {
 		t.log.Error("Failed to marshel body", err)
+		return
 	}
 
 	params := url.Values{}
@@ -122,11 +127,16 @@ func (t *Twitch) TimeoutUser(channelID, userID string, duration int, reason stri
 	err = t.doTwitchRequest("POST", "https://api.twitch.tv/helix/moderation/bans?"+params.Encode(), nil, bytes.NewReader(bodyBytes), nil)
 	if err != nil {
 		t.log.Error("Failed to send timeout request", err)
+		return
 	}
 
 	t.log.Info("Timeout applied successfully", slog.String("user_id", userID), slog.Int("duration", duration), slog.String("reason", reason))
+	metrics.ModerationActions.With(prometheus.Labels{"channel": channelName, "action": "timeout"}).Inc()
 }
 
-func (t *Twitch) BanUser(channelID, userID string, reason string) {
-	t.TimeoutUser(channelID, userID, 0, reason)
+func (t *Twitch) BanUser(channelName, channelID, userID string, reason string) {
+	t.TimeoutUser(channelName, channelID, userID, 0, reason)
+
+	metrics.ModerationActions.With(prometheus.Labels{"channel": channelName, "action": "ban"}).Inc()
+	metrics.ModerationActions.With(prometheus.Labels{"channel": channelName, "action": "timeout"}).Dec()
 }

@@ -18,9 +18,9 @@ type APIPort interface {
 	SendChatMessages(channelID string, msgs *AnswerType)
 	SendChatMessage(channelID, message string) error
 	SendChatAnnouncement(channelID, message, color string) error
-	DeleteChatMessage(channelID, messageID string) error
-	TimeoutUser(channelID, userID string, duration int, reason string)
-	BanUser(channelID, userID string, reason string)
+	DeleteChatMessage(channelName, channelID, messageID string) error
+	TimeoutUser(channelName, channelID, userID string, duration int, reason string)
+	BanUser(channelName, channelID, userID string, reason string)
 	SearchCategory(gameName string) (string, string, error)
 	UpdateChannelGameID(broadcasterID string, gameID string) error
 	UpdateChannelTitle(broadcasterID string, title string) error

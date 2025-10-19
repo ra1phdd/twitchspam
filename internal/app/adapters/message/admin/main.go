@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"twitchspam/internal/app/adapters/metrics"
 	"twitchspam/internal/app/domain"
 	"twitchspam/internal/app/infrastructure/config"
 	"twitchspam/internal/app/ports"
@@ -48,6 +49,8 @@ func (o *OnOff) Execute(cfg *config.Config, _ *domain.MessageText) *ports.Answer
 
 func (o *OnOff) handleOnOff(cfg *config.Config, enabled bool) *ports.AnswerType {
 	cfg.Enabled = enabled
+
+	metrics.BotEnabled.Set(map[bool]float64{true: 1, false: 0}[enabled])
 	o.template.SpamPause().Pause(0)
 	return success
 }

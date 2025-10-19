@@ -1,10 +1,12 @@
 package user
 
 import (
+	"github.com/prometheus/client_golang/prometheus"
 	"golang.org/x/time/rate"
 	"strconv"
 	"strings"
 	"sync"
+	"twitchspam/internal/app/adapters/metrics"
 	"twitchspam/internal/app/domain"
 	"twitchspam/internal/app/infrastructure/config"
 	"twitchspam/internal/app/ports"
@@ -91,7 +93,7 @@ func (u *User) handleCommands(msg *domain.ChatMessage) *ports.AnswerType {
 	cfg := u.manager.Get()
 	words := msg.Message.Text.Words()
 
-	for _, word := range words {
+	for i, word := range words {
 		word = strings.TrimSpace(word)
 		if word == "" {
 			continue
@@ -110,16 +112,14 @@ func (u *User) handleCommands(msg *domain.ChatMessage) *ports.AnswerType {
 			return nil
 		}
 
-		if msg.Chatter.IsBroadcaster || msg.Chatter.IsMod {
-			for _, w := range msg.Message.Text.Words(domain.RemovePunctuationOption) {
-				c, err := strconv.Atoi(strings.TrimSpace(w))
-				if err == nil && c > 0 {
-					if c > 100 {
-						c = 100
-					}
-
-					count = c
+		if (msg.Chatter.IsBroadcaster || msg.Chatter.IsMod) && len(words) > i+1 {
+			c, err := strconv.Atoi(strings.TrimSpace(words[i+1]))
+			if err == nil && c > 0 {
+				if c > 100 {
+					c = 100
 				}
+
+				count = c
 			}
 		}
 
@@ -137,6 +137,7 @@ func (u *User) handleCommands(msg *domain.ChatMessage) *ports.AnswerType {
 			return nil
 		}
 
+		metrics.UserCommands.With(prometheus.Labels{"channel": msg.Broadcaster.Login, "command": strings.TrimSpace(word)}).Inc()
 		if replyUsername != "" {
 			break
 		}
@@ -145,9 +146,8 @@ func (u *User) handleCommands(msg *domain.ChatMessage) *ports.AnswerType {
 	if text == "" {
 		return nil
 	}
-
 	var msgs []string
-	for range count {
+	for i := 0; i < count; i++ {
 		msgs = append(msgs, text)
 	}
 

@@ -1,6 +1,7 @@
 package message
 
 import (
+	"github.com/prometheus/client_golang/prometheus"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -9,6 +10,7 @@ import (
 	"twitchspam/internal/app/adapters/message/admin"
 	"twitchspam/internal/app/adapters/message/checker"
 	"twitchspam/internal/app/adapters/message/user"
+	"twitchspam/internal/app/adapters/metrics"
 	"twitchspam/internal/app/domain"
 	"twitchspam/internal/app/domain/template"
 	"twitchspam/internal/app/infrastructure/config"
@@ -66,6 +68,7 @@ func New(log logger.Logger, manager *config.Manager, stream ports.StreamPort, ap
 }
 
 func (m *Message) Check(msg *domain.ChatMessage) {
+	startProcessing := time.Now()
 	if m.stream.IsLive() {
 		m.stream.Stats().AddMessage(msg.Chatter.Username)
 	}
@@ -76,6 +79,7 @@ func (m *Message) Check(msg *domain.ChatMessage) {
 		HashWordsLowerNorm: domain.WordsToHashes(msg.Message.Text.Words(domain.RemovePunctuationOption)),
 		IgnoreAntispam:     !m.cfg.Enabled || !m.template.SpamPause().CanProcess() || !m.cfg.Spam.SettingsDefault.Enabled,
 	})
+	metrics.MessagesPerStream.With(prometheus.Labels{"channel": m.stream.ChannelName()}).Inc()
 
 	if !strings.HasPrefix(msg.Message.Text.Text(), "!am al ") && !strings.HasPrefix(msg.Message.Text.Text(), "!am alg ") {
 		text, ok := m.template.Aliases().Replace(msg.Message.Text.Words())
@@ -100,6 +104,8 @@ func (m *Message) Check(msg *domain.ChatMessage) {
 
 	action := m.checker.Check(msg, true)
 	m.getAction(action, msg)
+
+	metrics.MessageProcessingTime.Observe(float64(time.Since(startProcessing).Nanoseconds()))
 }
 
 func (m *Message) CheckAutomod(msg *domain.ChatMessage) {
@@ -130,13 +136,13 @@ func (m *Message) getAction(action *ports.CheckerAction, msg *domain.ChatMessage
 	switch action.Type {
 	case checker.Ban:
 		m.log.Warn("Ban user", slog.String("username", msg.Chatter.Username), slog.String("text", msg.Message.Text.Text()))
-		m.api.BanUser(m.stream.ChannelID(), msg.Chatter.UserID, action.Reason)
+		m.api.BanUser(m.stream.ChannelName(), m.stream.ChannelID(), msg.Chatter.UserID, action.Reason)
 	case checker.Timeout:
 		m.log.Warn("Timeout user", slog.String("username", msg.Chatter.Username), slog.String("text", msg.Message.Text.Text()), slog.Int("duration", int(action.Duration.Seconds())))
-		m.api.TimeoutUser(m.stream.ChannelID(), msg.Chatter.UserID, int(action.Duration.Seconds()), action.Reason)
+		m.api.TimeoutUser(m.stream.ChannelName(), m.stream.ChannelID(), msg.Chatter.UserID, int(action.Duration.Seconds()), action.Reason)
 	case checker.Delete:
 		m.log.Warn("Delete message", slog.String("username", msg.Chatter.Username), slog.String("text", msg.Message.Text.Text()))
-		if err := m.api.DeleteChatMessage(m.stream.ChannelID(), msg.Message.ID); err != nil {
+		if err := m.api.DeleteChatMessage(m.stream.ChannelName(), m.stream.ChannelID(), msg.Message.ID); err != nil {
 			m.log.Error("Failed to delete message on chat", err)
 		}
 	}

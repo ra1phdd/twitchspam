@@ -2,10 +2,12 @@ package admin
 
 import (
 	"fmt"
+	"github.com/prometheus/client_golang/prometheus"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
+	"twitchspam/internal/app/adapters/metrics"
 	"twitchspam/internal/app/domain"
 	"twitchspam/internal/app/infrastructure/config"
 	"twitchspam/internal/app/infrastructure/storage"
@@ -58,6 +60,7 @@ func (a *OnOffAntispam) handleAntiSpamOnOff(cfg *config.Config) *ports.AnswerTyp
 	if target, ok := targetMap[a.typeSpam]; ok {
 		*target = a.enabled
 
+		metrics.AntiSpamEnabled.With(prometheus.Labels{"type": a.typeSpam}).Set(map[bool]float64{true: 1, false: 0}[*target])
 		a.template.SpamPause().Pause(0)
 		return success
 	}

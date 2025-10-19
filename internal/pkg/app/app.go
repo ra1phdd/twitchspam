@@ -3,11 +3,13 @@ package app
 import (
 	"fmt"
 	"github.com/gin-gonic/gin"
+	"github.com/prometheus/client_golang/prometheus"
 	"net/http"
 	"time"
 	"twitchspam/internal/app/adapters/file_server"
 	router "twitchspam/internal/app/adapters/http"
 	"twitchspam/internal/app/adapters/message"
+	"twitchspam/internal/app/adapters/metrics"
 	"twitchspam/internal/app/adapters/platform/twitch"
 	"twitchspam/internal/app/domain/stream"
 	"twitchspam/internal/app/infrastructure/config"
@@ -28,6 +30,11 @@ func New() error {
 	cfg := manager.Get()
 	log.SetLogLevel(cfg.App.LogLevel)
 	gin.SetMode(cfg.App.GinMode)
+
+	metrics.BotEnabled.Set(map[bool]float64{true: 1, false: 0}[cfg.Enabled])
+	metrics.AntiSpamEnabled.With(prometheus.Labels{"type": "default"}).Set(map[bool]float64{true: 1, false: 0}[cfg.Spam.SettingsDefault.Enabled])
+	metrics.AntiSpamEnabled.With(prometheus.Labels{"type": "vip"}).Set(map[bool]float64{true: 1, false: 0}[cfg.Spam.SettingsVIP.Enabled])
+	metrics.AntiSpamEnabled.With(prometheus.Labels{"type": "emote"}).Set(map[bool]float64{true: 1, false: 0}[cfg.Spam.SettingsEmotes.Enabled])
 
 	streams := make(map[string]ports.StreamPort, len(cfg.App.ModChannels))
 	t := twitch.New(log, manager, client)
@@ -76,8 +83,10 @@ func New() error {
 
 				s.SetIslive(true)
 				s.SetChannelID(d.UserID)
-				s.Stats().SetStartTime(d.StartedAt)
 				s.Stats().SetOnline(d.ViewerCount)
+				s.OnceStart().Do(func() {
+					s.Stats().SetStartTime(d.StartedAt)
+				})
 			}
 
 			for _, channel := range cfg.App.ModChannels {

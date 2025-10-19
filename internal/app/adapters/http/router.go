@@ -3,6 +3,7 @@ package http
 import (
 	"crypto/tls"
 	"github.com/gin-gonic/gin"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"golang.org/x/crypto/acme/autocert"
 	"log/slog"
 	"net/http"
@@ -35,6 +36,7 @@ func NewRouter(log logger.Logger, manager *config.Manager) (*Router, error) {
 	}
 
 	r.router.GET("/", r.handlers.IndexHandler)
+	r.router.GET("/metrics", gin.WrapH(promhttp.Handler()))
 	return r, nil
 }
 

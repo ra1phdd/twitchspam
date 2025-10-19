@@ -1,6 +1,9 @@
 package ports
 
-import "time"
+import (
+	"sync"
+	"time"
+)
 
 type StreamPort interface {
 	Stats() StatsPort
@@ -11,6 +14,7 @@ type StreamPort interface {
 	ChannelName() string
 	SetCategory(category string)
 	Category() string
+	OnceStart() *sync.Once
 }
 
 type StatsPort interface {
