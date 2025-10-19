@@ -49,6 +49,9 @@ func New() error {
 			continue
 		}
 
+		metrics.ModerationActions.With(prometheus.Labels{"channel": channel, "action": "delete"}).Set(0)
+		metrics.ModerationActions.With(prometheus.Labels{"channel": channel, "action": "timeout"}).Set(0)
+		metrics.ModerationActions.With(prometheus.Labels{"channel": channel, "action": "ban"}).Set(0)
 		log.Info(fmt.Sprintf("[%s] Chatbot started", channel))
 	}
 
@@ -85,7 +88,7 @@ func New() error {
 				s.SetChannelID(d.UserID)
 				s.Stats().SetOnline(d.ViewerCount)
 				s.OnceStart().Do(func() {
-					s.Stats().SetStartTime(d.StartedAt)
+					s.Stats().SetStartTime(d.StartedAt.In(time.Local))
 				})
 			}
 

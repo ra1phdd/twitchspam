@@ -69,8 +69,11 @@ func New(log logger.Logger, manager *config.Manager, stream ports.StreamPort, ap
 
 func (m *Message) Check(msg *domain.ChatMessage) {
 	startProcessing := time.Now()
+	defer metrics.MessageProcessingTime.Observe(float64(time.Since(startProcessing).Milliseconds()))
+
 	if m.stream.IsLive() {
 		m.stream.Stats().AddMessage(msg.Chatter.Username)
+		metrics.MessagesPerStream.With(prometheus.Labels{"channel": m.stream.ChannelName()}).Inc()
 	}
 
 	m.messages.Push(msg.Chatter.Username, msg.Message.ID, storage.Message{
@@ -79,7 +82,6 @@ func (m *Message) Check(msg *domain.ChatMessage) {
 		HashWordsLowerNorm: domain.WordsToHashes(msg.Message.Text.Words(domain.RemovePunctuationOption)),
 		IgnoreAntispam:     !m.cfg.Enabled || !m.template.SpamPause().CanProcess() || !m.cfg.Spam.SettingsDefault.Enabled,
 	})
-	metrics.MessagesPerStream.With(prometheus.Labels{"channel": m.stream.ChannelName()}).Inc()
 
 	if !strings.HasPrefix(msg.Message.Text.Text(), "!am al ") && !strings.HasPrefix(msg.Message.Text.Text(), "!am alg ") {
 		text, ok := m.template.Aliases().Replace(msg.Message.Text.Words())
@@ -104,13 +106,15 @@ func (m *Message) Check(msg *domain.ChatMessage) {
 
 	action := m.checker.Check(msg, true)
 	m.getAction(action, msg)
-
-	metrics.MessageProcessingTime.Observe(float64(time.Since(startProcessing).Nanoseconds()))
 }
 
 func (m *Message) CheckAutomod(msg *domain.ChatMessage) {
+	startProcessing := time.Now()
+	defer metrics.MessageProcessingTime.Observe(float64(time.Since(startProcessing).Milliseconds()))
+
 	if m.stream.IsLive() {
 		m.stream.Stats().AddMessage(msg.Chatter.Username)
+		metrics.MessagesPerStream.With(prometheus.Labels{"channel": m.stream.ChannelName()}).Inc()
 	}
 
 	if !m.cfg.Enabled || !m.cfg.Automod.Enabled {

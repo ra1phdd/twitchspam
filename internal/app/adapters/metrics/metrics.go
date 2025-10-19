@@ -68,7 +68,7 @@ var (
 	// MessageProcessingTime - время обработки сообщений
 	MessageProcessingTime = prometheus.NewHistogram(
 		prometheus.HistogramOpts{
-			Name:    "bot_message_processing_seconds",
+			Name:    "bot_message_processing_milliseconds",
 			Help:    "Average time to process a message",
 			Buckets: prometheus.DefBuckets,
 		},
