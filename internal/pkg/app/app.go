@@ -5,6 +5,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/prometheus/client_golang/prometheus"
 	"net/http"
+	"sync"
 	"time"
 	"twitchspam/internal/app/adapters/file_server"
 	router "twitchspam/internal/app/adapters/http"
@@ -41,21 +42,32 @@ func New() error {
 	streams := make(map[string]ports.StreamPort, len(cfg.App.ModChannels))
 	t := twitch.New(log, manager, client)
 
+	var wg sync.WaitGroup
+	var mu sync.Mutex
 	for _, channel := range cfg.App.ModChannels {
-		prefixedLog := logger.NewPrefixedLogger(log, channel)
-		streams[channel] = stream.NewStream(channel, fs)
-		msg := message.New(prefixedLog, manager, streams[channel], t.API(), client)
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
 
-		if err := t.AddChannel(channel, streams[channel], msg); err != nil {
-			log.Info(fmt.Sprintf("[%s] Failed add channel", channel))
-			continue
-		}
+			prefixedLog := logger.NewPrefixedLogger(log, channel)
 
-		metrics.MessagesPerStream.With(prometheus.Labels{"channel": channel}).Add(0)
-		metrics.ModerationActions.With(prometheus.Labels{"channel": channel, "action": "delete"}).Set(0)
-		metrics.ModerationActions.With(prometheus.Labels{"channel": channel, "action": "timeout"}).Set(0)
-		metrics.ModerationActions.With(prometheus.Labels{"channel": channel, "action": "ban"}).Set(0)
-		log.Info(fmt.Sprintf("[%s] Chatbot started", channel))
+			mu.Lock()
+			streams[channel] = stream.NewStream(channel, fs)
+			msg := message.New(prefixedLog, manager, streams[channel], t.API(), client)
+
+			if err := t.AddChannel(channel, streams[channel], msg); err != nil {
+				log.Info(fmt.Sprintf("[%s] Failed add channel", channel))
+				mu.Unlock()
+				return
+			}
+			mu.Unlock()
+
+			metrics.MessagesPerStream.With(prometheus.Labels{"channel": channel}).Add(0)
+			metrics.ModerationActions.With(prometheus.Labels{"channel": channel, "action": "delete"}).Set(0)
+			metrics.ModerationActions.With(prometheus.Labels{"channel": channel, "action": "timeout"}).Set(0)
+			metrics.ModerationActions.With(prometheus.Labels{"channel": channel, "action": "ban"}).Set(0)
+			log.Info(fmt.Sprintf("[%s] Chatbot started", channel))
+		}()
 	}
 
 	go func() {

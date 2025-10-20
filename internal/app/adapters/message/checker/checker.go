@@ -50,7 +50,7 @@ func (c *Checker) Check(msg *domain.ChatMessage, checkSpam bool) *ports.CheckerA
 		return action
 	}
 
-	if action := c.template.Nuke().Check(&msg.Message.Text); action != nil {
+	if action := c.template.Nuke().Check(&msg.Message.Text, false); action != nil {
 		return action
 	}
 

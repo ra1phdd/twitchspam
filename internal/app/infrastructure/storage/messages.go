@@ -10,4 +10,5 @@ type Message struct {
 	Time               time.Time
 	HashWordsLowerNorm []uint64
 	IgnoreAntispam     bool
+	IgnoreNuke         bool
 }

@@ -73,5 +73,5 @@ type NukePort interface {
 	Start(punishment config.Punishment, duration time.Duration, containsWords, words []string, regexp *regexp.Regexp, startFn func(ctx context.Context))
 	Restart() error
 	Cancel()
-	Check(text *domain.MessageText) *CheckerAction
+	Check(text *domain.MessageText, ignoreNuke bool) *CheckerAction
 }

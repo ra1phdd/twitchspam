@@ -2,6 +2,7 @@ package admin
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"regexp"
 	"strings"
@@ -41,7 +42,7 @@ func (n *Nuke) handleNuke(text *domain.MessageText) *ports.AnswerType {
 		Duration: 60,
 	}
 	duration := 5 * time.Minute
-	scrollback := min(n.messages.GetTTL(), 60)
+	scrollback := min(n.messages.GetTTL(), 60) * time.Second
 
 	if strings.TrimSpace(matches[1]) != "" {
 		p, err := n.template.Punishment().Parse(strings.TrimSpace(matches[1]), false)
@@ -97,7 +98,6 @@ func (n *Nuke) handleNuke(text *domain.MessageText) *ports.AnswerType {
 		}
 	}
 
-	now := time.Now()
 	n.template.Nuke().Start(punishment, duration, containsWords, words, re, func(ctx context.Context) {
 		checkCtx := func() bool {
 			select {
@@ -137,6 +137,7 @@ func (n *Nuke) handleNuke(text *domain.MessageText) *ports.AnswerType {
 			}
 		}
 
+		now := time.Now()
 		for username, msgs := range n.messages.GetAllData() {
 			if !checkCtx() {
 				return
@@ -146,17 +147,27 @@ func (n *Nuke) handleNuke(text *domain.MessageText) *ports.AnswerType {
 				if !checkCtx() {
 					return
 				}
+
+				fmt.Println(now.Sub(msg.Time), scrollback)
 				if now.Sub(msg.Time) >= scrollback {
 					continue
 				}
 
-				action := n.template.Nuke().Check(&msg.Data.Message.Text)
+				n.messages.Update(username, messageID, func(cur storage.Message, exists bool) storage.Message {
+					if !exists {
+						return cur
+					}
+
+					cur.IgnoreNuke = true
+					return cur
+				})
+
+				action := n.template.Nuke().Check(&msg.Data.Message.Text, msg.IgnoreNuke)
 				if action == nil || msg.Data.Chatter.IsBroadcaster || msg.Data.Chatter.IsMod {
 					continue
 				}
 
 				executeAction(username, messageID, msg)
-
 				if punishment.Action != "delete" {
 					break
 				}

@@ -46,6 +46,10 @@ func (n *NukeTemplate) Start(punishment config.Punishment, duration time.Duratio
 		n.timer = nil
 	}
 
+	if n.nuke != nil && n.nuke.cancel != nil {
+		n.nuke.cancel()
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
 	n.nuke = &Nuke{
 		expiresAt:     time.Now().Add(duration),
@@ -59,14 +63,18 @@ func (n *NukeTemplate) Start(punishment config.Punishment, duration time.Duratio
 		startFn:       startFn,
 	}
 
-	n.timer = time.AfterFunc(5*time.Minute, func() {
+	n.timer = time.AfterFunc(duration, func() {
 		n.mu.Lock()
 		defer n.mu.Unlock()
+
+		n.oldNuke = n.nuke
 		n.nuke = nil
 		n.timer = nil
 	})
 
-	go startFn(ctx)
+	if startFn != nil {
+		go startFn(ctx)
+	}
 }
 
 func (n *NukeTemplate) Restart() error {
@@ -92,8 +100,8 @@ func (n *NukeTemplate) Cancel() {
 	n.nuke = nil
 }
 
-func (n *NukeTemplate) Check(text *domain.MessageText) *ports.CheckerAction {
-	if n.nuke == nil {
+func (n *NukeTemplate) Check(text *domain.MessageText, ignoreNuke bool) *ports.CheckerAction {
+	if n.nuke == nil || ignoreNuke {
 		return nil
 	}
 
