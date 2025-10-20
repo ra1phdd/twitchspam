@@ -2,6 +2,7 @@ package http
 
 import (
 	"crypto/tls"
+	"github.com/gin-contrib/pprof"
 	"github.com/gin-gonic/gin"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"golang.org/x/crypto/acme/autocert"
@@ -10,13 +11,15 @@ import (
 	"strings"
 	"time"
 	"twitchspam/internal/app/adapters/http/handlers"
+	"twitchspam/internal/app/adapters/http/middlewares"
 	"twitchspam/internal/app/infrastructure/config"
 	"twitchspam/pkg/logger"
 )
 
 type Router struct {
-	router   *gin.Engine
-	handlers *handlers.Handlers
+	router      *gin.Engine
+	handlers    *handlers.Handlers
+	middlewares *middlewares.Middlewares
 
 	log     logger.Logger
 	manager *config.Manager
@@ -29,14 +32,19 @@ func NewRouter(log logger.Logger, manager *config.Manager) (*Router, error) {
 	}
 
 	r := &Router{
-		router:   gin.Default(),
-		handlers: h,
-		log:      log,
-		manager:  manager,
+		router:      gin.Default(),
+		handlers:    h,
+		middlewares: middlewares.New(),
+		log:         log,
+		manager:     manager,
 	}
 
+	pprofGroup := r.router.Group("/debug/pprof", r.middlewares.LocalOnly())
+	pprof.Register(pprofGroup)
+
+	r.router.GET("/metrics", r.middlewares.LocalOnly(), gin.WrapH(promhttp.Handler()))
+
 	r.router.GET("/", r.handlers.IndexHandler)
-	r.router.GET("/metrics", gin.WrapH(promhttp.Handler()))
 	return r, nil
 }
 

@@ -50,16 +50,17 @@ func New() error {
 			defer wg.Done()
 
 			prefixedLog := logger.NewPrefixedLogger(log, channel)
+			st := stream.NewStream(channel, fs)
+			msg := message.New(prefixedLog, manager, st, t.API(), client)
 
-			mu.Lock()
-			streams[channel] = stream.NewStream(channel, fs)
-			msg := message.New(prefixedLog, manager, streams[channel], t.API(), client)
-
-			if err := t.AddChannel(channel, streams[channel], msg); err != nil {
+			if err := t.AddChannel(channel, st, msg); err != nil {
 				log.Info(fmt.Sprintf("[%s] Failed add channel", channel))
 				mu.Unlock()
 				return
 			}
+
+			mu.Lock()
+			streams[channel] = st
 			mu.Unlock()
 
 			metrics.MessagesPerStream.With(prometheus.Labels{"channel": channel}).Add(0)
