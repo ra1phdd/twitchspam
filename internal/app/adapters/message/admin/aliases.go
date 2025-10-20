@@ -215,6 +215,36 @@ func (a *AddAliasGroup) handleAlgAdd(cfg *config.Config, text *domain.MessageTex
 	return success
 }
 
+type SetAliasGroup struct {
+	re       *regexp.Regexp
+	template ports.TemplatePort
+}
+
+func (a *SetAliasGroup) Execute(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
+	return a.handleAlgSet(cfg, text)
+}
+
+func (a *SetAliasGroup) handleAlgSet(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
+	matches := a.re.FindStringSubmatch(text.Text()) // !am alg set <название_группы> <оригинальная команда>
+	if len(matches) != 3 {
+		return incorrectSyntax
+	}
+
+	groupName := strings.TrimSpace(matches[1])
+	if _, exists := cfg.AliasGroups[groupName]; !exists {
+		return notFoundAliasGroup
+	}
+
+	original := strings.TrimSpace(matches[2])
+	if !strings.HasPrefix(original, "!") {
+		original = "!" + original
+	}
+
+	cfg.AliasGroups[groupName].Original = original
+	a.template.Aliases().Update(cfg.Aliases, cfg.AliasGroups, cfg.GlobalAliases)
+	return success
+}
+
 type DelAliasGroup struct {
 	re       *regexp.Regexp
 	template ports.TemplatePort

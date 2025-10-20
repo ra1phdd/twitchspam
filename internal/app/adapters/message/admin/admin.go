@@ -367,6 +367,7 @@ func (a *Admin) buildCommandTree() ports.Command {
 					"off":    &OnOffAliasGroup{re: regexp.MustCompile(`(?i)^!am\s+alg\s+(off)\s+(\S+)$`), template: a.template},
 					"create": &CreateAliasGroup{re: regexp.MustCompile(`(?i)^!am\s+alg\s+create\s+(\S+)\s+(.+)$`), template: a.template},
 					"add":    &AddAliasGroup{re: regexp.MustCompile(`(?i)^!am\s+alg\s+add\s+(\S+)\s+(.+)$`), template: a.template},
+					"set":    &SetAliasGroup{re: regexp.MustCompile(`(?i)^!am\s+alg\s+set\s+(\S+)\s+(.+)$`), template: a.template},
 					"del":    &DelAliasGroup{re: regexp.MustCompile(`(?i)^!am\s+alg\s+del\s+(\S+)(?:\s+(.+))?$`), template: a.template},
 				},
 				cursor: 2,
