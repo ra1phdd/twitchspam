@@ -1,6 +1,7 @@
 package ports
 
 import (
+	"context"
 	"regexp"
 	"time"
 	"twitchspam/internal/app/domain"
@@ -60,6 +61,7 @@ type PunishmentPort interface {
 type SpamPausePort interface {
 	Pause(duration time.Duration)
 	CanProcess() bool
+	Remaining() time.Duration
 }
 
 type MwordPort interface {
@@ -68,7 +70,8 @@ type MwordPort interface {
 }
 
 type NukePort interface {
-	Start(punishment config.Punishment, duration time.Duration, containsWords, words []string, regexp *regexp.Regexp)
+	Start(punishment config.Punishment, duration time.Duration, containsWords, words []string, regexp *regexp.Regexp, startFn func(ctx context.Context))
+	Restart() error
 	Cancel()
 	Check(text *domain.MessageText) *CheckerAction
 }

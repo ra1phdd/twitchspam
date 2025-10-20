@@ -194,7 +194,7 @@ func (a *Admin) buildCommandTree() ports.Command {
 				},
 				cursor: 2,
 			},
-			"status": &Status{},
+			"status": &Status{a.template},
 			"say":    &Say{re: regexp.MustCompile(`(?i)^!am\s+say\s+(.+)$`)},
 			"spam":   &Spam{re: regexp.MustCompile(`(?i)^!am\s+spam\s+(.+)\s+(.+)$`)},
 			"reset":  &Reset{manager: a.manager},
@@ -229,6 +229,7 @@ func (a *Admin) buildCommandTree() ports.Command {
 					log:     a.log, api: a.api, template: a.template, stream: a.stream, messages: a.messages},
 				cursor: 2,
 			},
+			"renuke": &ReNuke{template: a.template},
 			"mod": &CompositeCommand{
 				subcommands: map[string]ports.Command{
 					"on":    &OnOffAutomod{enabled: true},

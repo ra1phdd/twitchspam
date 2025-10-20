@@ -357,7 +357,7 @@ func (m *GlobalSetMwordGroup) Execute(cfg *config.Config, text *domain.MessageTe
 func (m *GlobalSetMwordGroup) handleMwgGlobalSet(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
 	textWithoutOpts, opts := m.template.Options().ParseAll(text.Text(), template.MwordOptions)
 
-	// !am mwg set <название_группы> <*наказания через запятую> <*опции>
+	// !am mwg glset <название_группы> <*наказания через запятую> <*опции>
 	matches := m.re.FindStringSubmatch(textWithoutOpts)
 	if len(matches) != 3 {
 		return nonParametr

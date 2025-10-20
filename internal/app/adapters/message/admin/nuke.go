@@ -1,6 +1,7 @@
 package admin
 
 import (
+	"context"
 	"log/slog"
 	"regexp"
 	"strings"
@@ -96,45 +97,72 @@ func (n *Nuke) handleNuke(text *domain.MessageText) *ports.AnswerType {
 		}
 	}
 
-	go func() {
-		now := time.Now()
-		dur := time.Duration(punishment.Duration) * time.Second
+	now := time.Now()
+	n.template.Nuke().Start(punishment, duration, containsWords, words, re, func(ctx context.Context) {
+		checkCtx := func() bool {
+			select {
+			case <-ctx.Done():
+				n.log.Warn("Mass action canceled", slog.String("reason", ctx.Err().Error()))
+				return false
+			default:
+				return true
+			}
+		}
 
-		n.template.Nuke().Start(punishment, duration, containsWords, words, re)
+		executeAction := func(username string, messageID string, msg storage.Message) {
+			err := n.api.Pool().Submit(func() {
+				if !checkCtx() {
+					return
+				}
+
+				switch punishment.Action {
+				case checker.Ban:
+					n.log.Warn("Ban user", slog.String("username", username), slog.String("text", msg.Data.Message.Text.Text()))
+					n.api.BanUser(n.stream.ChannelName(), n.stream.ChannelID(), msg.Data.Chatter.UserID, "массбан")
+				case checker.Timeout:
+					n.log.Warn("Timeout user", slog.String("username", username),
+						slog.String("text", msg.Data.Message.Text.Text()),
+						slog.Int("duration", int((time.Duration(punishment.Duration)*time.Second).Seconds())),
+					)
+					n.api.TimeoutUser(n.stream.ChannelName(), n.stream.ChannelID(), msg.Data.Chatter.UserID, int(duration.Seconds()), "массбан")
+				case checker.Delete:
+					n.log.Warn("Delete message", slog.String("username", username), slog.String("text", msg.Data.Message.Text.Text()))
+					if err := n.api.DeleteChatMessage(n.stream.ChannelName(), n.stream.ChannelID(), messageID); err != nil {
+						n.log.Error("Failed to delete message on chat", err)
+					}
+				}
+			})
+			if err != nil {
+				n.log.Error("Failed to submit request", err)
+			}
+		}
+
 		for username, msgs := range n.messages.GetAllData() {
+			if !checkCtx() {
+				return
+			}
+
 			for messageID, msg := range msgs {
+				if !checkCtx() {
+					return
+				}
 				if now.Sub(msg.Time) >= scrollback {
 					continue
 				}
 
 				action := n.template.Nuke().Check(&msg.Data.Message.Text)
-				if action != nil && !msg.Data.Chatter.IsBroadcaster && !msg.Data.Chatter.IsMod {
-					err := n.api.Pool().Submit(func() {
-						switch punishment.Action {
-						case checker.Ban:
-							n.log.Warn("Ban user", slog.String("username", username), slog.String("text", msg.Data.Message.Text.Text()))
-							n.api.BanUser(n.stream.ChannelName(), n.stream.ChannelID(), msg.Data.Chatter.UserID, "массбан")
-						case checker.Timeout:
-							n.log.Warn("Timeout user", slog.String("username", username), slog.String("text", msg.Data.Message.Text.Text()), slog.Int("duration", int(dur.Seconds())))
-							n.api.TimeoutUser(n.stream.ChannelName(), n.stream.ChannelID(), msg.Data.Chatter.UserID, int(duration.Seconds()), "массбан")
-						case checker.Delete:
-							n.log.Warn("Delete message", slog.String("username", username), slog.String("text", msg.Data.Message.Text.Text()))
-							if err := n.api.DeleteChatMessage(n.stream.ChannelName(), n.stream.ChannelID(), messageID); err != nil {
-								n.log.Error("Failed to delete message on chat", err)
-							}
-						}
-					})
-					if err != nil {
-						n.log.Error("Failed to submit request", err)
-					}
+				if action == nil || msg.Data.Chatter.IsBroadcaster || msg.Data.Chatter.IsMod {
+					continue
+				}
 
-					if punishment.Action != "delete" {
-						break
-					}
+				executeAction(username, messageID, msg)
+
+				if punishment.Action != "delete" {
+					break
 				}
 			}
 		}
-	}()
+	})
 
 	if len(globalErrs) != 0 {
 		return &ports.AnswerType{
@@ -156,6 +184,26 @@ func (n *NukeStop) Execute(_ *config.Config, _ *domain.MessageText) *ports.Answe
 func (n *NukeStop) handleNukeStop() *ports.AnswerType {
 	// !am nuke stop
 	n.template.Nuke().Cancel()
+
+	return success
+}
+
+type ReNuke struct {
+	template ports.TemplatePort
+}
+
+func (n *ReNuke) Execute(_ *config.Config, _ *domain.MessageText) *ports.AnswerType {
+	return n.handleReNuke()
+}
+
+func (n *ReNuke) handleReNuke() *ports.AnswerType {
+	// !am renuke
+	if err := n.template.Nuke().Restart(); err != nil {
+		return &ports.AnswerType{
+			Text:    []string{"повтор предыдущего массбана не возможен"},
+			IsReply: true,
+		}
+	}
 
 	return success
 }

@@ -1,6 +1,8 @@
 package template
 
 import (
+	"context"
+	"errors"
 	"regexp"
 	"slices"
 	"strings"
@@ -12,24 +14,30 @@ import (
 )
 
 type NukeTemplate struct {
-	nuke  *Nuke
-	timer *time.Timer
-	mu    sync.Mutex
+	nuke    *Nuke
+	oldNuke *Nuke
+	timer   *time.Timer
+	mu      sync.Mutex
 }
 
 type Nuke struct {
 	expiresAt     time.Time
+	duration      time.Duration
 	punishment    config.Punishment
 	containsWords []string
 	words         []string
 	regexp        *regexp.Regexp
+
+	ctx     context.Context
+	cancel  context.CancelFunc
+	startFn func(ctx context.Context)
 }
 
 func NewNuke() *NukeTemplate {
 	return &NukeTemplate{}
 }
 
-func (n *NukeTemplate) Start(punishment config.Punishment, duration time.Duration, containsWords, words []string, regexp *regexp.Regexp) {
+func (n *NukeTemplate) Start(punishment config.Punishment, duration time.Duration, containsWords, words []string, regexp *regexp.Regexp, startFn func(ctx context.Context)) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 
@@ -38,12 +46,17 @@ func (n *NukeTemplate) Start(punishment config.Punishment, duration time.Duratio
 		n.timer = nil
 	}
 
+	ctx, cancel := context.WithCancel(context.Background())
 	n.nuke = &Nuke{
 		expiresAt:     time.Now().Add(duration),
+		duration:      duration,
 		punishment:    punishment,
 		containsWords: containsWords,
 		words:         words,
 		regexp:        regexp,
+		ctx:           ctx,
+		cancel:        cancel,
+		startFn:       startFn,
 	}
 
 	n.timer = time.AfterFunc(5*time.Minute, func() {
@@ -52,15 +65,30 @@ func (n *NukeTemplate) Start(punishment config.Punishment, duration time.Duratio
 		n.nuke = nil
 		n.timer = nil
 	})
+
+	go startFn(ctx)
+}
+
+func (n *NukeTemplate) Restart() error {
+	if n.oldNuke == nil {
+		return errors.New("a repeat of the previous nuke is not possible")
+	}
+
+	n.Start(n.oldNuke.punishment, n.oldNuke.duration, n.oldNuke.containsWords, n.oldNuke.words, n.oldNuke.regexp, n.oldNuke.startFn)
+	return nil
 }
 
 func (n *NukeTemplate) Cancel() {
 	n.mu.Lock()
 	defer n.mu.Unlock()
+
 	if n.timer != nil {
 		n.timer.Stop()
 		n.timer = nil
 	}
+	n.nuke.cancel()
+
+	n.oldNuke = n.nuke
 	n.nuke = nil
 }
 

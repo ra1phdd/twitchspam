@@ -86,24 +86,32 @@ func (g *Game) handleGame(text *domain.MessageText) *ports.AnswerType {
 	return success
 }
 
-type Status struct{}
+type Status struct {
+	template ports.TemplatePort
+}
 
 func (s *Status) Execute(cfg *config.Config, _ *domain.MessageText) *ports.AnswerType {
 	return s.handleStatus(cfg)
 }
 
 func (s *Status) handleStatus(cfg *config.Config) *ports.AnswerType {
-	if !cfg.Enabled { // !am status
-		return &ports.AnswerType{
-			Text:    []string{"бот выключен!"},
-			IsReply: true,
+	if !cfg.Enabled {
+		return &ports.AnswerType{Text: []string{"бот выключен!"}, IsReply: true}
+	}
+
+	msg := []string{"бот включен"}
+	if r := s.template.SpamPause().Remaining(); r > 0 {
+		msg = append(msg, fmt.Sprintf("антиспам на паузе (%s)", domain.FormatDuration(r)))
+	} else {
+		state := "выключен"
+		if cfg.Spam.SettingsDefault.Enabled {
+			state = "включен"
 		}
+		msg = append(msg, "антиспам "+state)
 	}
 
 	return &ports.AnswerType{
-		Text: []string{strings.Join([]string{
-			"бот включён", map[bool]string{true: "антиспам включён", false: "антиспам выключен"}[cfg.Spam.SettingsDefault.Enabled],
-		}, " • ") + "!"},
+		Text:    []string{strings.Join(msg, " • ") + "!"},
 		IsReply: true,
 	}
 }

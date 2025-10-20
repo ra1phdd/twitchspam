@@ -54,6 +54,10 @@ func (c *Checker) Check(msg *domain.ChatMessage, checkSpam bool) *ports.CheckerA
 		return action
 	}
 
+	if !c.cfg.Enabled {
+		return &ports.CheckerAction{Type: None}
+	}
+
 	if action := c.checkBanwords(msg.Message.Text.Text(domain.LowerOption, domain.RemovePunctuationOption, domain.RemoveDuplicateLettersOption), msg.Message.Text.Words()); action != nil {
 		return action
 	}
@@ -76,7 +80,7 @@ func (c *Checker) Check(msg *domain.ChatMessage, checkSpam bool) *ports.CheckerA
 }
 
 func (c *Checker) checkBypass(msg *domain.ChatMessage) *ports.CheckerAction {
-	if !c.cfg.Enabled || msg.Chatter.IsBroadcaster || msg.Chatter.IsMod {
+	if msg.Chatter.IsBroadcaster || msg.Chatter.IsMod {
 		return &ports.CheckerAction{Type: None}
 	}
 
