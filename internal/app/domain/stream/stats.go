@@ -232,13 +232,6 @@ func (s *Stats) GetStats() *ports.AnswerType {
 		msg += "не найдены"
 	}
 
-	for i, item := range list[:top] {
-		if i > 0 {
-			msg += ", "
-		}
-		msg += fmt.Sprintf("%s (%d)", item.key, item.value)
-	}
-
 	msg += " • посмотреть свою стату - !stats"
 	diff := s.startTime.Sub(s.startStreamTime)
 	if diff >= 5*time.Minute {

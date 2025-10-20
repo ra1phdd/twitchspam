@@ -42,9 +42,9 @@ func TestEmoteStats(t *testing.T) {
 			wantOnlyEmo: false,
 		},
 		{
-			name:        "zxc",
-			words:       []string{"zxc"},
-			wantCount:   1,
+			name:        "0",
+			words:       []string{"0", "0", "0"},
+			wantCount:   3,
 			wantOnlyEmo: true,
 		},
 		{
