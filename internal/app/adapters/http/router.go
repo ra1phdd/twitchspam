@@ -39,7 +39,7 @@ func NewRouter(log logger.Logger, manager *config.Manager) (*Router, error) {
 		manager:     manager,
 	}
 
-	pprofGroup := r.router.Group("/debug/pprof", r.middlewares.LocalOnly())
+	pprofGroup := r.router.Group("/", r.middlewares.LocalOnly())
 	pprof.Register(pprofGroup)
 
 	r.router.GET("/metrics", r.middlewares.LocalOnly(), gin.WrapH(promhttp.Handler()))
