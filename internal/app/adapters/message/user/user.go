@@ -19,17 +19,19 @@ type User struct {
 	stream       ports.StreamPort
 	template     ports.TemplatePort
 	fs           ports.FileServerPort
+	api          ports.APIPort
 	muLimiter    sync.Mutex
 	usersLimiter map[string]*rate.Limiter
 }
 
-func New(log logger.Logger, manager *config.Manager, stream ports.StreamPort, template ports.TemplatePort, fs ports.FileServerPort) *User {
+func New(log logger.Logger, manager *config.Manager, stream ports.StreamPort, template ports.TemplatePort, fs ports.FileServerPort, api ports.APIPort) *User {
 	return &User{
 		log:          log,
 		manager:      manager,
 		stream:       stream,
 		template:     template,
 		fs:           fs,
+		api:          api,
 		usersLimiter: make(map[string]*rate.Limiter),
 	}
 }
@@ -89,7 +91,7 @@ func (u *User) handleCommands(msg *domain.ChatMessage) *ports.AnswerType {
 		replyUsername = msg.Reply.ParentChatter.Username
 	}
 
-	text, count := "", 1
+	text, count, isAnnounce := "", 1, false
 	cfg := u.manager.Get()
 	words := msg.Message.Text.Words()
 
@@ -113,12 +115,23 @@ func (u *User) handleCommands(msg *domain.ChatMessage) *ports.AnswerType {
 		}
 
 		if (msg.Chatter.IsBroadcaster || msg.Chatter.IsMod) && len(words) > i+1 {
-			c, err := strconv.Atoi(strings.TrimSpace(words[i+1]))
+			next := strings.TrimSpace(words[i+1])
+
+			if strings.HasSuffix(next, "a") {
+				isAnnounce = true
+				next = strings.TrimSuffix(next, "a")
+			}
+
+			if strings.HasSuffix(next, "а") {
+				isAnnounce = true
+				next = strings.TrimSuffix(next, "а")
+			}
+
+			c, err := strconv.Atoi(next)
 			if err == nil && c > 0 {
 				if c > 100 {
 					c = 100
 				}
-
 				count = c
 			}
 		}
@@ -149,6 +162,14 @@ func (u *User) handleCommands(msg *domain.ChatMessage) *ports.AnswerType {
 	var msgs []string
 	for i := 0; i < count; i++ {
 		msgs = append(msgs, text)
+	}
+
+	if _, ok := u.manager.Get().UsersTokens[u.stream.ChannelID()]; ok && isAnnounce {
+		u.api.SendChatAnnouncements(u.stream.ChannelID(), &ports.AnswerType{
+			Text:    msgs,
+			IsReply: false,
+		}, "primary")
+		return nil
 	}
 
 	noReply := ((msg.Chatter.IsBroadcaster || msg.Chatter.IsMod) && replyUsername == "") || count > 1

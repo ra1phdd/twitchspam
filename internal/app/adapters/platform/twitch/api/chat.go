@@ -7,6 +7,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"log/slog"
 	"net/url"
+	"time"
 	"twitchspam/internal/app/adapters/metrics"
 	"twitchspam/internal/app/ports"
 )
@@ -58,6 +59,19 @@ func (t *Twitch) SendChatMessage(channelID, message string) error {
 	}
 
 	return nil
+}
+
+func (t *Twitch) SendChatAnnouncements(channelID string, msgs *ports.AnswerType, color string) {
+	for i, message := range msgs.Text {
+		if err := t.SendChatAnnouncement(channelID, message, color); err != nil {
+			t.log.Error("Failed to send message on chat", err)
+		}
+
+		if i >= 2 {
+			break
+		}
+		time.Sleep(2 * time.Second)
+	}
 }
 
 func (t *Twitch) SendChatAnnouncement(channelID, message, color string) error {

@@ -2,7 +2,6 @@ package admin
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"regexp"
 	"strings"
@@ -124,7 +123,7 @@ func (n *Nuke) handleNuke(text *domain.MessageText) *ports.AnswerType {
 						slog.String("text", msg.Data.Message.Text.Text()),
 						slog.Int("duration", int((time.Duration(punishment.Duration)*time.Second).Seconds())),
 					)
-					n.api.TimeoutUser(n.stream.ChannelName(), n.stream.ChannelID(), msg.Data.Chatter.UserID, int(duration.Seconds()), "массбан")
+					n.api.TimeoutUser(n.stream.ChannelName(), n.stream.ChannelID(), msg.Data.Chatter.UserID, punishment.Duration, "массбан")
 				case checker.Delete:
 					n.log.Warn("Delete message", slog.String("username", username), slog.String("text", msg.Data.Message.Text.Text()))
 					if err := n.api.DeleteChatMessage(n.stream.ChannelName(), n.stream.ChannelID(), messageID); err != nil {
@@ -148,7 +147,6 @@ func (n *Nuke) handleNuke(text *domain.MessageText) *ports.AnswerType {
 					return
 				}
 
-				fmt.Println(now.Sub(msg.Time), scrollback)
 				if now.Sub(msg.Time) >= scrollback {
 					continue
 				}

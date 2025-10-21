@@ -267,7 +267,7 @@ func (a *AddTimer) AddTimer(key string, cmd *config.Commands) {
 		}
 
 		if _, ok := a.Cfg.UsersTokens[a.Stream.ChannelID()]; ok && timer.Options.IsAnnounce {
-			_ = a.Api.SendChatAnnouncement(a.Stream.ChannelID(), args["text"].(string), timer.Options.ColorAnnounce)
+			a.Api.SendChatAnnouncements(a.Stream.ChannelID(), msg, timer.Options.ColorAnnounce)
 			return
 		}
 

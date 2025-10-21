@@ -71,6 +71,8 @@ func New() error {
 		}()
 	}
 
+	wg.Wait()
+
 	go func() {
 		var channelIDs []string
 		for _, channel := range cfg.App.ModChannels {

@@ -261,6 +261,13 @@ func (t *SetTitle) handleSetTitle(text *domain.MessageText) *ports.AnswerType {
 	err := t.api.UpdateChannelTitle(t.stream.ChannelID(), strings.TrimSpace(matches[1]))
 	if err != nil {
 		t.log.Error("Failed to update channel title", err)
+
+		if err.Error() == "400" {
+			return &ports.AnswerType{
+				Text:    []string{"одно из указанных слов находится в бан-листе Twitch!"},
+				IsReply: true,
+			}
+		}
 		return unknownError
 	}
 

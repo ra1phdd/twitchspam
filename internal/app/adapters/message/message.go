@@ -53,7 +53,7 @@ func New(log logger.Logger, manager *config.Manager, stream ports.StreamPort, ap
 		timeouts: storage.New[int](15, 0),
 	}
 	m.admin = admin.New(log, manager, stream, api, m.template, fs, timer, m.messages)
-	m.user = user.New(log, manager, stream, m.template, fs)
+	m.user = user.New(log, manager, stream, m.template, fs, api)
 	m.checker = checker.NewCheck(log, cfg, stream, m.template, m.messages, m.timeouts)
 
 	for cmd, data := range cfg.Commands {

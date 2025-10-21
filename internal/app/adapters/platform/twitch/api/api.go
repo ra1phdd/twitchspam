@@ -35,7 +35,7 @@ func NewTwitch(log logger.Logger, manager *config.Manager, client *http.Client, 
 		cfg:    manager.Get(),
 		client: client,
 		pool: &TwitchPool{
-			tasks:    make(chan func()),
+			tasks:    make(chan func(), 100),
 			shutdown: make(chan struct{}),
 		},
 	}
@@ -62,9 +62,9 @@ func (p *TwitchPool) Submit(task func()) error {
 }
 
 func (p *TwitchPool) Stop() {
-	close(p.shutdown)
-	p.wg.Wait()
 	close(p.tasks)
+	p.wg.Wait()
+	close(p.shutdown)
 }
 
 func (p *TwitchPool) worker() {
@@ -72,7 +72,10 @@ func (p *TwitchPool) worker() {
 
 	for {
 		select {
-		case task := <-p.tasks:
+		case task, ok := <-p.tasks:
+			if !ok {
+				return
+			}
 			task()
 		case <-p.shutdown:
 			return
@@ -123,6 +126,11 @@ func (t *Twitch) doTwitchRequest(method, url string, token *config.UserTokens, b
 				return nil
 			}
 			return json.NewDecoder(resp.Body).Decode(target)
+
+		case http.StatusBadRequest:
+			raw, _ := io.ReadAll(resp.Body)
+			t.log.Error("Twitch returned 400", nil, slog.String("raw", string(raw)))
+			return errors.New("400")
 
 		case http.StatusUnauthorized:
 			raw, _ := io.ReadAll(resp.Body)
