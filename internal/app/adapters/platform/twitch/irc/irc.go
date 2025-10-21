@@ -2,7 +2,6 @@ package irc
 
 import (
 	"bufio"
-	"context"
 	"crypto/tls"
 	"log/slog"
 	"net"
@@ -91,17 +90,14 @@ func (i *IRC) runIRC() {
 }
 
 func (i *IRC) connectAndListen() error {
-	transport := i.client.Transport.(*http.Transport)
-	transport.TLSClientConfig = &tls.Config{MinVersion: tls.VersionTLS12}
-
-	conn, err := transport.DialContext(context.Background(), "tcp", "irc.chat.twitch.tv:443")
+	conn, err := tls.Dial("tcp", "irc.chat.twitch.tv:443", &tls.Config{MinVersion: tls.VersionTLS12})
 	if err != nil {
 		i.log.Error("Failed to connect to IRC chat Twitch", err)
 		return err
 	}
 
 	i.conn = conn
-	i.reader = bufio.NewReader(conn)
+	i.reader = bufio.NewReader(i.conn)
 
 	i.write("PASS oauth:" + i.cfg.App.OAuth)
 	i.write("NICK " + i.cfg.App.Username)
