@@ -55,7 +55,6 @@ func New() error {
 
 			if err := t.AddChannel(channel, st, msg); err != nil {
 				log.Info(fmt.Sprintf("[%s] Failed add channel", channel))
-				mu.Unlock()
 				return
 			}
 
