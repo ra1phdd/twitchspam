@@ -1,14 +1,10 @@
 package http
 
 import (
-	"crypto/tls"
 	"github.com/gin-contrib/pprof"
 	"github.com/gin-gonic/gin"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"golang.org/x/crypto/acme/autocert"
-	"log/slog"
 	"net/http"
-	"strings"
 	"time"
 	"twitchspam/internal/app/adapters/http/handlers"
 	"twitchspam/internal/app/adapters/http/middlewares"
@@ -54,33 +50,7 @@ func NewRouter(log logger.Logger, manager *config.Manager) (*Router, error) {
 }
 
 func (r *Router) Run() error {
-	cfg := r.manager.Get()
-	certManager := &autocert.Manager{
-		Prompt:     autocert.AcceptTOS,
-		HostPolicy: autocert.HostWhitelist(cfg.CertDomains...),
-		Cache:      autocert.DirCache(".cache"),
-	}
-
-	r.log.Info("Starting server", slog.String("cert_domains", strings.Join(cfg.CertDomains, ", ")))
-	go func() {
-		httpServer := r.newServer(":80", certManager.HTTPHandler(nil))
-		if err := httpServer.ListenAndServe(); err != nil {
-			r.log.Error("HTTP server error", err)
-		}
-	}()
-
-	server := r.newServer(":443", r.router)
-	server.TLSConfig = &tls.Config{
-		GetCertificate: certManager.GetCertificate,
-		MinVersion:     tls.VersionTLS12,
-	}
-
-	if err := server.ListenAndServeTLS("", ""); err != nil {
-		r.log.Error("Failed starting server", err)
-		return err
-	}
-
-	return nil
+	return r.router.Run(":80")
 }
 
 func (r *Router) newServer(addr string, handler http.Handler) *http.Server {
