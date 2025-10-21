@@ -7,9 +7,9 @@ import (
 
 func (m *Manager) validate(cfg *Config) error {
 	// app
-	validLevels := map[string]bool{"debug": true, "info": true, "warn": true, "error": true}
+	validLevels := map[string]bool{"trace": true, "debug": true, "info": true, "warn": true, "error": true}
 	if cfg.App.LogLevel != "" && !validLevels[cfg.App.LogLevel] {
-		return fmt.Errorf("app.log_level must be one of debug, info, warn, error; got %s", cfg.App.LogLevel)
+		return fmt.Errorf("app.log_level must be one of trace, debug, info, warn, error; got %s", cfg.App.LogLevel)
 	}
 
 	validGinModes := map[string]bool{"debug": true, "release": true}

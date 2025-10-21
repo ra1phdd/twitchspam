@@ -86,7 +86,12 @@ func (es *EventSub) runEventLoop() {
 }
 
 func (es *EventSub) connectAndHandleEvents() error {
-	ws, resp, err := websocket.DefaultDialer.Dial("wss://eventsub.wss.twitch.tv/ws", nil)
+	dialer := websocket.Dialer{
+		NetDialContext:   es.client.Transport.(*http.Transport).DialContext,
+		HandshakeTimeout: 10 * time.Second,
+	}
+
+	ws, resp, err := dialer.Dial("wss://eventsub.wss.twitch.tv/ws", nil)
 	if err != nil {
 		if resp != nil {
 			resp.Body.Close()

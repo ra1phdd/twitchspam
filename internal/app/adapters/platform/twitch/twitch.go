@@ -30,7 +30,7 @@ func New(log logger.Logger, manager *config.Manager, client *http.Client) *Twitc
 		client: client,
 	}
 	t.api = api.NewTwitch(log, manager, client, 5)
-	t.irc = irc.New(log, cfg, 1*time.Second)
+	t.irc = irc.New(log, cfg, 1*time.Second, client)
 	t.eventSub = event_sub.NewTwitch(t.log, t.cfg, t.api, t.irc, t.client)
 
 	return t

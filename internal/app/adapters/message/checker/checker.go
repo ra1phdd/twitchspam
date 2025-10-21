@@ -1,6 +1,7 @@
 package checker
 
 import (
+	"net/http"
 	"regexp"
 	"slices"
 	"strings"
@@ -33,12 +34,12 @@ type Checker struct {
 	timeouts ports.StorePort[int]
 }
 
-func NewCheck(log logger.Logger, cfg *config.Config, stream ports.StreamPort, template ports.TemplatePort, messages ports.StorePort[storage.Message], timeouts ports.StorePort[int]) *Checker {
+func NewCheck(log logger.Logger, cfg *config.Config, stream ports.StreamPort, template ports.TemplatePort, messages ports.StorePort[storage.Message], timeouts ports.StorePort[int], client *http.Client) *Checker {
 	return &Checker{
 		log:      log,
 		cfg:      cfg,
 		stream:   stream,
-		sevenTV:  seventv.New(log, cfg, stream),
+		sevenTV:  seventv.New(log, cfg, stream, client),
 		template: template,
 		messages: messages,
 		timeouts: timeouts,

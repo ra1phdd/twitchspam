@@ -8,6 +8,7 @@ import (
 
 type Config struct {
 	App           App                              `json:"app"`
+	Proxy         *Proxy                           `json:"proxy"`
 	UserAccess    UserAccess                       `json:"user_access"`
 	UsersTokens   map[string]*UserTokens           `json:"user_tokens"`
 	CertDomains   []string                         `json:"cert_domains"`
@@ -34,6 +35,11 @@ type App struct {
 	Username    string   `json:"username"`
 	UserID      string   `json:"user_id"`
 	ModChannels []string `json:"mod_channels"`
+}
+
+type Proxy struct {
+	Address string `json:"address"`
+	Port    int    `json:"port"`
 }
 
 type UserAccess struct {

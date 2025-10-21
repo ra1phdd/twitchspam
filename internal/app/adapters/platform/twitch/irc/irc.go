@@ -2,9 +2,11 @@ package irc
 
 import (
 	"bufio"
+	"context"
 	"crypto/tls"
 	"log/slog"
 	"net"
+	"net/http"
 	"strings"
 	"sync"
 	"time"
@@ -21,17 +23,19 @@ type IRC struct {
 	chans    map[string]chan bool
 	ttl      time.Duration
 
+	client *http.Client
 	conn   net.Conn
 	reader *bufio.Reader
 }
 
-func New(log logger.Logger, cfg *config.Config, ttl time.Duration) *IRC {
+func New(log logger.Logger, cfg *config.Config, ttl time.Duration, client *http.Client) *IRC {
 	i := &IRC{
 		log:      log,
 		cfg:      cfg,
 		channels: make(map[string]bool),
 		chans:    make(map[string]chan bool),
 		ttl:      ttl,
+		client:   client,
 	}
 
 	go i.runIRC()
@@ -87,7 +91,10 @@ func (i *IRC) runIRC() {
 }
 
 func (i *IRC) connectAndListen() error {
-	conn, err := tls.Dial("tcp", "irc.chat.twitch.tv:443", &tls.Config{MinVersion: tls.VersionTLS12})
+	transport := i.client.Transport.(*http.Transport)
+	transport.TLSClientConfig = &tls.Config{MinVersion: tls.VersionTLS12}
+
+	conn, err := transport.DialContext(context.Background(), "tcp", "irc.chat.twitch.tv:443")
 	if err != nil {
 		i.log.Error("Failed to connect to IRC chat Twitch", err)
 		return err

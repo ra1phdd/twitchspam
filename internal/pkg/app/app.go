@@ -1,9 +1,12 @@
 package app
 
 import (
+	"context"
 	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/prometheus/client_golang/prometheus"
+	"golang.org/x/net/proxy"
+	"net"
 	"net/http"
 	"sync"
 	"time"
@@ -19,9 +22,11 @@ import (
 )
 
 func New() error {
+	client := &http.Client{
+		Timeout:   10 * time.Second,
+		Transport: http.DefaultTransport,
+	}
 	log := logger.New()
-	client := &http.Client{Timeout: 10 * time.Second}
-	fs := file_server.New(log, client)
 
 	manager, err := config.New("config.json")
 	if err != nil {
@@ -29,6 +34,20 @@ func New() error {
 	}
 
 	cfg := manager.Get()
+	if cfg.Proxy != nil && cfg.Proxy.Address != "" && cfg.Proxy.Port != 0 {
+		dialer, err := proxy.SOCKS5("tcp", fmt.Sprintf("%s:%d", cfg.Proxy.Address, cfg.Proxy.Port), nil, proxy.Direct)
+		if err != nil {
+			return err
+		}
+
+		client.Transport = &http.Transport{
+			DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+				return dialer.Dial(network, addr)
+			},
+		}
+	}
+
+	fs := file_server.New(log, client)
 	log.SetLogLevel(cfg.App.LogLevel)
 	gin.SetMode(cfg.App.GinMode)
 
