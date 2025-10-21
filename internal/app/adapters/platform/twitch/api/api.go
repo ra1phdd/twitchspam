@@ -35,7 +35,7 @@ func NewTwitch(log logger.Logger, manager *config.Manager, client *http.Client, 
 		cfg:    manager.Get(),
 		client: client,
 		pool: &TwitchPool{
-			tasks:    make(chan func(), 100),
+			tasks:    make(chan func(), 300),
 			shutdown: make(chan struct{}),
 		},
 	}
