@@ -40,10 +40,14 @@ func NewRouter(log logger.Logger, manager *config.Manager) (*Router, error) {
 	}
 	cfg := manager.Get()
 
-	pprofGroup := r.router.Group("/", r.middlewares.Auth(cfg.App.AuthToken))
+	pprofGroup := r.router.Group("/", gin.BasicAuth(gin.Accounts{
+		"admin": cfg.App.AuthToken,
+	}))
 	pprof.Register(pprofGroup)
 
-	r.router.GET("/metrics", r.middlewares.Auth(cfg.App.AuthToken), gin.WrapH(promhttp.Handler()))
+	r.router.GET("/metrics", gin.BasicAuth(gin.Accounts{
+		"admin": cfg.App.AuthToken,
+	}), gin.WrapH(promhttp.Handler()))
 
 	r.router.GET("/", r.handlers.IndexHandler)
 	return r, nil
