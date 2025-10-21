@@ -38,11 +38,12 @@ func NewRouter(log logger.Logger, manager *config.Manager) (*Router, error) {
 		log:         log,
 		manager:     manager,
 	}
+	cfg := manager.Get()
 
-	pprofGroup := r.router.Group("/", r.middlewares.LocalOnly())
+	pprofGroup := r.router.Group("/", r.middlewares.Auth(cfg.App.AuthToken))
 	pprof.Register(pprofGroup)
 
-	r.router.GET("/metrics", r.middlewares.LocalOnly(), gin.WrapH(promhttp.Handler()))
+	r.router.GET("/metrics", r.middlewares.Auth(cfg.App.AuthToken), gin.WrapH(promhttp.Handler()))
 
 	r.router.GET("/", r.handlers.IndexHandler)
 	return r, nil

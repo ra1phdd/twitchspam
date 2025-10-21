@@ -34,6 +34,7 @@ type App struct {
 	ClientID    string   `json:"client_id"`
 	Username    string   `json:"username"`
 	UserID      string   `json:"user_id"`
+	AuthToken   string   `json:"auth_token"`
 	ModChannels []string `json:"mod_channels"`
 }
 

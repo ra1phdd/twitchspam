@@ -29,6 +29,9 @@ func (m *Manager) validate(cfg *Config) error {
 	if cfg.App.UserID == "" {
 		return errors.New("app.user_id is required")
 	}
+	if cfg.App.AuthToken == "" {
+		return errors.New("app.auth_token is required")
+	}
 	if len(cfg.App.ModChannels) == 0 {
 		return errors.New("app.mod_channels is required")
 	}

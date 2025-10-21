@@ -1,32 +1,19 @@
 package middlewares
 
 import (
+	"crypto/subtle"
 	"github.com/gin-gonic/gin"
-	"net"
+	"net/http"
 	"strings"
 )
 
-func (m *Middlewares) LocalOnly() gin.HandlerFunc {
+func (m *Middlewares) Auth(expected string) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		host, _, err := net.SplitHostPort(c.Request.RemoteAddr)
-		if err != nil {
-			c.AbortWithStatus(403)
+		auth := c.GetHeader("Authorization")
+		if !strings.HasPrefix(auth, "Bearer ") || subtle.ConstantTimeCompare([]byte(strings.TrimPrefix(auth, "Bearer ")), []byte(expected)) != 1 {
+			c.AbortWithStatus(http.StatusUnauthorized)
 			return
 		}
-
-		ip := net.ParseIP(host)
-		if ip == nil {
-			c.AbortWithStatus(403)
-			return
-		}
-
-		if !ip.IsLoopback() &&
-			!strings.HasPrefix(ip.String(), "192.168.") &&
-			!strings.HasPrefix(ip.String(), "10.") {
-			c.AbortWithStatus(403)
-			return
-		}
-
 		c.Next()
 	}
 }
