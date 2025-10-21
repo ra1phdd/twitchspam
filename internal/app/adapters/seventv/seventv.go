@@ -55,7 +55,7 @@ func New(log logger.Logger, cfg *config.Config, stream ports.StreamPort, client 
 		s.emoteSet[name] = struct{}{}
 	}
 
-	s.log.Info("Successfully initialized SevenTV instance",
+	s.log.Debug("Successfully initialized SevenTV instance",
 		slog.String("set_id", s.setID),
 		slog.Int("emote_count", len(s.emoteSet)),
 	)
@@ -145,7 +145,7 @@ func (sv *SevenTV) EmoteStats(words []string) (count int, onlyEmotes bool) {
 	}
 
 	ratio := float64(emoteChars) / float64(total)
-	sv.log.Debug("Computed emote ratio",
+	sv.log.Trace("Computed emote ratio",
 		slog.Int("emote_chars", emoteChars),
 		slog.Int("text_chars", textChars),
 		slog.Float64("ratio", ratio),
@@ -154,7 +154,7 @@ func (sv *SevenTV) EmoteStats(words []string) (count int, onlyEmotes bool) {
 
 	if ratio >= sv.cfg.Spam.SettingsEmotes.EmoteThreshold {
 		onlyEmotes = true
-		sv.log.Info("Message detected as emote-only",
+		sv.log.Debug("Message detected as emote-only",
 			slog.Float64("ratio", ratio),
 			slog.Int("emote_count", count),
 			slog.Float64("threshold", sv.cfg.Spam.SettingsEmotes.EmoteThreshold),
