@@ -51,6 +51,10 @@ func newStats(channelName string, fs ports.FileServerPort, cache ports.CachePort
 		cache:       cache,
 	}
 
+	if stats, ok := cache.Get(channelName); ok {
+		s.stats = stats
+	}
+
 	go func() {
 		ticker := time.NewTicker(1 * time.Minute)
 		for range ticker.C {
