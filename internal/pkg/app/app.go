@@ -61,6 +61,7 @@ func New() error {
 	streams := make(map[string]ports.StreamPort, len(cfg.App.ModChannels))
 	t := twitch.New(log, manager, client)
 
+	var channelIDs []string
 	var wg sync.WaitGroup
 	var mu sync.Mutex
 	for _, channel := range cfg.App.ModChannels {
@@ -70,8 +71,16 @@ func New() error {
 
 			prefixedLog := logger.NewPrefixedLogger(log, channel)
 			st := stream.NewStream(channel, fs)
-			msg := message.New(prefixedLog, manager, st, t.API(), client)
 
+			id, err := t.API().GetChannelID(channel)
+			if err != nil {
+				log.Error("Error getting live stream", err)
+				return
+			}
+			st.SetChannelID(id)
+			channelIDs = append(channelIDs, id)
+
+			msg := message.New(prefixedLog, manager, st, t.API(), client)
 			if err := t.AddChannel(channel, st, msg); err != nil {
 				log.Info(fmt.Sprintf("[%s] Failed add channel", channel))
 				return
@@ -92,17 +101,6 @@ func New() error {
 	wg.Wait()
 
 	go func() {
-		var channelIDs []string
-		for _, channel := range cfg.App.ModChannels {
-			id, err := t.API().GetChannelID(channel)
-			if err != nil {
-				log.Error("Error getting live stream", err)
-				return
-			}
-
-			channelIDs = append(channelIDs, id)
-		}
-
 		syncLiveStreams := func() {
 			data, err := t.API().GetLiveStreams(channelIDs)
 			if err != nil {
@@ -121,7 +119,6 @@ func New() error {
 				livedStreams[d.UserLogin] = struct{}{}
 
 				s.SetIslive(true)
-				s.SetChannelID(d.UserID)
 				s.Stats().SetOnline(d.ViewerCount)
 				s.OnceStart().Do(func() {
 					s.Stats().SetStartTime(d.StartedAt.In(time.Local))
