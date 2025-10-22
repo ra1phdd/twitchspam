@@ -30,7 +30,7 @@ type Mwords struct {
 func NewMword(options ports.OptionsPort, mwords []config.Mword, mwordGroups map[string]*config.MwordGroup) *MwordTemplate {
 	mt := &MwordTemplate{
 		options: options,
-		cache:   storage.NewCache[map[bool][]config.Punishment](500, 3*time.Minute),
+		cache:   storage.NewCache[map[bool][]config.Punishment](500, 3*time.Minute, false, false, "", 0),
 	}
 	mt.Update(mwords, mwordGroups)
 

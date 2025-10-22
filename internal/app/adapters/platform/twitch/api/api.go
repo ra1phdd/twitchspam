@@ -30,6 +30,8 @@ type TwitchPool struct {
 	shutdown chan struct{}
 }
 
+var UserAuthNotCompleted = errors.New("user auth failed")
+
 func NewTwitch(log logger.Logger, manager *config.Manager, client *http.Client, workerCount int) *Twitch {
 	t := &Twitch{
 		log:    log,
@@ -188,7 +190,7 @@ func calcWaitDuration(resetHeader string) time.Duration {
 func (t *Twitch) ensureUserToken(broadcasterID string) (*config.UserTokens, error) {
 	token, ok := t.cfg.UsersTokens[broadcasterID]
 	if !ok {
-		return nil, errors.New("user auth failed")
+		return nil, UserAuthNotCompleted
 	}
 
 	if time.Now().After(token.ObtainedAt.Add(time.Duration(token.ExpiresIn-300) * time.Second)) {

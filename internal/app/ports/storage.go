@@ -26,4 +26,5 @@ type CachePort[T any] interface {
 	Get(key string) (T, bool)
 	ClearKey(key string)
 	ClearAll()
+	FlushToDisk()
 }

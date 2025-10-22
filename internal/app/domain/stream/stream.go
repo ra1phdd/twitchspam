@@ -21,9 +21,9 @@ type Stream struct {
 	stats ports.StatsPort
 }
 
-func NewStream(channelName string, fs ports.FileServerPort) *Stream {
+func NewStream(channelName string, fs ports.FileServerPort, cache ports.CachePort[SessionStats]) *Stream {
 	s := &Stream{
-		stats: newStats(channelName, fs),
+		stats: newStats(channelName, fs, cache),
 	}
 
 	s.SetChannelName(channelName)

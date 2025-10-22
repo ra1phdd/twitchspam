@@ -8,6 +8,7 @@ import (
 	"golang.org/x/net/proxy"
 	"net"
 	"net/http"
+	"os"
 	"sync"
 	"time"
 	"twitchspam/internal/app/adapters/file_server"
@@ -17,6 +18,7 @@ import (
 	"twitchspam/internal/app/adapters/platform/twitch"
 	"twitchspam/internal/app/domain/stream"
 	"twitchspam/internal/app/infrastructure/config"
+	"twitchspam/internal/app/infrastructure/storage"
 	"twitchspam/internal/app/ports"
 	"twitchspam/pkg/logger"
 )
@@ -58,10 +60,22 @@ func New() error {
 	metrics.AntiSpamEnabled.With(prometheus.Labels{"type": "vip"}).Set(map[bool]float64{true: 1, false: 0}[cfg.Spam.SettingsVIP.Enabled])
 	metrics.AntiSpamEnabled.With(prometheus.Labels{"type": "emote"}).Set(map[bool]float64{true: 1, false: 0}[cfg.Spam.SettingsEmotes.Enabled])
 
-	streams := make(map[string]ports.StreamPort, len(cfg.App.ModChannels))
-	t := twitch.New(log, manager, client)
+	if _, err := os.Stat("cache"); os.IsNotExist(err) {
+		if err := os.Mkdir("cache", 0755); err != nil {
+			log.Error("Error creating cache directory", err)
+			return err
+		}
+	} else if err != nil {
+		log.Error("Error stat cache directory", err)
+		return err
+	}
 
-	var channelIDs []string
+	t := twitch.New(log, manager, client)
+	cacheStats := storage.NewCache[stream.SessionStats](0, 0, true, true, "cache/stats.json", 0)
+
+	streams := make(map[string]ports.StreamPort, len(cfg.App.ModChannels))
+	channelIDs := make([]string, 0, len(cfg.App.ModChannels))
+
 	var wg sync.WaitGroup
 	var mu sync.Mutex
 	for _, channel := range cfg.App.ModChannels {
@@ -70,7 +84,7 @@ func New() error {
 			defer wg.Done()
 
 			prefixedLog := logger.NewPrefixedLogger(log, channel)
-			st := stream.NewStream(channel, fs)
+			st := stream.NewStream(channel, fs, cacheStats)
 
 			id, err := t.API().GetChannelID(channel)
 			if err != nil {

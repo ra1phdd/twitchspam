@@ -1,16 +1,20 @@
 package admin
 
 import (
+	"errors"
 	"fmt"
 	"github.com/shirou/gopsutil/cpu"
+	"log/slog"
 	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
 	"time"
 	"twitchspam/internal/app/adapters/metrics"
+	"twitchspam/internal/app/adapters/platform/twitch/api"
 	"twitchspam/internal/app/domain"
 	"twitchspam/internal/app/infrastructure/config"
+	"twitchspam/internal/app/infrastructure/storage"
 	"twitchspam/internal/app/ports"
 	"twitchspam/pkg/logger"
 )
@@ -185,10 +189,16 @@ func (s *Spam) handleSpam(text *domain.MessageText) *ports.AnswerType {
 }
 
 type SetCategory struct {
-	re     *regexp.Regexp
-	log    logger.Logger
-	stream ports.StreamPort
-	api    ports.APIPort
+	re              *regexp.Regexp
+	log             logger.Logger
+	stream          ports.StreamPort
+	api             ports.APIPort
+	cacheCategories *storage.Cache[Category]
+}
+
+type Category struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
 }
 
 func (c *SetCategory) Execute(_ *config.Config, text *domain.MessageText) *ports.AnswerType {
@@ -201,37 +211,50 @@ func (c *SetCategory) handleSetCategory(text *domain.MessageText) *ports.AnswerT
 		return nonParametr
 	}
 
-	id, name := "0", ""
 	match := strings.TrimSpace(matches[1])
+	if match == "" {
+		if err := c.api.UpdateChannelGameID(c.stream.ChannelID(), "0"); err != nil {
+			c.log.Error("Failed to remove Category", err)
+			return unknownError
+		}
+		c.log.Info("Category removed", slog.String("channel_id", c.stream.ChannelID()))
+		return &ports.AnswerType{Text: []string{"категория удалена!"}, IsReply: true}
+	}
 
-	if match != "" {
+	id, name := "0", ""
+	key := text.Text(domain.RemovePunctuationOption)
+	if cat, ok := c.cacheCategories.Get(key); ok {
+		id, name = cat.ID, cat.Name
+		c.log.Info("Category found in cache", slog.String("id", id), slog.String("name", name))
+	} else {
 		var err error
 		id, name, err = c.api.SearchCategory(match)
 		if err != nil {
-			return &ports.AnswerType{
-				Text:    []string{"категория не найдена!"},
-				IsReply: true,
+			c.log.Error("Category search failed", err, slog.String("query", match))
+			if err := c.api.UpdateChannelGameID(c.stream.ChannelID(), "66082"); err != nil {
+				c.log.Error("Failed to set fallback Category", err)
+				if errors.Is(err, api.UserAuthNotCompleted) {
+					return &ports.AnswerType{Text: []string{"авторизация не пройдена!"}, IsReply: true}
+				}
+				return &ports.AnswerType{Text: []string{"категория не найдена!"}, IsReply: true}
 			}
+			return &ports.AnswerType{Text: []string{"категория не найдена, по умолчанию установлена Games + Demos!"}, IsReply: true}
 		}
+		c.cacheCategories.Set(key, Category{id, name})
+		c.log.Info("Category added to cache", slog.String("id", id), slog.String("name", name))
 	}
 
-	err := c.api.UpdateChannelGameID(c.stream.ChannelID(), id)
-	if err != nil {
-		c.log.Error("Failed to update channel game id", err)
+	if err := c.api.UpdateChannelGameID(c.stream.ChannelID(), id); err != nil {
+		c.log.Error("Failed to update channel Category id", err,
+			slog.String("channel_id", c.stream.ChannelID()), slog.String("category_id", id))
+		if errors.Is(err, api.UserAuthNotCompleted) {
+			return &ports.AnswerType{Text: []string{"авторизация не пройдена!"}, IsReply: true}
+		}
 		return unknownError
 	}
 
-	if id == "0" {
-		return &ports.AnswerType{
-			Text:    []string{"категория удалена!"},
-			IsReply: true,
-		}
-	}
-
-	return &ports.AnswerType{
-		Text:    []string{fmt.Sprintf("установлена категория %s!", name)},
-		IsReply: true,
-	}
+	c.log.Info("Category set successfully", slog.String("channel_id", c.stream.ChannelID()), slog.String("category_name", name), slog.String("category_id", id))
+	return &ports.AnswerType{Text: []string{fmt.Sprintf("установлена категория %s!", name)}, IsReply: true}
 }
 
 type SetTitle struct {
