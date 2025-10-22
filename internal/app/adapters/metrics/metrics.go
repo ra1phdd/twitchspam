@@ -6,13 +6,13 @@ import (
 )
 
 var (
-	// BotEnabled - включен ли бот
+	// BotEnabled - включен ли бот.
 	BotEnabled = promauto.NewGauge(prometheus.GaugeOpts{
 		Name: "bot_enabled",
 		Help: "Whether the bot is enabled (1) or disabled (0)",
 	})
 
-	// AntiSpamEnabled - включен ли антиспам
+	// AntiSpamEnabled - включен ли антиспам.
 	AntiSpamEnabled = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "anti_spam_enabled",
@@ -20,7 +20,7 @@ var (
 		}, []string{"type"},
 	)
 
-	// StreamActive - включен ли стрим по каналам
+	// StreamActive - включен ли стрим по каналам.
 	StreamActive = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "stream_active",
@@ -29,7 +29,7 @@ var (
 		[]string{"channel"},
 	)
 
-	// OnlineViewers - онлайн по каналам
+	// OnlineViewers - онлайн по каналам.
 	OnlineViewers = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "bot_online_viewers",
@@ -38,7 +38,7 @@ var (
 		[]string{"channel"},
 	)
 
-	// StreamStartTime - время начала стрима по каналам (Unix timestamp)
+	// StreamStartTime - время начала стрима по каналам (Unix timestamp).
 	StreamStartTime = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "stream_start_timestamp",
@@ -47,7 +47,7 @@ var (
 		[]string{"channel"},
 	)
 
-	// StreamEndTime - время конца стрима по каналам (Unix timestamp)
+	// StreamEndTime - время конца стрима по каналам (Unix timestamp).
 	StreamEndTime = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "stream_end_timestamp",
@@ -56,7 +56,7 @@ var (
 		[]string{"channel"},
 	)
 
-	// MessagesPerStream - количество сообщений за стрим по каналам
+	// MessagesPerStream - количество сообщений за стрим по каналам.
 	MessagesPerStream = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "bot_messages_total",
@@ -65,7 +65,7 @@ var (
 		[]string{"channel"},
 	)
 
-	// MessageProcessingTime - время обработки сообщений
+	// MessageProcessingTime - время обработки сообщений.
 	MessageProcessingTime = prometheus.NewHistogram(
 		prometheus.HistogramOpts{
 			Name:    "bot_message_processing_milliseconds",
@@ -74,7 +74,7 @@ var (
 		},
 	)
 
-	// ModerationActions - количество банов, мутов и удалений сообщений по каналам
+	// ModerationActions - количество банов, мутов и удалений сообщений по каналам.
 	ModerationActions = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "bot_moderation_actions",
@@ -83,7 +83,7 @@ var (
 		[]string{"channel", "action"},
 	)
 
-	// UserCommands - количество вызовов пользовательских команд по каналам
+	// UserCommands - количество вызовов пользовательских команд по каналам.
 	UserCommands = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "bot_user_commands_total",

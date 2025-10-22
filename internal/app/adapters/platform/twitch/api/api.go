@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -40,7 +41,7 @@ func NewTwitch(log logger.Logger, manager *config.Manager, client *http.Client, 
 		},
 	}
 
-	for i := 0; i < workerCount; i++ {
+	for range workerCount {
 		t.pool.wg.Add(1)
 		go t.pool.worker()
 	}
@@ -57,7 +58,7 @@ func (p *TwitchPool) Submit(task func()) error {
 	case p.tasks <- task:
 		return nil
 	default:
-		return fmt.Errorf("worker pool queue is full")
+		return errors.New("worker pool queue is full")
 	}
 }
 
@@ -90,7 +91,7 @@ const (
 )
 
 func (t *Twitch) doTwitchRequest(method, url string, token *config.UserTokens, body io.Reader, target interface{}) error {
-	req, err := http.NewRequest(method, url, body)
+	req, err := http.NewRequestWithContext(context.Background(), method, url, body)
 	if err != nil {
 		return err
 	}
@@ -218,7 +219,7 @@ type TokenResponse struct {
 
 func (t *Twitch) refreshUserToken(token *config.UserTokens) (*TokenResponse, error) {
 	if token == nil {
-		return nil, fmt.Errorf("token is nil")
+		return nil, errors.New("token is nil")
 	}
 
 	data := url.Values{}

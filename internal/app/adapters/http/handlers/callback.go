@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"github.com/gin-gonic/gin"
@@ -40,7 +41,7 @@ func (h *Handlers) CallbackHandler(c *gin.Context) {
 		slog.Bool("has_refresh_token", token.RefreshToken != ""),
 	)
 
-	req, err := http.NewRequest("GET", "https://api.twitch.tv/helix/users", nil)
+	req, err := http.NewRequestWithContext(context.Background(), "GET", "https://api.twitch.tv/helix/users", nil)
 	if err != nil {
 		h.log.Error("Failed to create Twitch user info request", err)
 		c.String(http.StatusInternalServerError, "Internal error creating request")

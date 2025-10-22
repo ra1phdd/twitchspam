@@ -27,7 +27,7 @@ func TestEmoteStats(t *testing.T) {
 	s := stream.NewStream("stintik", file_server.New(logger.New(), &http.Client{}))
 	s.SetChannelID(channelID)
 
-	sv := seventv.New(logger.New(), manager.Get(), s)
+	sv := seventv.New(logger.New(), manager.Get(), s, &http.Client{})
 
 	tests := []struct {
 		name        string

@@ -1,15 +1,16 @@
-package template
+package template_test
 
 import (
 	"github.com/stretchr/testify/assert"
 	"testing"
 	"twitchspam/internal/app/domain"
+	"twitchspam/internal/app/domain/template"
 	"twitchspam/internal/app/infrastructure/config"
 )
 
 func TestMatchMwordRule_CaseSensitiveAlwaysMode(t *testing.T) {
-	tmpl := New(
-		WithMword([]config.Mword{}, make(map[string]*config.MwordGroup)),
+	tmpl := template.New(
+		template.WithMword([]config.Mword{}, make(map[string]*config.MwordGroup)),
 	)
 
 	msg := &domain.ChatMessage{
@@ -19,7 +20,7 @@ func TestMatchMwordRule_CaseSensitiveAlwaysMode(t *testing.T) {
 	}
 
 	matched := tmpl.Mword().Check(msg, true)
-	assert.False(t, len(matched) > 0, "issuing punishments without mwords")
+	assert.LessOrEqual(t, len(matched), 0, "issuing punishments without mwords")
 
 	tmpl.Mword().Update([]config.Mword{
 		{
@@ -38,7 +39,7 @@ func TestMatchMwordRule_CaseSensitiveAlwaysMode(t *testing.T) {
 	}, make(map[string]*config.MwordGroup))
 
 	matched = tmpl.Mword().Check(msg, true)
-	assert.True(t, len(matched) > 0, "the punishment was not issued under the current law")
+	assert.Positive(t, len(matched), "the punishment was not issued under the current law")
 
 	msg = &domain.ChatMessage{
 		Message: domain.Message{
@@ -47,5 +48,5 @@ func TestMatchMwordRule_CaseSensitiveAlwaysMode(t *testing.T) {
 	}
 
 	matched = tmpl.Mword().Check(msg, true)
-	assert.False(t, len(matched) > 0, "the punishment was given for a word with a mismatched case")
+	assert.LessOrEqual(t, len(matched), 0, "the punishment was given for a word with a mismatched case")
 }

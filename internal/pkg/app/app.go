@@ -114,7 +114,7 @@ func New() error {
 			for _, d := range data {
 				s, ok := streams[d.UserLogin]
 				if !ok {
-					fmt.Println("Error getting live stream")
+					log.Error("Error getting live stream", nil)
 					continue
 				}
 

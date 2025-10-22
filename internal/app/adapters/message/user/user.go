@@ -160,7 +160,7 @@ func (u *User) handleCommands(msg *domain.ChatMessage) *ports.AnswerType {
 		return nil
 	}
 	var msgs []string
-	for i := 0; i < count; i++ {
+	for range count {
 		msgs = append(msgs, text)
 	}
 

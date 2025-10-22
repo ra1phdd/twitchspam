@@ -305,7 +305,7 @@ func (es *EventSub) subscribeEvent(eventType, version string, condition map[stri
 		return fmt.Errorf("marshal subscription body: %w", err)
 	}
 
-	req, err := http.NewRequest("POST", "https://api.twitch.tv/helix/eventsub/subscriptions", bytes.NewBuffer(jsonBody))
+	req, err := http.NewRequestWithContext(context.Background(), "POST", "https://api.twitch.tv/helix/eventsub/subscriptions", bytes.NewBuffer(jsonBody))
 	if err != nil {
 		return fmt.Errorf("create subscription request: %w", err)
 	}

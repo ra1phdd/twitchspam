@@ -365,7 +365,7 @@ func (c *Checker) matchExceptRule(msg *domain.ChatMessage, word string, re *rege
 	if opts.NoSub && msg.Chatter.IsSubscriber {
 		return false
 	}
-	if opts.OneWord && len(msg.Message.Text.Words()) > 1 {
+	if opts.OneWord && len(msg.Message.Text.Words(domain.LowerOption, domain.RemovePunctuationOption, domain.RemoveDuplicateLettersOption)) > 1 {
 		return false
 	}
 
