@@ -33,7 +33,6 @@ func New(log logger.Logger, cfg *config.Config, stream ports.StreamPort, client 
 		emoteSet: make(map[string]struct{}),
 		client:   client,
 	}
-	s.stream.SetChannelID("44748026")
 
 	log.Debug("Fetching user channel from 7TV API", slog.String("channel", s.stream.ChannelName()))
 
