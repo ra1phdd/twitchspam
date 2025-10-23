@@ -81,7 +81,7 @@ func (m *Message) Check(msg *domain.ChatMessage) {
 	})
 
 	if !strings.HasPrefix(msg.Message.Text.Text(), "!am al ") && !strings.HasPrefix(msg.Message.Text.Text(), "!am alg ") {
-		text, ok := m.template.Aliases().Replace(msg.Message.Text.Words())
+		text, ok := m.template.Aliases().Replace(msg.Message.Text.Words(domain.RemovePunctuationOption))
 		if ok {
 			msg.Message.Text.ReplaceOriginal(text)
 		}

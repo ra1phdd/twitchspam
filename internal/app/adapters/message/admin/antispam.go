@@ -155,9 +155,10 @@ func (a *InfoAntispam) handleAntiSpamInfo(cfg *config.Config) *ports.AnswerType 
 		"- время сброса счётчика наказаний: " + strconv.Itoa(cfg.Spam.SettingsEmotes.DurationResetPunishments),
 		"- ограничение количества эмоутов в сообщении: " + strconv.Itoa(cfg.Spam.SettingsEmotes.MaxEmotesLength),
 		"- наказание за превышение количества эмоутов в сообщении: " + a.template.Punishment().Format(cfg.Spam.SettingsEmotes.MaxEmotesPunishment),
-		"- исключения: " + formatExceptions(cfg.Spam.SettingsEmotes.Exceptions),
 		"\nисключения:",
 		formatExceptions(cfg.Spam.Exceptions),
+		"\nисключения эмоутов:",
+		formatExceptions(cfg.Spam.SettingsEmotes.Exceptions),
 	}
 	msg := "настройки:\n" + strings.Join(parts, "\n")
 
