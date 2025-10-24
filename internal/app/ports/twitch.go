@@ -28,6 +28,8 @@ type APIPort interface {
 	ManageHeldAutoModMessage(userID, msgID, action string) error
 	CreatePrediction(broadcasterID, title string, outcomes []string, predictionWindow int) (*Predictions, error)
 	EndPrediction(broadcasterID, predictionID, status, winningOutcomeID string) error
+	CreatePoll(broadcasterID, title string, choices []string, duration int, enablePoints bool, pointsPerVote int) (*Poll, error)
+	EndPoll(broadcasterID, pollID, status string) error
 }
 
 type IRCPort interface {
@@ -63,6 +65,23 @@ type Predictions struct {
 }
 
 type PredictionsOutcome struct {
+	ID    string
+	Title string
+}
+
+type Poll struct {
+	ID                         string
+	Title                      string
+	Choices                    []PollChoiceResponse
+	Status                     string
+	Duration                   int
+	StartedAt                  time.Time
+	EndedAt                    time.Time
+	ChannelPointsVotingEnabled bool
+	ChannelPointsPerVote       int
+}
+
+type PollChoiceResponse struct {
 	ID    string
 	Title string
 }

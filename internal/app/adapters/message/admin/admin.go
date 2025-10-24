@@ -208,7 +208,9 @@ func (a *Admin) buildCommandTree() ports.Command {
 		Stream: a.stream,
 		Api:    a.api,
 	}
+
 	pred := &ports.Predictions{}
+	poll := &ports.Poll{}
 
 	return &CompositeCommand{
 		subcommands: map[string]ports.Command{
@@ -406,8 +408,18 @@ func (a *Admin) buildCommandTree() ports.Command {
 					"end":  &EndPrediction{re: regexp.MustCompile(`(?i)^!am\s+pred\s+(end)(?:\s+(\d+))?$`), stream: a.stream, api: a.api, template: a.template, pred: pred},
 					"lock": &EndPrediction{re: regexp.MustCompile(`(?i)^!am\s+pred\s+(lock)`), stream: a.stream, api: a.api, template: a.template, pred: pred},
 					"del":  &EndPrediction{re: regexp.MustCompile(`(?i)^!am\s+pred\s+(del)`), stream: a.stream, api: a.api, template: a.template, pred: pred},
+					"re":   &RePrediction{stream: a.stream, api: a.api, template: a.template, pred: pred},
 				},
 				defaultCmd: &CreatePrediction{re: regexp.MustCompile(`(?i)^!am\s+pred\s+(?:(\d+)\s+)?([^/]+)(?:/(.*))?$`), stream: a.stream, api: a.api, template: a.template, pred: pred},
+				cursor:     2,
+			},
+			"poll": &CompositeCommand{
+				subcommands: map[string]ports.Command{
+					"end": &EndPoll{re: regexp.MustCompile(`(?i)^!am\s+poll\s+(end)`), stream: a.stream, api: a.api, template: a.template, poll: poll},
+					"del": &EndPoll{re: regexp.MustCompile(`(?i)^!am\s+poll\s+(del)`), stream: a.stream, api: a.api, template: a.template, poll: poll},
+					"re":  &RePoll{stream: a.stream, api: a.api, template: a.template, poll: poll},
+				},
+				defaultCmd: &CreatePoll{re: regexp.MustCompile(`(?i)^!am\s+poll\s+(?:(\d+)\s+)?(?:(\d+)\s+)?([^/]+)(?:/(.*))?$`), stream: a.stream, api: a.api, template: a.template, poll: poll},
 				cursor:     2,
 			},
 		},

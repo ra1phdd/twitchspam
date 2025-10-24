@@ -24,13 +24,20 @@ func (p *CreatePrediction) Execute(_ *config.Config, text *domain.MessageText) *
 }
 
 func (p *CreatePrediction) handleCreatePrediction(text *domain.MessageText) *ports.AnswerType {
-	matches := p.re.FindStringSubmatch(text.Text()) // !am pred <длительность> <заголовок> / <исход> / <исход> / <исход> / ... (до 10 вариантов)
+	if p.pred != nil && p.pred.Status != "RESOLVED" && p.pred.Status != "CANCELED" {
+		return &ports.AnswerType{
+			Text:    []string{"перед открытием ставки нужно закрыть предыдущую!"},
+			IsReply: true,
+		}
+	}
+
+	matches := p.re.FindStringSubmatch(text.Text()) // !am pred <*длительность> <заголовок> / <исход> / <исход> / <исход> / ... (до 10 вариантов)
 	if len(matches) != 4 {
 		return incorrectSyntax
 	}
 
 	dur := 60
-	if strings.TrimSpace(matches[3]) != "" {
+	if strings.TrimSpace(matches[1]) != "" {
 		if val, ok := p.template.Parser().ParseIntArg(strings.TrimSpace(matches[1]), 30, 1800); ok {
 			dur = val
 		} else {
@@ -64,7 +71,8 @@ func (p *CreatePrediction) handleCreatePrediction(text *domain.MessageText) *por
 		outcomes = outcomes[:10]
 	}
 
-	if len(outcomes) == 0 {
+	if len(outcomes) < 2 {
+		outcomes = outcomes[:0]
 		outcomes = append(outcomes, "да", "нет")
 	}
 
@@ -160,5 +168,51 @@ func (p *EndPrediction) handleEndPrediction(text *domain.MessageText) *ports.Ans
 	case "lock":
 		p.pred.LockedAt = time.Now()
 	}
+	return success
+}
+
+type RePrediction struct {
+	stream   ports.StreamPort
+	api      ports.APIPort
+	template ports.TemplatePort
+	pred     *ports.Predictions
+}
+
+func (p *RePrediction) Execute(_ *config.Config, _ *domain.MessageText) *ports.AnswerType {
+	return p.handleRePrediction()
+}
+
+func (p *RePrediction) handleRePrediction() *ports.AnswerType {
+	if p.pred == nil || p.pred.ID == "" {
+		return &ports.AnswerType{
+			Text:    []string{"предыдущая ставка не найдена!"},
+			IsReply: true,
+		}
+	}
+
+	if p.pred.Status != "RESOLVED" && p.pred.Status != "CANCELED" {
+		return &ports.AnswerType{
+			Text:    []string{"перед открытием ставки нужно закрыть предыдущую!"},
+			IsReply: true,
+		}
+	}
+
+	outcomes := make([]string, 0, len(p.pred.Outcomes))
+	for _, outcome := range p.pred.Outcomes {
+		outcomes = append(outcomes, outcome.ID)
+	}
+
+	pred, err := p.api.CreatePrediction(p.stream.ChannelID(), p.pred.Title, outcomes, p.pred.PredictionWindow)
+	if err != nil {
+		if errors.Is(err, api.ErrUserAuthNotCompleted) {
+			return &ports.AnswerType{Text: []string{"авторизация не пройдена!"}, IsReply: true}
+		}
+		if errors.Is(err, api.ErrBadRequest) {
+			return &ports.AnswerType{Text: []string{"некорректный запрос!"}, IsReply: true}
+		}
+		return unknownError
+	}
+	p.pred = pred
+
 	return success
 }
