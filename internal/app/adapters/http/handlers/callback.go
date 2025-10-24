@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 	"twitchspam/internal/app/infrastructure/config"
 )
@@ -41,7 +42,7 @@ func (h *Handlers) CallbackHandler(c *gin.Context) {
 		slog.Bool("has_refresh_token", token.RefreshToken != ""),
 	)
 
-	req, err := http.NewRequestWithContext(context.Background(), "GET", "https://api.twitch.tv/helix/users", nil)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "https://api.twitch.tv/helix/users", nil)
 	if err != nil {
 		h.log.Error("Failed to create Twitch user info request", err)
 		c.String(http.StatusInternalServerError, "Internal error creating request")
@@ -131,10 +132,17 @@ func (h *Handlers) exchangeCodeForToken(code string) (*config.UserTokens, error)
 	data.Set("grant_type", "authorization_code")
 	data.Set("redirect_uri", cfg.UserAccess.RedirectURL)
 
-	resp, err := http.PostForm("https://id.twitch.tv/oauth2/token", data)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, "https://id.twitch.tv/oauth2/token", strings.NewReader(data.Encode()))
+	if err != nil {
+		h.log.Error("Failed to create Twitch token exchange request", err)
+		return nil, fmt.Errorf("create request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	resp, err := h.client.Do(req)
 	if err != nil {
 		h.log.Error("Failed to send token exchange request to Twitch", err)
-		return nil, err
+		return nil, fmt.Errorf("send request: %w", err)
 	}
 	defer resp.Body.Close()
 

@@ -95,9 +95,7 @@ func (e *AddExcept) handleExceptAdd(cfg *config.Config, text *domain.MessageText
 	}
 
 	words := strings.Split(strings.TrimSpace(matches[6]), ",")
-	added := make([]string, 0, len(words))
-	exists := make([]string, 0, len(words))
-
+	added, exists := make([]string, 0, len(words)), make([]string, 0, len(words))
 	for _, word := range words {
 		word = strings.TrimSpace(word)
 		if word == "" {
@@ -201,8 +199,9 @@ func (e *SetExcept) handleExceptSet(cfg *config.Config, text *domain.MessageText
 		fn = e.template.Options().MergeEmoteExcept
 	}
 
-	var edited, notFound []string
-	for _, word := range strings.Split(strings.TrimSpace(matches[3]), ",") {
+	words := strings.Split(strings.TrimSpace(matches[3]), ",")
+	edited, notFound := make([]string, 0, len(words)), make([]string, 0, len(words))
+	for _, word := range words {
 		word = strings.TrimSpace(word)
 		if word == "" {
 			continue
@@ -247,8 +246,9 @@ func (e *DelExcept) handleExceptDel(cfg *config.Config, text *domain.MessageText
 		exSettings = cfg.Spam.SettingsEmotes.Exceptions
 	}
 
-	var removed, notFound []string
-	for _, word := range strings.Split(strings.TrimSpace(matches[1]), ",") {
+	words := strings.Split(strings.TrimSpace(matches[1]), ",")
+	removed, notFound := make([]string, 0, len(words)), make([]string, 0, len(words))
+	for _, word := range words {
 		word = strings.TrimSpace(word)
 		if word == "" {
 			continue
@@ -311,21 +311,22 @@ func (e *OnOffExcept) handleExceptOnOff(cfg *config.Config, text *domain.Message
 
 	state := strings.ToLower(strings.TrimSpace(matches[1]))
 
-	var edited, notFound []string
-	for _, key := range strings.Split(strings.TrimSpace(matches[2]), ",") {
-		key = strings.TrimSpace(key)
-		if key == "" {
+	words := strings.Split(strings.TrimSpace(matches[2]), ",")
+	edited, notFound := make([]string, 0, len(words)), make([]string, 0, len(words))
+	for _, word := range words {
+		word = strings.TrimSpace(word)
+		if word == "" {
 			continue
 		}
 
-		except, ok := exSettings[key]
+		except, ok := exSettings[word]
 		if !ok {
-			notFound = append(notFound, key)
+			notFound = append(notFound, word)
 			continue
 		}
 
 		except.Enabled = state == "on"
-		edited = append(edited, key)
+		edited = append(edited, word)
 	}
 
 	return buildResponse("исключения не указаны", RespArg{Items: edited, Name: "изменены"}, RespArg{Items: notFound, Name: "не найдены"})

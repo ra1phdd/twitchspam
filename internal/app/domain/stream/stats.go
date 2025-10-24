@@ -49,6 +49,12 @@ func newStats(channelName string, fs ports.FileServerPort, cache ports.CachePort
 		channelName: channelName,
 		fs:          fs,
 		cache:       cache,
+		stats: SessionStats{
+			CountMessages: make(map[string]int),
+			CountDeletes:  make(map[string]int),
+			CountTimeouts: make(map[string]int),
+			CountBans:     make(map[string]int),
+		},
 	}
 
 	if stats, ok := cache.Get(channelName); ok {
@@ -69,18 +75,11 @@ func (s *Stats) SetStartTime(t time.Time) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	s.stats.StartTime = time.Now()
+	if s.stats.StartTime.IsZero() {
+		s.stats.StartTime = time.Now()
+	}
 	s.stats.StartStreamTime = t
 	s.stats.EndStreamTime = t
-	s.stats.Online = struct {
-		MaxViewers int
-		SumViewers int64
-		Count      int
-	}{}
-	s.stats.CountMessages = make(map[string]int)
-	s.stats.CountDeletes = make(map[string]int)
-	s.stats.CountTimeouts = make(map[string]int)
-	s.stats.CountBans = make(map[string]int)
 
 	s.cache.Set(s.channelName, s.stats)
 	metrics.StreamStartTime.With(prometheus.Labels{"channel": s.channelName}).Set(float64(s.stats.StartStreamTime.Unix()))

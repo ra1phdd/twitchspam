@@ -213,15 +213,22 @@ func (c *SetCategory) handleSetCategory(text *domain.MessageText) *ports.AnswerT
 
 	match := strings.TrimSpace(matches[1])
 	if match == "" {
-		if err := c.api.UpdateChannelGameID(c.stream.ChannelID(), "0"); err != nil {
+		if err := c.api.UpdateChannelCategoryID(c.stream.ChannelID(), "0"); err != nil {
 			c.log.Error("Failed to remove Category", err)
+
+			if errors.Is(err, api.ErrUserAuthNotCompleted) {
+				return &ports.AnswerType{Text: []string{"авторизация не пройдена!"}, IsReply: true}
+			}
+			if errors.Is(err, api.ErrBadRequest) {
+				return &ports.AnswerType{Text: []string{"некорректный запрос!"}, IsReply: true}
+			}
 			return unknownError
 		}
 		c.log.Info("Category removed", slog.String("channel_id", c.stream.ChannelID()))
 		return &ports.AnswerType{Text: []string{"категория удалена!"}, IsReply: true}
 	}
 
-	id, name := "0", ""
+	var id, name string
 	key := text.Text(domain.RemovePunctuationOption)
 	if cat, ok := c.cacheCategories.Get(key); ok {
 		id, name = cat.ID, cat.Name
@@ -231,12 +238,24 @@ func (c *SetCategory) handleSetCategory(text *domain.MessageText) *ports.AnswerT
 		id, name, err = c.api.SearchCategory(match)
 		if err != nil {
 			c.log.Error("Category search failed", err, slog.String("query", match))
-			if err := c.api.UpdateChannelGameID(c.stream.ChannelID(), "66082"); err != nil {
+			if errors.Is(err, api.ErrUserAuthNotCompleted) {
+				return &ports.AnswerType{Text: []string{"авторизация не пройдена!"}, IsReply: true}
+			}
+
+			if err := c.api.UpdateChannelCategoryID(c.stream.ChannelID(), "66082"); err != nil {
 				c.log.Error("Failed to set fallback Category", err)
-				if errors.Is(err, api.UserAuthNotCompleted) {
+
+				if errors.Is(err, api.ErrUserAuthNotCompleted) {
 					return &ports.AnswerType{Text: []string{"авторизация не пройдена!"}, IsReply: true}
 				}
-				return &ports.AnswerType{Text: []string{"категория не найдена!"}, IsReply: true}
+				if errors.Is(err, api.ErrBadRequest) {
+					return &ports.AnswerType{Text: []string{"некорректный запрос!"}, IsReply: true}
+				}
+				return unknownError
+			}
+
+			if errors.Is(err, api.ErrBadRequest) {
+				return &ports.AnswerType{Text: []string{"некорректный запрос!"}, IsReply: true}
 			}
 			return &ports.AnswerType{Text: []string{"категория не найдена, по умолчанию установлена Games + Demos!"}, IsReply: true}
 		}
@@ -244,11 +263,14 @@ func (c *SetCategory) handleSetCategory(text *domain.MessageText) *ports.AnswerT
 		c.log.Info("Category added to cache", slog.String("id", id), slog.String("name", name))
 	}
 
-	if err := c.api.UpdateChannelGameID(c.stream.ChannelID(), id); err != nil {
-		c.log.Error("Failed to update channel Category id", err,
-			slog.String("channel_id", c.stream.ChannelID()), slog.String("category_id", id))
-		if errors.Is(err, api.UserAuthNotCompleted) {
+	if err := c.api.UpdateChannelCategoryID(c.stream.ChannelID(), id); err != nil {
+		c.log.Error("Failed to update channel Category id", err, slog.String("channel_id", c.stream.ChannelID()), slog.String("category_id", id))
+
+		if errors.Is(err, api.ErrUserAuthNotCompleted) {
 			return &ports.AnswerType{Text: []string{"авторизация не пройдена!"}, IsReply: true}
+		}
+		if errors.Is(err, api.ErrBadRequest) {
+			return &ports.AnswerType{Text: []string{"некорректный запрос!"}, IsReply: true}
 		}
 		return unknownError
 	}
@@ -285,11 +307,11 @@ func (t *SetTitle) handleSetTitle(text *domain.MessageText) *ports.AnswerType {
 	if err != nil {
 		t.log.Error("Failed to update channel title", err)
 
-		if err.Error() == "400" {
-			return &ports.AnswerType{
-				Text:    []string{"одно из указанных слов находится в бан-листе Twitch!"},
-				IsReply: true,
-			}
+		if errors.Is(err, api.ErrUserAuthNotCompleted) {
+			return &ports.AnswerType{Text: []string{"авторизация не пройдена!"}, IsReply: true}
+		}
+		if errors.Is(err, api.ErrBadRequest) {
+			return &ports.AnswerType{Text: []string{"некорректный запрос! Вероятно, одно из указанных слов находится в бан-листе Twitch"}, IsReply: true}
 		}
 		return unknownError
 	}

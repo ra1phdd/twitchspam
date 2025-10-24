@@ -3,6 +3,7 @@ package user
 import (
 	"github.com/prometheus/client_golang/prometheus"
 	"golang.org/x/time/rate"
+	"log/slog"
 	"strconv"
 	"strings"
 	"sync"
@@ -41,14 +42,26 @@ func (u *User) FindMessages(msg *domain.ChatMessage) *ports.AnswerType {
 	u.ensureUserLimiter(msg.Chatter.Username, cfg.Limiter)
 
 	if !cfg.Enabled {
+		u.log.Debug("Bot disabled, skipping message",
+			slog.String("username", msg.Chatter.Username),
+			slog.String("message", msg.Message.Text.Text()),
+		)
 		return nil
 	}
 
 	if action := u.handleStats(msg); action != nil {
+		u.log.Debug("Handled stats command",
+			slog.String("username", msg.Chatter.Username),
+			slog.String("message", msg.Message.Text.Text()),
+		)
 		return action
 	}
 
 	if action := u.handleCommands(msg); action != nil {
+		u.log.Debug("Handled user command",
+			slog.String("username", msg.Chatter.Username),
+			slog.String("message", msg.Message.Text.Text()),
+		)
 		return action
 	}
 
@@ -57,15 +70,27 @@ func (u *User) FindMessages(msg *domain.ChatMessage) *ports.AnswerType {
 
 func (u *User) handleStats(msg *domain.ChatMessage) *ports.AnswerType {
 	if !strings.HasPrefix(msg.Message.Text.Text(domain.LowerOption), "!stats") {
+		u.log.Trace("Message does not start with !stats, skipping", slog.String("username", msg.Chatter.Username))
 		return nil
 	}
 
-	if u.stream.IsLive() || !u.allowUser(msg.Chatter.Username) {
+	if u.stream.IsLive() {
+		u.log.Debug("Stream is live, stats command not allowed", slog.String("username", msg.Chatter.Username))
+		return nil
+	}
+
+	if !u.allowUser(msg.Chatter.Username) {
+		u.log.Debug("User not allowed to access stats due to limiter", slog.String("username", msg.Chatter.Username))
 		return nil
 	}
 
 	target := msg.Chatter.Username
 	words := msg.Message.Text.Words(domain.LowerOption)
+
+	u.log.Info("User command executed",
+		slog.String("user", msg.Chatter.Username),
+		slog.String("message", msg.Message.Text.Text()),
+	)
 
 	if len(words) > 1 {
 		switch words[1] {
@@ -89,6 +114,7 @@ func (u *User) handleCommands(msg *domain.ChatMessage) *ports.AnswerType {
 	var replyUsername string
 	if msg.Reply != nil {
 		replyUsername = msg.Reply.ParentChatter.Username
+		u.log.Debug("Message is a reply", slog.String("reply_username", replyUsername))
 	}
 
 	text, count, isAnnounce := "", 1, false
@@ -103,6 +129,7 @@ func (u *User) handleCommands(msg *domain.ChatMessage) *ports.AnswerType {
 
 		if strings.HasPrefix(word, "@") && replyUsername == "" {
 			replyUsername = strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(word, "@"), ","))
+			u.log.Debug("Detected reply username from @ mention", slog.String("reply_username", replyUsername))
 		}
 
 		cmd, ok := cfg.Commands[strings.ToLower(word)]
@@ -111,6 +138,9 @@ func (u *User) handleCommands(msg *domain.ChatMessage) *ports.AnswerType {
 		}
 
 		if cmd.Options.IsPrivate && !msg.Chatter.IsBroadcaster && !msg.Chatter.IsMod {
+			u.log.Warn("Private command attempted by unauthorized user",
+				slog.String("username", msg.Chatter.Username),
+				slog.String("command", word))
 			return nil
 		}
 
@@ -120,6 +150,7 @@ func (u *User) handleCommands(msg *domain.ChatMessage) *ports.AnswerType {
 			if strings.HasSuffix(next, "a") {
 				isAnnounce = true
 				next = strings.TrimSuffix(next, "a")
+				u.log.Debug("Announcement mode detected", slog.Bool("is_announce", isAnnounce))
 			}
 
 			if strings.HasSuffix(next, "а") {
@@ -138,10 +169,21 @@ func (u *User) handleCommands(msg *domain.ChatMessage) *ports.AnswerType {
 
 		if (cmd.Options.Mode == config.OnlineMode && !u.stream.IsLive()) ||
 			(cmd.Options.Mode == config.OfflineMode && u.stream.IsLive()) {
+			u.log.Trace("Command mode does not match stream status, skipping",
+				slog.String("command", word),
+				slog.Int("option_mode", cmd.Options.Mode),
+				slog.Bool("stream_live", u.stream.IsLive()),
+			)
 			return nil
 		}
 
-		if !u.allowUser(msg.Chatter.Username) || !u.allowCommand(word, cmd.Limiter) {
+		if !u.allowUser(msg.Chatter.Username) {
+			u.log.Warn("User blocked by limiter during command execution", slog.String("username", msg.Chatter.Username), slog.String("command", word))
+			return nil
+		}
+
+		if !u.allowCommand(word, cmd.Limiter) {
+			u.log.Warn("Command blocked by limiter", slog.String("username", msg.Chatter.Username), slog.String("command", word))
 			return nil
 		}
 
@@ -157,14 +199,22 @@ func (u *User) handleCommands(msg *domain.ChatMessage) *ports.AnswerType {
 	}
 
 	if text == "" {
+		u.log.Trace("No command matched or text empty, returning nil")
 		return nil
 	}
-	var msgs []string
-	for range count {
-		msgs = append(msgs, text)
+
+	u.log.Info("User command executed",
+		slog.String("user", msg.Chatter.Username),
+		slog.String("message", msg.Message.Text.Text()),
+	)
+
+	msgs := make([]string, count)
+	for i := range count {
+		msgs[i] = text
 	}
 
 	if _, ok := u.manager.Get().UsersTokens[u.stream.ChannelID()]; ok && isAnnounce {
+		u.log.Info("Sending chat announcement", slog.String("channel_id", u.stream.ChannelID()), slog.Int("count", count))
 		u.api.SendChatAnnouncements(u.stream.ChannelID(), &ports.AnswerType{
 			Text:    msgs,
 			IsReply: false,

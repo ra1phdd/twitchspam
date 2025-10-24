@@ -12,17 +12,6 @@ import (
 	"twitchspam/internal/app/ports"
 )
 
-var (
-	notFoundMwordGroup = &ports.AnswerType{
-		Text:    []string{"мворд группа не найдена!"},
-		IsReply: true,
-	}
-	existsMwordGroup = &ports.AnswerType{
-		Text:    []string{"мворд группа уже существует!"},
-		IsReply: true,
-	}
-)
-
 // Одиночные мутворды
 
 type AddMword struct {
@@ -84,9 +73,7 @@ func (m *AddMword) handleMwAdd(cfg *config.Config, text *domain.MessageText) *po
 	}
 
 	words := strings.Split(strings.TrimSpace(matches[5]), ",")
-	added := make([]string, 0, len(words))
-	exists := make([]string, 0, len(words))
-
+	added, exists := make([]string, 0, len(words)), make([]string, 0, len(words))
 	for _, word := range words {
 		word = strings.TrimSpace(word)
 		if word == "" {
@@ -145,23 +132,24 @@ func (m *SetMword) handleMwSet(cfg *config.Config, text *domain.MessageText) *po
 		}
 	}
 
-	var edited, notFound []string
-	for _, word := range strings.Split(strings.TrimSpace(matches[2]), ",") {
+	words := strings.Split(strings.TrimSpace(matches[2]), ",")
+	edited, notFound := make([]string, 0, len(words)), make([]string, 0, len(words))
+	for _, word := range words {
 		word = strings.TrimSpace(word)
 		if word == "" {
 			continue
 		}
 
-		i := slices.IndexFunc(cfg.Mword, func(w config.Mword) bool { return w.Word == word })
-		if i == -1 {
+		index := slices.IndexFunc(cfg.Mword, func(w config.Mword) bool { return w.Word == word })
+		if index == -1 {
 			notFound = append(notFound, word)
 			continue
 		}
 
 		if len(punishments) != 0 {
-			cfg.Mword[i].Punishments = punishments
+			cfg.Mword[index].Punishments = punishments
 		}
-		cfg.Mword[i].Options = m.template.Options().MergeMword(cfg.Mword[i].Options, opts)
+		cfg.Mword[index].Options = m.template.Options().MergeMword(cfg.Mword[index].Options, opts)
 
 		edited = append(edited, word)
 	}
@@ -185,8 +173,9 @@ func (m *DelMword) handleMwDel(cfg *config.Config, text *domain.MessageText) *po
 		return nonParametr
 	}
 
-	var removed, notFound []string
-	for _, word := range strings.Split(strings.TrimSpace(matches[1]), ",") {
+	words := strings.Split(strings.TrimSpace(matches[1]), ",")
+	removed, notFound := make([]string, 0, len(words)), make([]string, 0, len(words))
+	for _, word := range words {
 		word = strings.TrimSpace(word)
 		if word == "" {
 			continue
@@ -198,8 +187,8 @@ func (m *DelMword) handleMwDel(cfg *config.Config, text *domain.MessageText) *po
 			continue
 		}
 
-		removed = append(removed, word)
 		cfg.Mword = slices.Delete(cfg.Mword, index, index+1)
+		removed = append(removed, word)
 	}
 
 	m.template.Mword().Update(cfg.Mword, cfg.MwordGroup)
@@ -216,7 +205,7 @@ func (m *ListMword) Execute(cfg *config.Config, _ *domain.MessageText) *ports.An
 }
 
 func (m *ListMword) handleMwList(cfg *config.Config) *ports.AnswerType {
-	mwords := make(map[string]config.Mword)
+	mwords := make(map[string]config.Mword, len(cfg.Mword))
 	for i, mw := range cfg.Mword {
 		mwords[strconv.Itoa(i)] = mw
 	}
@@ -257,8 +246,10 @@ func (m *CreateMwordGroup) handleMwgCreate(cfg *config.Config, text *domain.Mess
 		return existsMwordGroup
 	}
 
-	var punishments []config.Punishment
-	for _, pa := range strings.Split(strings.TrimSpace(matches[2]), ",") {
+	parts := strings.Split(strings.TrimSpace(matches[2]), ",")
+	punishments := make([]config.Punishment, 0, len(parts))
+
+	for _, pa := range parts {
 		pa = strings.TrimSpace(pa)
 		if pa == "" {
 			continue
@@ -323,8 +314,9 @@ func (m *AddMwordGroup) handleMwgAdd(cfg *config.Config, text *domain.MessageTex
 		return success
 	}
 
-	var added, exists []string
-	for _, word := range strings.Split(strings.TrimSpace(matches[6]), ",") {
+	words := strings.Split(strings.TrimSpace(matches[6]), ",")
+	added, exists := make([]string, 0, len(words)), make([]string, 0, len(words))
+	for _, word := range words {
 		word = strings.TrimSpace(word)
 		if word == "" {
 			continue
@@ -432,23 +424,24 @@ func (m *SetMwordGroup) handleMwgSet(cfg *config.Config, text *domain.MessageTex
 		}
 	}
 
-	var edited, notFound []string
-	for _, word := range strings.Split(strings.TrimSpace(matches[3]), ",") {
+	words := strings.Split(strings.TrimSpace(matches[3]), ",")
+	edited, notFound := make([]string, 0, len(words)), make([]string, 0, len(words))
+	for _, word := range words {
 		word = strings.TrimSpace(word)
 		if word == "" {
 			continue
 		}
 
-		i := slices.IndexFunc(cfg.MwordGroup[groupName].Words, func(w config.Mword) bool { return w.Word == word })
-		if i == -1 {
+		index := slices.IndexFunc(cfg.MwordGroup[groupName].Words, func(w config.Mword) bool { return w.Word == word })
+		if index == -1 {
 			notFound = append(notFound, word)
 			continue
 		}
 
 		if len(punishments) != 0 {
-			cfg.MwordGroup[groupName].Words[i].Punishments = punishments
+			cfg.MwordGroup[groupName].Words[index].Punishments = punishments
 		}
-		cfg.MwordGroup[groupName].Words[i].Options = m.template.Options().MergeMword(cfg.MwordGroup[groupName].Words[i].Options, opts)
+		cfg.MwordGroup[groupName].Words[index].Options = m.template.Options().MergeMword(cfg.MwordGroup[groupName].Words[index].Options, opts)
 
 		edited = append(edited, word)
 	}
@@ -485,8 +478,9 @@ func (m *DelMwordGroup) handleMwgDel(cfg *config.Config, text *domain.MessageTex
 		return success
 	}
 
-	var removed, notFound []string
-	for _, word := range strings.Split(strings.TrimSpace(matches[2]), ",") {
+	words := strings.Split(strings.TrimSpace(matches[2]), ",")
+	removed, notFound := make([]string, 0, len(words)), make([]string, 0, len(words))
+	for _, word := range words {
 		word = strings.TrimSpace(word)
 		if word == "" {
 			continue

@@ -1,6 +1,8 @@
 package api
 
 import (
+	"context"
+	"net/http"
 	"net/url"
 	"time"
 	"twitchspam/internal/app/ports"
@@ -14,8 +16,12 @@ func (t *Twitch) GetLiveStreams(channelIDs []string) ([]*ports.Stream, error) {
 	params.Set("type", "live")
 
 	var streamResp StreamResponse
-	err := t.doTwitchRequest("GET", "https://api.twitch.tv/helix/streams?"+params.Encode(), nil, nil, &streamResp)
-	if err != nil {
+	if _, err := t.doTwitchRequest(context.Background(), twitchRequest{
+		Method: http.MethodGet,
+		URL:    "https://api.twitch.tv/helix/streams?" + params.Encode(),
+		Token:  nil,
+		Body:   nil,
+	}, &streamResp); err != nil {
 		return nil, err
 	}
 

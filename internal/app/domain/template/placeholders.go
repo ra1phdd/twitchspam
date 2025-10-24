@@ -199,6 +199,7 @@ func (pt *PlaceholdersTemplate) placeholderRandint(args []string) string {
 		minInt, maxInt = maxInt, minInt
 	}
 
+	// #nosec G404
 	num := rand.Intn(maxInt-minInt+1) + minInt
 	return strconv.Itoa(num)
 }

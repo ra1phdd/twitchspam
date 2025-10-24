@@ -8,12 +8,10 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
-	"net/url"
 	"strconv"
 	"sync"
 	"time"
 	"twitchspam/internal/app/infrastructure/config"
-	"twitchspam/internal/app/ports"
 	"twitchspam/pkg/logger"
 )
 
@@ -29,8 +27,6 @@ type TwitchPool struct {
 	tasks    chan func()
 	shutdown chan struct{}
 }
-
-var UserAuthNotCompleted = errors.New("user auth failed")
 
 func NewTwitch(log logger.Logger, manager *config.Manager, client *http.Client, workerCount int) *Twitch {
 	t := &Twitch{
@@ -51,58 +47,41 @@ func NewTwitch(log logger.Logger, manager *config.Manager, client *http.Client, 
 	return t
 }
 
-func (t *Twitch) Pool() ports.APIPollPort {
-	return t.pool
-}
-
-func (p *TwitchPool) Submit(task func()) error {
-	select {
-	case p.tasks <- task:
-		return nil
-	default:
-		return errors.New("worker pool queue is full")
-	}
-}
-
-func (p *TwitchPool) Stop() {
-	close(p.tasks)
-	p.wg.Wait()
-	close(p.shutdown)
-}
-
-func (p *TwitchPool) worker() {
-	defer p.wg.Done()
-
-	for {
-		select {
-		case task, ok := <-p.tasks:
-			if !ok {
-				return
-			}
-			task()
-		case <-p.shutdown:
-			return
-		}
-	}
-}
-
 const (
 	maxRetries  = 5
 	baseBackoff = time.Second
 	maxBackoff  = 30 * time.Second
 )
 
-func (t *Twitch) doTwitchRequest(method, url string, token *config.UserTokens, body io.Reader, target interface{}) error {
-	req, err := http.NewRequestWithContext(context.Background(), method, url, body)
+type twitchRequest struct {
+	Method string
+	URL    string
+	Token  *config.UserTokens
+	Body   io.Reader
+}
+
+type TwitchAPIError struct {
+	Error   string `json:"error"`
+	Status  int    `json:"status"`
+	Message string `json:"message"`
+}
+
+func (t *Twitch) doTwitchRequest(ctx context.Context, reqData twitchRequest, target interface{}) (int, error) {
+	t.log.Trace("Preparing Twitch request",
+		slog.String("method", reqData.Method),
+		slog.String("url", reqData.URL),
+		slog.Bool("hasToken", reqData.Token != nil),
+	)
+
+	req, err := http.NewRequestWithContext(ctx, reqData.Method, reqData.URL, reqData.Body)
 	if err != nil {
-		return err
+		t.log.Error("Failed to create HTTP request", err, slog.String("method", reqData.Method), slog.String("url", reqData.URL))
+		return 0, err
 	}
 
-	auth := t.cfg.App.OAuth
-	clientID := t.cfg.App.ClientID
-	if token != nil {
-		auth = token.AccessToken
-		clientID = t.cfg.UserAccess.ClientID
+	auth, clientID := t.cfg.App.OAuth, t.cfg.App.ClientID
+	if reqData.Token != nil {
+		auth, clientID = reqData.Token.AccessToken, t.cfg.UserAccess.ClientID
 	}
 
 	req.Header.Set("Authorization", "Bearer "+auth)
@@ -110,40 +89,42 @@ func (t *Twitch) doTwitchRequest(method, url string, token *config.UserTokens, b
 	req.Header.Set("Content-Type", "application/json")
 
 	var resp *http.Response
-	defer func() {
-		if resp != nil {
-			resp.Body.Close()
-		}
-	}()
-
 	for attempt := 1; attempt <= maxRetries; attempt++ {
+		t.log.Debug("Sending Twitch request", slog.Int("attempt", attempt), slog.String("method", reqData.Method), slog.String("url", reqData.URL))
+
 		resp, err = t.client.Do(req)
 		if err != nil {
-			return err
+			t.log.Error("HTTP request failed", err, slog.Int("attempt", attempt), slog.String("url", reqData.URL))
+			return 0, err
 		}
 
+		raw, err := io.ReadAll(resp.Body)
+		if cerr := resp.Body.Close(); cerr != nil {
+			t.log.Error("Failed to close response body", cerr)
+		}
+		if err != nil {
+			t.log.Error("Failed to read response body", err, slog.Int("status", resp.StatusCode), slog.String("url", reqData.URL))
+			return resp.StatusCode, err
+		}
+
+		t.log.Trace("Response received", slog.Int("status", resp.StatusCode), slog.String("body", string(raw)))
 		switch resp.StatusCode {
 		case http.StatusOK, http.StatusNoContent:
 			if target == nil {
-				_, _ = io.Copy(io.Discard, resp.Body)
-				return nil
+				t.log.Debug("No target provided, discarding body", slog.Int("status", resp.StatusCode))
+				return resp.StatusCode, nil
 			}
-			return json.NewDecoder(resp.Body).Decode(target)
 
-		case http.StatusBadRequest:
-			raw, _ := io.ReadAll(resp.Body)
-			t.log.Error("Twitch returned 400", nil, slog.String("raw", string(raw)))
-			return errors.New("400")
+			if err := json.Unmarshal(raw, target); err != nil {
+				t.log.Error("Failed to decode response JSON", err, slog.Int("status", resp.StatusCode), slog.String("body", string(raw)))
+				return resp.StatusCode, err
+			}
 
-		case http.StatusUnauthorized:
-			raw, _ := io.ReadAll(resp.Body)
-			t.log.Warn("Access token expired", slog.String("raw", string(raw)))
-
-			return errors.New("access token expired")
+			t.log.Debug("Request succeeded", slog.Int("status", resp.StatusCode))
+			return resp.StatusCode, nil
 
 		case http.StatusTooManyRequests:
-			resetHeader := resp.Header.Get("Ratelimit-Reset")
-			wait := calcWaitDuration(resetHeader)
+			wait := calcWaitDuration(resp.Header.Get("Ratelimit-Reset"))
 
 			if wait <= 0 {
 				wait = time.Duration(attempt) * baseBackoff
@@ -152,20 +133,27 @@ func (t *Twitch) doTwitchRequest(method, url string, token *config.UserTokens, b
 				wait = maxBackoff
 			}
 
-			t.log.Warn("Rate limit hit, backing off",
-				slog.Int("attempt", attempt),
-				slog.String("wait", wait.String()),
-			)
+			t.log.Warn("Rate limit hit, backing off", slog.Int("attempt", attempt), slog.String("wait", wait.String()))
 			time.Sleep(wait)
 			continue
 
 		default:
-			raw, _ := io.ReadAll(resp.Body)
-			return fmt.Errorf("twitch returned %s: %s", resp.Status, string(raw))
+			var apiErr TwitchAPIError
+			if err := json.Unmarshal(raw, &apiErr); err != nil {
+				t.log.Error("Failed to decode Twitch API error", err, slog.Int("status", resp.StatusCode), slog.String("body", string(raw)))
+				return resp.StatusCode, fmt.Errorf("twitch API returned: %s", string(raw))
+			}
+
+			t.log.Error("Twitch API returned an error", errors.New(apiErr.Message), slog.Int("status", resp.StatusCode), slog.String("url", reqData.URL))
+			return resp.StatusCode, errors.New(apiErr.Message)
 		}
 	}
 
-	return fmt.Errorf("twitch request failed after %d retries", maxRetries)
+	t.log.Error("Twitch request failed after max retries", nil,
+		slog.Int("maxRetries", maxRetries),
+		slog.String("url", reqData.URL),
+	)
+	return 0, fmt.Errorf("twitch request failed after %d retries", maxRetries)
 }
 
 func calcWaitDuration(resetHeader string) time.Duration {
@@ -185,66 +173,4 @@ func calcWaitDuration(resetHeader string) time.Duration {
 		return 0
 	}
 	return resetTime.Sub(now)
-}
-
-func (t *Twitch) ensureUserToken(broadcasterID string) (*config.UserTokens, error) {
-	token, ok := t.cfg.UsersTokens[broadcasterID]
-	if !ok {
-		return nil, UserAuthNotCompleted
-	}
-
-	if time.Now().After(token.ObtainedAt.Add(time.Duration(token.ExpiresIn-300) * time.Second)) {
-		resp, err := t.refreshUserToken(token)
-		if err != nil {
-			return nil, fmt.Errorf("failed to refresh user token: %w", err)
-		}
-
-		newToken := &config.UserTokens{
-			AccessToken:  resp.AccessToken,
-			RefreshToken: resp.RefreshToken,
-			ExpiresIn:    resp.ExpiresIn,
-			ObtainedAt:   time.Now(),
-		}
-		t.cfg.UsersTokens[broadcasterID] = newToken
-
-		return newToken, nil
-	}
-
-	return token, nil
-}
-
-type TokenResponse struct {
-	AccessToken  string `json:"access_token"`
-	RefreshToken string `json:"refresh_token"`
-	ExpiresIn    int    `json:"expires_in"`
-}
-
-func (t *Twitch) refreshUserToken(token *config.UserTokens) (*TokenResponse, error) {
-	if token == nil {
-		return nil, errors.New("token is nil")
-	}
-
-	data := url.Values{}
-	data.Set("grant_type", "refresh_token")
-	data.Set("refresh_token", token.RefreshToken)
-	data.Set("client_id", t.cfg.UserAccess.ClientID)
-	data.Set("client_secret", t.cfg.UserAccess.ClientSecret)
-
-	resp, err := t.client.PostForm("https://id.twitch.tv/oauth2/token", data)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		raw, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("failed to refresh token: %s", string(raw))
-	}
-
-	var tokenResp TokenResponse
-	if err := json.NewDecoder(resp.Body).Decode(&tokenResp); err != nil {
-		return nil, err
-	}
-
-	return &tokenResp, nil
 }

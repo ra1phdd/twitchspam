@@ -102,37 +102,35 @@ func (c *DelCommand) Execute(cfg *config.Config, text *domain.MessageText) *port
 }
 
 func (c *DelCommand) handleCommandDel(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
-	matches := c.re.FindStringSubmatch(text.Text()) // !am cmd del <команды через запятую>
+	matches := c.re.FindStringSubmatch(text.Text()) // !am word del <команды через запятую>
 	if len(matches) != 2 {
 		return nonParametr
 	}
 
 	words := strings.Split(strings.TrimSpace(matches[1]), ",")
-	removed := make([]string, 0, len(words))
-	notFound := make([]string, 0, len(words))
-
-	for _, cmd := range words {
-		cmd = strings.ToLower(strings.TrimSpace(cmd))
-		if cmd == "" {
+	removed, notFound := make([]string, 0, len(words)), make([]string, 0, len(words))
+	for _, word := range words {
+		word = strings.ToLower(strings.TrimSpace(word))
+		if word == "" {
 			continue
 		}
 
-		if !strings.HasPrefix(cmd, "!") {
-			cmd = "!" + cmd
+		if !strings.HasPrefix(word, "!") {
+			word = "!" + word
 		}
 
-		if _, ok := cfg.Commands[cmd]; !ok {
-			notFound = append(notFound, cmd)
+		if _, ok := cfg.Commands[word]; !ok {
+			notFound = append(notFound, word)
 			continue
 		}
 
-		delete(cfg.Commands, cmd)
+		delete(cfg.Commands, word)
 		for alias, original := range cfg.Aliases {
-			if original == cmd {
+			if original == word {
 				delete(cfg.Aliases, alias)
 			}
 		}
-		removed = append(removed, cmd)
+		removed = append(removed, word)
 	}
 
 	return buildResponse("команды не указаны", RespArg{Items: removed, Name: "удалены"}, RespArg{Items: notFound, Name: "не найдены"})
@@ -168,7 +166,7 @@ func (c *AliasesCommand) handleCommandAliases(cfg *config.Config, text *domain.M
 		}
 	}
 
-	var aliases []string
+	aliases := make([]string, 0, len(cfg.Aliases))
 	for alias, orig := range cfg.Aliases {
 		if strings.Contains(cmd, orig) {
 			aliases = append(aliases, alias)

@@ -30,7 +30,7 @@ func (a *ListAlias) handleAliasesList(cfg *config.Config) *ports.AnswerType {
 			continue
 		}
 
-		var alias []string
+		alias := make([]string, 0, len(als.Aliases))
 		for key := range als.Aliases {
 			alias = append(alias, key)
 		}
@@ -117,18 +117,19 @@ func (a *DelAlias) handleAliasesDel(cfg *config.Config, text *domain.MessageText
 		return nonParametr
 	}
 
-	var removed, notFound []string
-	for _, alias := range strings.Split(strings.TrimSpace(matches[1]), ",") {
-		alias = strings.TrimSpace(alias)
-		if alias == "" {
+	words := strings.Split(strings.TrimSpace(matches[1]), ",")
+	removed, notFound := make([]string, 0, len(words)), make([]string, 0, len(words))
+	for _, word := range words {
+		word = strings.TrimSpace(word)
+		if word == "" {
 			continue
 		}
 
-		if _, ok := cfg.Aliases[alias]; ok {
-			delete(cfg.Aliases, alias)
-			removed = append(removed, alias)
+		if _, ok := cfg.Aliases[word]; ok {
+			delete(cfg.Aliases, word)
+			removed = append(removed, word)
 		} else {
-			notFound = append(notFound, alias)
+			notFound = append(notFound, word)
 		}
 	}
 
@@ -272,13 +273,14 @@ func (a *DelAliasGroup) handleAlgDel(cfg *config.Config, text *domain.MessageTex
 		return success
 	}
 
-	var removed, notFound []string
-	for _, w := range strings.Split(strings.TrimSpace(matches[2]), ",") {
-		if _, ok := group.Aliases[w]; ok {
-			delete(cfg.AliasGroups[groupName].Aliases, w)
-			removed = append(removed, w)
+	words := strings.Split(strings.TrimSpace(matches[2]), ",")
+	removed, notFound := make([]string, 0, len(words)), make([]string, 0, len(words))
+	for _, word := range words {
+		if _, ok := group.Aliases[word]; ok {
+			delete(cfg.AliasGroups[groupName].Aliases, word)
+			removed = append(removed, word)
 		} else {
-			notFound = append(notFound, w)
+			notFound = append(notFound, word)
 		}
 	}
 

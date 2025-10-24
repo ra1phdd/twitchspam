@@ -4,6 +4,7 @@ import (
 	"github.com/gin-contrib/pprof"
 	"github.com/gin-gonic/gin"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"net/http"
 	"twitchspam/internal/app/adapters/http/handlers"
 	"twitchspam/internal/app/adapters/http/middlewares"
 	"twitchspam/internal/app/infrastructure/config"
@@ -19,8 +20,8 @@ type Router struct {
 	manager *config.Manager
 }
 
-func NewRouter(log logger.Logger, manager *config.Manager) (*Router, error) {
-	h, err := handlers.New(log, manager)
+func NewRouter(log logger.Logger, manager *config.Manager, client *http.Client) (*Router, error) {
+	h, err := handlers.New(log, manager, client)
 	if err != nil {
 		return nil, err
 	}

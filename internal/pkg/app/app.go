@@ -23,6 +23,8 @@ import (
 	"twitchspam/pkg/logger"
 )
 
+const configPath = "config.json"
+
 func New() error {
 	client := &http.Client{
 		Timeout:   10 * time.Second,
@@ -30,7 +32,7 @@ func New() error {
 	}
 	log := logger.New()
 
-	manager, err := config.New("config.json")
+	manager, err := config.New(configPath)
 	if err != nil {
 		log.Fatal("Error loading config", err)
 	}
@@ -61,7 +63,7 @@ func New() error {
 	metrics.AntiSpamEnabled.With(prometheus.Labels{"type": "emote"}).Set(map[bool]float64{true: 1, false: 0}[cfg.Spam.SettingsEmotes.Enabled])
 
 	if _, err := os.Stat("cache"); os.IsNotExist(err) {
-		if err := os.Mkdir("cache", 0755); err != nil {
+		if err := os.Mkdir("cache", 0700); err != nil {
 			log.Error("Error creating cache directory", err)
 			return err
 		}
@@ -158,7 +160,7 @@ func New() error {
 		}
 	}()
 
-	r, err := router.NewRouter(log, manager)
+	r, err := router.NewRouter(log, manager, client)
 	if err != nil {
 		return err
 	}

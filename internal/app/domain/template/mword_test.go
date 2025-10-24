@@ -9,6 +9,8 @@ import (
 )
 
 func TestMatchMwordRule_CaseSensitiveAlwaysMode(t *testing.T) {
+	t.Parallel()
+
 	tmpl := template.New(
 		template.WithMword([]config.Mword{}, make(map[string]*config.MwordGroup)),
 	)
@@ -20,7 +22,7 @@ func TestMatchMwordRule_CaseSensitiveAlwaysMode(t *testing.T) {
 	}
 
 	matched := tmpl.Mword().Check(msg, true)
-	assert.LessOrEqual(t, len(matched), 0, "issuing punishments without mwords")
+	assert.Empty(t, matched, "issuing punishments without mwords")
 
 	tmpl.Mword().Update([]config.Mword{
 		{
@@ -39,7 +41,7 @@ func TestMatchMwordRule_CaseSensitiveAlwaysMode(t *testing.T) {
 	}, make(map[string]*config.MwordGroup))
 
 	matched = tmpl.Mword().Check(msg, true)
-	assert.Positive(t, len(matched), "the punishment was not issued under the current law")
+	assert.NotEmpty(t, matched, "the punishment was not issued under the current law")
 
 	msg = &domain.ChatMessage{
 		Message: domain.Message{
@@ -48,5 +50,5 @@ func TestMatchMwordRule_CaseSensitiveAlwaysMode(t *testing.T) {
 	}
 
 	matched = tmpl.Mword().Check(msg, true)
-	assert.LessOrEqual(t, len(matched), 0, "the punishment was given for a word with a mismatched case")
+	assert.Empty(t, matched, "the punishment was given for a word with a mismatched case")
 }

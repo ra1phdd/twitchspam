@@ -86,6 +86,14 @@ var (
 		Text:    []string{"стрим выключен!"},
 		IsReply: true,
 	}
+	notFoundMwordGroup = &ports.AnswerType{
+		Text:    []string{"мворд группа не найдена!"},
+		IsReply: true,
+	}
+	existsMwordGroup = &ports.AnswerType{
+		Text:    []string{"мворд группа уже существует!"},
+		IsReply: true,
+	}
 )
 
 type Admin struct {
@@ -126,12 +134,25 @@ func New(log logger.Logger, manager *config.Manager, stream ports.StreamPort, ap
 var startApp = time.Now()
 
 func (a *Admin) FindMessages(msg *domain.ChatMessage) *ports.AnswerType {
+	a.log.Trace("Admin.FindMessages called",
+		slog.String("user", msg.Chatter.Username),
+		slog.String("message", msg.Message.Text.Text()),
+		slog.Bool("is_broadcaster", msg.Chatter.IsBroadcaster),
+		slog.Bool("is_mod", msg.Chatter.IsMod),
+	)
+
 	if (!msg.Chatter.IsBroadcaster && !msg.Chatter.IsMod) || !strings.HasPrefix(msg.Message.Text.Text(domain.LowerOption), "!am") {
+		a.log.Debug("Skipping message: user not authorized or command prefix missing",
+			slog.String("user", msg.Chatter.Username),
+			slog.String("message", msg.Message.Text.Text()),
+		)
+
 		return nil
 	}
 
 	words := msg.Message.Text.Words(domain.LowerOption)
 	if len(words) < 2 {
+		a.log.Warn("Command not found or incomplete", slog.String("user", msg.Chatter.Username), slog.String("message", msg.Message.Text.Text()))
 		return notFoundCmd
 	}
 
@@ -144,9 +165,13 @@ func (a *Admin) FindMessages(msg *domain.ChatMessage) *ports.AnswerType {
 
 	var result *ports.AnswerType
 	if err := a.manager.Update(func(cfg *config.Config) {
+		a.log.Info("Admin command executed",
+			slog.String("user", msg.Chatter.Username),
+			slog.String("message", msg.Message.Text.Text()),
+		)
 		result = a.root.Execute(cfg, &msg.Message.Text)
 	}); err != nil {
-		a.log.Error("Failed update config", err, slog.String("msg", msg.Message.Text.Text()))
+		a.log.Error("Failed to update config", err, slog.String("user", msg.Chatter.Username), slog.String("message", msg.Message.Text.Text()))
 		return unknownError
 	}
 
@@ -183,6 +208,7 @@ func (a *Admin) buildCommandTree() ports.Command {
 		Stream: a.stream,
 		Api:    a.api,
 	}
+	pred := &ports.Predictions{}
 
 	return &CompositeCommand{
 		subcommands: map[string]ports.Command{
@@ -223,13 +249,13 @@ func (a *Admin) buildCommandTree() ports.Command {
 			"nuke": &CompositeCommand{
 				subcommands: map[string]ports.Command{
 					"stop": &NukeStop{template: a.template},
+					"re":   &ReNuke{template: a.template},
 				},
 				defaultCmd: &Nuke{re: regexp.MustCompile(`(?i)^!am nuke(?:\s+(\S+))?(?:\s+(\S+))?(?:\s+(\S+))?\s+(.+)$`),
 					reWords: regexp.MustCompile(`(?i)r'(.*?)'|r"(.*?)"|'(.*?)'|"(.*?)"|([^,'"\s]+)`),
 					log:     a.log, api: a.api, template: a.template, stream: a.stream, messages: a.messages},
 				cursor: 2,
 			},
-			"renuke": &ReNuke{template: a.template},
 			"mod": &CompositeCommand{
 				subcommands: map[string]ports.Command{
 					"on":    &OnOffAutomod{enabled: true},
@@ -375,6 +401,15 @@ func (a *Admin) buildCommandTree() ports.Command {
 			"cat": &SetCategory{re: regexp.MustCompile(`(?i)^!am\s+cat\s*(.*)$`), log: a.log, stream: a.stream, api: a.api,
 				cacheCategories: storage.NewCache[Category](0, 0, true, true, "cache/categories.json", 0)},
 			"title": &SetTitle{re: regexp.MustCompile(`(?i)^!am\s+title\s+(.+)$`), log: a.log, stream: a.stream, api: a.api},
+			"pred": &CompositeCommand{
+				subcommands: map[string]ports.Command{
+					"end":  &EndPrediction{re: regexp.MustCompile(`(?i)^!am\s+pred\s+(end)(?:\s+(\d+))?$`), stream: a.stream, api: a.api, template: a.template, pred: pred},
+					"lock": &EndPrediction{re: regexp.MustCompile(`(?i)^!am\s+pred\s+(lock)`), stream: a.stream, api: a.api, template: a.template, pred: pred},
+					"del":  &EndPrediction{re: regexp.MustCompile(`(?i)^!am\s+pred\s+(del)`), stream: a.stream, api: a.api, template: a.template, pred: pred},
+				},
+				defaultCmd: &CreatePrediction{re: regexp.MustCompile(`(?i)^!am\s+pred\s+(?:(\d+)\s+)?([^/]+)(?:/(.*))?$`), stream: a.stream, api: a.api, template: a.template, pred: pred},
+				cursor:     2,
+			},
 		},
 		cursor: 1,
 	}

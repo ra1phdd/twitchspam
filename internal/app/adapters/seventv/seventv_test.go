@@ -8,6 +8,7 @@ import (
 	"twitchspam/internal/app/adapters/seventv"
 	"twitchspam/internal/app/domain/stream"
 	"twitchspam/internal/app/infrastructure/config"
+	"twitchspam/internal/app/infrastructure/storage"
 	"twitchspam/pkg/logger"
 )
 
@@ -24,7 +25,9 @@ func TestEmoteStats(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	s := stream.NewStream("stintik", file_server.New(logger.New(), &http.Client{}))
+
+	cacheStats := storage.NewCache[stream.SessionStats](0, 0, false, false, "", 0)
+	s := stream.NewStream("stintik", file_server.New(logger.New(), &http.Client{}), cacheStats)
 	s.SetChannelID(channelID)
 
 	sv := seventv.New(logger.New(), manager.Get(), s, &http.Client{})

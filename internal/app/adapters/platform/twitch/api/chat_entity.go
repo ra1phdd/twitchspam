@@ -35,3 +35,8 @@ type TimeoutData struct {
 	Duration int    `json:"duration,omitempty"`
 	Reason   string `json:"reason,omitempty"`
 }
+
+type AnnouncementRequest struct {
+	Message string `json:"message"`
+	Color   string `json:"color,omitempty"`
+}

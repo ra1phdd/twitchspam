@@ -28,7 +28,6 @@ type Nuke struct {
 	words         []string
 	regexp        *regexp.Regexp
 
-	ctx     context.Context
 	cancel  context.CancelFunc
 	startFn func(ctx context.Context)
 }
@@ -58,7 +57,6 @@ func (n *NukeTemplate) Start(punishment config.Punishment, duration time.Duratio
 		containsWords: containsWords,
 		words:         words,
 		regexp:        regexp,
-		ctx:           ctx,
 		cancel:        cancel,
 		startFn:       startFn,
 	}

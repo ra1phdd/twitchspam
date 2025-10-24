@@ -1,7 +1,9 @@
 package api
 
 import (
+	"context"
 	"fmt"
+	"net/http"
 	"net/url"
 	"strings"
 	"twitchspam/internal/app/domain"
@@ -12,9 +14,12 @@ func (t *Twitch) SearchCategory(categoryName string) (string, string, error) {
 	params.Set("query", categoryName)
 
 	var searchResp SearchCategoriesResponse
-	err := t.doTwitchRequest("GET", "https://api.twitch.tv/helix/search/categories?"+params.Encode(), nil, nil, &searchResp)
-	if err != nil {
-		t.log.Error("Failed to twitch request", err)
+	if _, err := t.doTwitchRequest(context.Background(), twitchRequest{
+		Method: http.MethodGet,
+		URL:    "https://api.twitch.tv/helix/search/categories?" + params.Encode(),
+		Token:  nil,
+		Body:   nil,
+	}, &searchResp); err != nil {
 		return "", "", err
 	}
 

@@ -2,9 +2,11 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 )
 
 func (t *Twitch) ManageHeldAutoModMessage(userID, msgID, action string) error {
@@ -37,5 +39,14 @@ func (t *Twitch) ManageHeldAutoModMessage(userID, msgID, action string) error {
 		return fmt.Errorf("failed to marshal request body: %w", err)
 	}
 
-	return t.doTwitchRequest("POST", "https://api.twitch.tv/helix/moderation/automod/message", nil, bytes.NewReader(bodyBytes), nil)
+	if _, err := t.doTwitchRequest(context.Background(), twitchRequest{
+		Method: http.MethodPost,
+		URL:    "https://api.twitch.tv/helix/moderation/automod/message",
+		Token:  nil,
+		Body:   bytes.NewReader(bodyBytes),
+	}, nil); err != nil {
+		return err
+	}
+
+	return nil
 }

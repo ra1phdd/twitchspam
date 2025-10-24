@@ -41,7 +41,11 @@ func (n *Nuke) handleNuke(text *domain.MessageText) *ports.AnswerType {
 		Duration: 60,
 	}
 	duration := 5 * time.Minute
-	scrollback := min(n.messages.GetTTL(), 60) * time.Second
+
+	scrollback := n.messages.GetTTL()
+	if scrollback > 60*time.Second {
+		scrollback = 60 * time.Second
+	}
 
 	if strings.TrimSpace(matches[1]) != "" {
 		p, err := n.template.Punishment().Parse(strings.TrimSpace(matches[1]), false)
@@ -206,7 +210,7 @@ func (n *ReNuke) Execute(_ *config.Config, _ *domain.MessageText) *ports.AnswerT
 }
 
 func (n *ReNuke) handleReNuke() *ports.AnswerType {
-	// !am renuke
+	// !am nuke re
 	if err := n.template.Nuke().Restart(); err != nil {
 		return &ports.AnswerType{
 			Text:    []string{"повтор предыдущего массбана не возможен"},

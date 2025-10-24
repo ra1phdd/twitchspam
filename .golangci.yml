@@ -7,6 +7,9 @@ run:
 linters:
   default: all
   disable:
+    - goconst
+    - gosmopolitan
+    - nestif
     - promlinter
     - maintidx
     - cyclop

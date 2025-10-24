@@ -2,6 +2,7 @@ package irc
 
 import (
 	"bufio"
+	"context"
 	"crypto/tls"
 	"log/slog"
 	"net"
@@ -90,7 +91,13 @@ func (i *IRC) runIRC() {
 }
 
 func (i *IRC) connectAndListen() error {
-	conn, err := tls.Dial("tcp", "irc.chat.twitch.tv:443", &tls.Config{MinVersion: tls.VersionTLS12})
+	dialer := &tls.Dialer{
+		Config: &tls.Config{
+			MinVersion: tls.VersionTLS12,
+		},
+	}
+
+	conn, err := dialer.DialContext(context.Background(), "tcp", "irc.chat.twitch.tv:443")
 	if err != nil {
 		i.log.Error("Failed to connect to IRC chat Twitch", err)
 		return err

@@ -93,7 +93,7 @@ func (l *SlogLogger) SetLogLevel(levelStr string) {
 		l.level.Set(LevelTrace)
 	case "debug":
 		l.level.Set(slog.LevelDebug)
-	case "info":
+	case "info": //nolint:goconst
 		l.level.Set(slog.LevelInfo)
 	case "warn":
 		l.level.Set(slog.LevelWarn)

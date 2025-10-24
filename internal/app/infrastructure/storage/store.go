@@ -153,7 +153,13 @@ func (s *Store[T]) SetCapacity(newCap int32) {
 		if !ok {
 			continue
 		}
-		inner.SetMaximum(uint64(newCap))
+
+		inner.SetMaximum(func() uint64 {
+			if newCap < 0 {
+				return 0
+			}
+			return uint64(newCap)
+		}())
 	}
 }
 

@@ -517,22 +517,23 @@ func (a *AddAntispam) handleAdd(cfg *config.Config, text *domain.MessageText) *p
 		return nonParametr
 	}
 
-	var added, alreadyExists []string
-	for _, user := range strings.Split(strings.TrimSpace(matches[1]), ",") {
-		user = strings.TrimPrefix(strings.TrimSpace(user), "@")
-		if user == "" {
+	words := strings.Split(strings.TrimSpace(matches[1]), ",")
+	added, exists := make([]string, 0, len(words)), make([]string, 0, len(words))
+	for _, word := range words {
+		word = strings.TrimPrefix(strings.TrimSpace(word), "@")
+		if word == "" {
 			continue
 		}
 
-		if _, ok := cfg.Spam.WhitelistUsers[user]; ok {
-			alreadyExists = append(alreadyExists, user)
+		if _, ok := cfg.Spam.WhitelistUsers[word]; ok {
+			exists = append(exists, word)
 		} else {
-			cfg.Spam.WhitelistUsers[user] = struct{}{}
-			added = append(added, user)
+			cfg.Spam.WhitelistUsers[word] = struct{}{}
+			added = append(added, word)
 		}
 	}
 
-	return buildResponse("пользователи не указаны", RespArg{Items: added, Name: "добавлены в список"}, RespArg{Items: alreadyExists, Name: "уже есть в списке"})
+	return buildResponse("пользователи не указаны", RespArg{Items: added, Name: "добавлены в список"}, RespArg{Items: exists, Name: "уже есть в списке"})
 }
 
 type DelAntispam struct {
@@ -549,18 +550,19 @@ func (a *DelAntispam) handleDel(cfg *config.Config, text *domain.MessageText) *p
 		return nonParametr
 	}
 
-	var removed, notFound []string
-	for _, user := range strings.Split(strings.TrimSpace(matches[1]), ",") {
-		user = strings.TrimPrefix(strings.TrimSpace(user), "@")
-		if user == "" {
+	words := strings.Split(strings.TrimSpace(matches[1]), ",")
+	removed, notFound := make([]string, 0, len(words)), make([]string, 0, len(words))
+	for _, word := range words {
+		word = strings.TrimPrefix(strings.TrimSpace(word), "@")
+		if word == "" {
 			continue
 		}
 
-		if _, ok := cfg.Spam.WhitelistUsers[user]; ok {
-			delete(cfg.Spam.WhitelistUsers, user)
-			removed = append(removed, user)
+		if _, ok := cfg.Spam.WhitelistUsers[word]; ok {
+			delete(cfg.Spam.WhitelistUsers, word)
+			removed = append(removed, word)
 		} else {
-			notFound = append(notFound, user)
+			notFound = append(notFound, word)
 		}
 	}
 

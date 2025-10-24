@@ -81,27 +81,25 @@ func (c *DelCommandTimer) handleCommandTimersDel(cfg *config.Config, text *domai
 	}
 
 	words := strings.Split(strings.TrimSpace(matches[1]), ",")
-	removed := make([]string, 0, len(words))
-	notFound := make([]string, 0, len(words))
-
-	for _, key := range words {
-		key = strings.TrimSpace(key)
-		if key == "" {
+	removed, notFound := make([]string, 0, len(words)), make([]string, 0, len(words))
+	for _, word := range words {
+		word = strings.TrimSpace(word)
+		if word == "" {
 			continue
 		}
 
-		if !strings.HasPrefix(key, "!") {
-			key = "!" + key
+		if !strings.HasPrefix(word, "!") {
+			word = "!" + word
 		}
 
-		if _, ok := cfg.Commands[key]; !ok {
-			notFound = append(notFound, key)
+		if _, ok := cfg.Commands[word]; !ok {
+			notFound = append(notFound, word)
 			continue
 		}
 
-		c.timers.RemoveTimer(key)
-		cfg.Commands[key].Timer = nil
-		removed = append(removed, key)
+		c.timers.RemoveTimer(word)
+		cfg.Commands[word].Timer = nil
+		removed = append(removed, word)
 	}
 
 	return buildResponse("команды не указаны", RespArg{Items: removed, Name: "удалены"}, RespArg{Items: notFound, Name: "не найдены"})
@@ -127,35 +125,33 @@ func (c *OnOffCommandTimer) handleCommandTimersOnOff(cfg *config.Config, text *d
 	state := strings.ToLower(strings.TrimSpace(matches[1]))
 
 	words := strings.Split(strings.TrimSpace(matches[2]), ",")
-	edited := make([]string, 0, len(words))
-	notFound := make([]string, 0, len(words))
-
-	for _, key := range words {
-		key = strings.TrimSpace(key)
-		if key == "" {
+	edited, notFound := make([]string, 0, len(words)), make([]string, 0, len(words))
+	for _, word := range words {
+		word = strings.TrimSpace(word)
+		if word == "" {
 			continue
 		}
 
-		if !strings.HasPrefix(key, "!") {
-			key = "!" + key
+		if !strings.HasPrefix(word, "!") {
+			word = "!" + word
 		}
 
-		if _, ok := cfg.Commands[key]; !ok {
-			notFound = append(notFound, key)
+		if _, ok := cfg.Commands[word]; !ok {
+			notFound = append(notFound, word)
 			continue
 		}
 
 		if state != "on" {
-			c.timers.RemoveTimer(key)
-			cfg.Commands[key].Timer.Enabled = false
-			edited = append(edited, key)
+			c.timers.RemoveTimer(word)
+			cfg.Commands[word].Timer.Enabled = false
+			edited = append(edited, word)
 			continue
 		}
 
-		cmd := cfg.Commands[key]
+		cmd := cfg.Commands[word]
 		cmd.Timer.Enabled = true
-		edited = append(edited, key)
-		c.t.AddTimer(key, cmd)
+		edited = append(edited, word)
+		c.t.AddTimer(word, cmd)
 	}
 
 	return buildResponse("команды не указаны", RespArg{Items: edited, Name: "изменены"}, RespArg{Items: notFound, Name: "не найдены"})
@@ -205,20 +201,21 @@ func (c *SetCommandTimer) handleCommandTimersSet(cfg *config.Config, text *domai
 		}
 	}
 
-	var edited, notFound, incorrectValue []string
-	for _, key := range strings.Split(strings.TrimSpace(matches[3]), ",") {
-		key = strings.TrimSpace(key)
-		if key == "" {
+	words := strings.Split(strings.TrimSpace(matches[3]), ",")
+	edited, notFound := make([]string, 0, len(words)), make([]string, 0, len(words))
+	for _, word := range words {
+		word = strings.TrimSpace(word)
+		if word == "" {
 			continue
 		}
 
-		if !strings.HasPrefix(key, "!") {
-			key = "!" + key
+		if !strings.HasPrefix(word, "!") {
+			word = "!" + word
 		}
 
-		cmd, ok := cfg.Commands[key]
+		cmd, ok := cfg.Commands[word]
 		if !ok || cmd.Timer == nil {
-			notFound = append(notFound, key)
+			notFound = append(notFound, word)
 			continue
 		}
 
@@ -230,13 +227,13 @@ func (c *SetCommandTimer) handleCommandTimersSet(cfg *config.Config, text *domai
 			cmd.Timer.Interval = time.Duration(interval) * time.Second
 		}
 
-		c.timers.RemoveTimer(key)
-		cfg.Commands[key].Timer.Options = c.template.Options().MergeTimer(cmd.Timer.Options, opts)
-		c.t.AddTimer(key, cfg.Commands[key])
-		edited = append(edited, key)
+		c.timers.RemoveTimer(word)
+		cfg.Commands[word].Timer.Options = c.template.Options().MergeTimer(cmd.Timer.Options, opts)
+		c.t.AddTimer(word, cfg.Commands[word])
+		edited = append(edited, word)
 	}
 
-	return buildResponse("команды не указаны", RespArg{Items: edited, Name: "изменены"}, RespArg{Items: notFound, Name: "не найдены"}, RespArg{Items: incorrectValue, Name: "некорректные значения"})
+	return buildResponse("команды не указаны", RespArg{Items: edited, Name: "изменены"}, RespArg{Items: notFound, Name: "не найдены"})
 }
 
 type AddTimer struct {

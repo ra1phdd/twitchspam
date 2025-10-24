@@ -68,6 +68,7 @@ func (m *Manager) readParseValidate(path string) (*Config, error) {
 		return nil, errors.New("no config path provided")
 	}
 
+	// #nosec G304
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("open/read config: %w", err)

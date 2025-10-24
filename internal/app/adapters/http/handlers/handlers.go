@@ -14,10 +14,11 @@ import (
 type Handlers struct {
 	log     logger.Logger
 	manager *config.Manager
+	client  *http.Client
 	state   string
 }
 
-func New(log logger.Logger, manager *config.Manager) (*Handlers, error) {
+func New(log logger.Logger, manager *config.Manager, client *http.Client) (*Handlers, error) {
 	s, err := generateSecureRandomString(52)
 	if err != nil {
 		log.Error("Failed to generate secure random string", err)
@@ -27,6 +28,7 @@ func New(log logger.Logger, manager *config.Manager) (*Handlers, error) {
 	return &Handlers{
 		log:     log,
 		manager: manager,
+		client:  client,
 		state:   s,
 	}, nil
 }

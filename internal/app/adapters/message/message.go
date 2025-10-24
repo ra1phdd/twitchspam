@@ -68,9 +68,11 @@ func New(log logger.Logger, manager *config.Manager, stream ports.StreamPort, ap
 }
 
 func (m *Message) Check(msg *domain.ChatMessage) {
+	m.log.Trace("Processing new message", slog.String("username", msg.Chatter.Username), slog.String("message", msg.Message.Text.Text()))
 	if m.stream.IsLive() {
 		m.stream.Stats().AddMessage(msg.Chatter.Username)
 		metrics.MessagesPerStream.With(prometheus.Labels{"channel": m.stream.ChannelName()}).Inc()
+		m.log.Trace("Added message to stream stats", slog.String("channel", m.stream.ChannelName()), slog.String("username", msg.Chatter.Username))
 	}
 
 	m.messages.Push(msg.Chatter.Username, msg.Message.ID, storage.Message{
@@ -79,11 +81,19 @@ func (m *Message) Check(msg *domain.ChatMessage) {
 		HashWordsLowerNorm: domain.WordsToHashes(msg.Message.Text.Words(domain.RemovePunctuationOption)),
 		IgnoreAntispam:     !m.cfg.Enabled || !m.template.SpamPause().CanProcess() || !m.cfg.Spam.SettingsDefault.Enabled,
 	})
+	m.log.Trace("Message pushed to storage", slog.String("username", msg.Chatter.Username), slog.String("message_id", msg.Message.ID))
 
 	if !strings.HasPrefix(msg.Message.Text.Text(), "!am al ") && !strings.HasPrefix(msg.Message.Text.Text(), "!am alg ") {
 		text, ok := m.template.Aliases().Replace(msg.Message.Text.Words(domain.RemovePunctuationOption))
 		if ok {
+			m.log.Debug("Message text replaced via alias",
+				slog.String("username", msg.Chatter.Username),
+				slog.String("original_text", msg.Message.Text.Text()),
+				slog.String("new_text", text),
+			)
 			msg.Message.Text.ReplaceOriginal(text)
+		} else {
+			m.log.Trace("No alias replacement applied", slog.String("username", msg.Chatter.Username))
 		}
 	}
 
@@ -111,7 +121,7 @@ func (m *Message) CheckAutomod(msg *domain.ChatMessage) {
 		metrics.MessagesPerStream.With(prometheus.Labels{"channel": m.stream.ChannelName()}).Inc()
 	}
 
-	if !m.cfg.Enabled || !m.cfg.Automod.Enabled {
+	if m.cfg.Enabled && m.cfg.Automod.Enabled {
 		return
 	}
 

@@ -1,6 +1,7 @@
 package event_sub
 
 import (
+	"context"
 	"log/slog"
 	"time"
 )
@@ -8,7 +9,7 @@ import (
 const maxRetries = 5
 const initialBackoff = 3 * time.Second
 
-func (es *EventSub) subscribeEvents(sessionID, channelID string) {
+func (es *EventSub) subscribeEvents(ctx context.Context, sessionID, channelID string) {
 	events := []struct {
 		name, version string
 		condition     map[string]string
@@ -65,7 +66,7 @@ func (es *EventSub) subscribeEvents(sessionID, channelID string) {
 		backoff := initialBackoff
 
 		for {
-			err := es.subscribeEvent(e.name, e.version, e.condition, sessionID)
+			err := es.subscribeEvent(ctx, e.name, e.version, e.condition, sessionID)
 			if err == nil {
 				break
 			}

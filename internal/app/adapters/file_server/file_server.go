@@ -1,6 +1,7 @@
 package file_server
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -26,8 +27,7 @@ func New(log logger.Logger, client *http.Client) *FileServer {
 func (fs *FileServer) UploadToHaste(text string) (string, error) {
 	fs.log.Debug("Starting file upload to Haste", slog.Int("text_length", len(text)))
 
-	body := strings.NewReader(text)
-	req, err := http.NewRequest(http.MethodPost, "https://haste.potat.app/documents", body)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, "https://haste.potat.app/documents", strings.NewReader(text))
 	if err != nil {
 		fs.log.Error("Failed to create HTTP request", err)
 		return "", err

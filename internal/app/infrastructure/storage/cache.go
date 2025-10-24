@@ -2,7 +2,6 @@ package storage
 
 import (
 	"encoding/json"
-	"fmt"
 	"github.com/maypok86/otter/v2"
 	"os"
 	"sync/atomic"
@@ -35,7 +34,7 @@ func NewCache[T any](capacity int32, ttl time.Duration, persist bool, flushOnCha
 		ExpiryCalculator: otter.ExpiryAccessing[string, T](ttl),
 		OnDeletion: func(e otter.DeletionEvent[string, T]) {
 			if c.persist && c.flushOnChange {
-				go c.FlushToDisk()
+				c.FlushToDisk()
 			}
 		},
 	})
@@ -91,11 +90,10 @@ func (c *Cache[T]) FlushToDisk() {
 
 	data, err := json.MarshalIndent(cacheData, "", "  ")
 	if err != nil {
-		fmt.Println("Failed to marshal cache", err)
 		return
 	}
 
-	_ = os.WriteFile(c.filePath, data, 0644)
+	_ = os.WriteFile(c.filePath, data, 0600)
 }
 
 func (c *Cache[T]) periodicFlush(interval time.Duration) {

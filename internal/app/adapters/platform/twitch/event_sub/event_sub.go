@@ -72,7 +72,7 @@ func (es *EventSub) AddChannel(channelID, channelName string, stream ports.Strea
 	}
 	es.mu.Unlock()
 
-	es.subscribeEvents(es.sessionID, channelID)
+	es.subscribeEvents(context.Background(), es.sessionID, channelID)
 }
 
 func (es *EventSub) runEventLoop() {
@@ -94,7 +94,10 @@ func (es *EventSub) connectAndHandleEvents() error {
 	ws, resp, err := dialer.Dial("wss://eventsub.wss.twitch.tv/ws", nil)
 	if err != nil {
 		if resp != nil {
-			resp.Body.Close()
+			err := resp.Body.Close()
+			if err != nil {
+				es.log.Error("Failed to close response body", err)
+			}
 		}
 		return fmt.Errorf("websocket dial: %w", err)
 	}
@@ -105,23 +108,23 @@ func (es *EventSub) connectAndHandleEvents() error {
 
 	var wg sync.WaitGroup
 	msgChan := make(chan []byte, 10000)
-	es.startWorkers(ctx, cancel, &wg, msgChan)
+	es.startWorkers(ctx, &wg, msgChan)
 
 	es.log.Info("Connected to EventSub WebSocket")
 	return es.readMessages(ctx, ws, msgChan, &wg)
 }
 
-func (es *EventSub) startWorkers(ctx context.Context, cancel context.CancelFunc, wg *sync.WaitGroup, msgChan chan []byte) {
+func (es *EventSub) startWorkers(ctx context.Context, wg *sync.WaitGroup, msgChan chan []byte) {
 	for range runtime.NumCPU() {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			es.workerLoop(ctx, cancel, msgChan)
+			es.workerLoop(ctx, msgChan)
 		}()
 	}
 }
 
-func (es *EventSub) workerLoop(ctx context.Context, cancel context.CancelFunc, msgChan chan []byte) {
+func (es *EventSub) workerLoop(ctx context.Context, msgChan chan []byte) {
 	for {
 		select {
 		case <-ctx.Done():
@@ -130,12 +133,12 @@ func (es *EventSub) workerLoop(ctx context.Context, cancel context.CancelFunc, m
 			if !ok {
 				return
 			}
-			es.handleMessage(cancel, msgBytes)
+			es.handleMessage(ctx, msgBytes)
 		}
 	}
 }
 
-func (es *EventSub) handleMessage(cancel context.CancelFunc, msgBytes []byte) {
+func (es *EventSub) handleMessage(ctx context.Context, msgBytes []byte) {
 	var event EventSubMessage
 	if err := json.Unmarshal(msgBytes, &event); err != nil {
 		es.log.Error("Failed to decode EventSub message", err, slog.String("event", string(msgBytes)))
@@ -145,7 +148,10 @@ func (es *EventSub) handleMessage(cancel context.CancelFunc, msgBytes []byte) {
 	switch event.Metadata.MessageType {
 	case "session_reconnect":
 		es.log.Debug("Received session_reconnect on EventSub")
-		cancel()
+
+		if cancelFunc, ok := ctx.Value("cancelFunc").(context.CancelFunc); ok {
+			cancelFunc()
+		}
 		return
 	case "session_welcome":
 		es.log.Debug("Received session_welcome on EventSub")
@@ -161,7 +167,7 @@ func (es *EventSub) handleMessage(cancel context.CancelFunc, msgBytes []byte) {
 		defer es.mu.Unlock()
 
 		for id := range es.channels {
-			es.subscribeEvents(es.sessionID, id)
+			es.subscribeEvents(ctx, es.sessionID, id)
 		}
 	case "session_keepalive":
 		es.log.Trace("Received session_keepalive on EventSub")
@@ -289,7 +295,7 @@ func (es *EventSub) readMessages(ctx context.Context, ws *websocket.Conn, msgCha
 	}
 }
 
-func (es *EventSub) subscribeEvent(eventType, version string, condition map[string]string, sessionID string) error {
+func (es *EventSub) subscribeEvent(ctx context.Context, eventType, version string, condition map[string]string, sessionID string) error {
 	body := map[string]interface{}{
 		"type":      eventType,
 		"version":   version,
@@ -305,7 +311,7 @@ func (es *EventSub) subscribeEvent(eventType, version string, condition map[stri
 		return fmt.Errorf("marshal subscription body: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(context.Background(), "POST", "https://api.twitch.tv/helix/eventsub/subscriptions", bytes.NewBuffer(jsonBody))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://api.twitch.tv/helix/eventsub/subscriptions", bytes.NewBuffer(jsonBody))
 	if err != nil {
 		return fmt.Errorf("create subscription request: %w", err)
 	}

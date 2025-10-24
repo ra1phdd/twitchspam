@@ -23,9 +23,11 @@ type APIPort interface {
 	TimeoutUser(channelName, channelID, userID string, duration int, reason string)
 	BanUser(channelName, channelID, userID string, reason string)
 	SearchCategory(gameName string) (string, string, error)
-	UpdateChannelGameID(broadcasterID string, gameID string) error
+	UpdateChannelCategoryID(broadcasterID string, gameID string) error
 	UpdateChannelTitle(broadcasterID string, title string) error
 	ManageHeldAutoModMessage(userID, msgID, action string) error
+	CreatePrediction(broadcasterID, title string, outcomes []string, predictionWindow int) (*Predictions, error)
+	EndPrediction(broadcasterID, predictionID, status, winningOutcomeID string) error
 }
 
 type IRCPort interface {
@@ -46,4 +48,21 @@ type Stream struct {
 	Username    string
 	ViewerCount int
 	StartedAt   time.Time
+}
+
+type Predictions struct {
+	ID               string
+	Title            string
+	WinningOutcomeID string
+	Outcomes         []PredictionsOutcome
+	PredictionWindow int
+	Status           string
+	CreatedAt        time.Time
+	EndedAt          time.Time
+	LockedAt         time.Time
+}
+
+type PredictionsOutcome struct {
+	ID    string
+	Title string
 }

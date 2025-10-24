@@ -2,26 +2,17 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"github.com/prometheus/client_golang/prometheus"
 	"log/slog"
+	"net/http"
 	"net/url"
 	"time"
 	"twitchspam/internal/app/adapters/metrics"
 	"twitchspam/internal/app/ports"
 )
-
-func (t *Twitch) GetChannelID(username string) (string, error) {
-	var userResp UserResponse
-	if err := t.doTwitchRequest("GET", "https://api.twitch.tv/helix/users?login="+username, nil, nil, &userResp); err != nil {
-		return "", err
-	}
-	if len(userResp.Data) == 0 {
-		return "", fmt.Errorf("user %s not found", username)
-	}
-	return userResp.Data[0].ID, nil
-}
 
 func (t *Twitch) SendChatMessages(channelID string, msgs *ports.AnswerType) {
 	for _, message := range msgs.Text {
@@ -49,15 +40,18 @@ func (t *Twitch) SendChatMessage(channelID, message string) error {
 	}
 
 	var chatResp ChatMessageResponse
-	err = t.doTwitchRequest("POST", "https://api.twitch.tv/helix/chat/messages", nil, bytes.NewReader(bodyBytes), &chatResp)
-	if err != nil {
+	if _, err := t.doTwitchRequest(context.Background(), twitchRequest{
+		Method: http.MethodPost,
+		URL:    "https://api.twitch.tv/helix/chat/messages",
+		Token:  nil,
+		Body:   bytes.NewReader(bodyBytes),
+	}, &chatResp); err != nil {
 		return err
 	}
 
 	if len(chatResp.Data) == 0 || !chatResp.Data[0].IsSent {
 		return fmt.Errorf("%s is not sent", message)
 	}
-
 	return nil
 }
 
@@ -85,21 +79,20 @@ func (t *Twitch) SendChatAnnouncement(channelID, message, color string) error {
 		return err
 	}
 
-	queryParams := url.Values{}
-	queryParams.Add("broadcaster_id", channelID)
-	queryParams.Add("moderator_id", t.cfg.App.UserID)
+	params := url.Values{}
+	params.Add("broadcaster_id", channelID)
+	params.Add("moderator_id", t.cfg.App.UserID)
 
-	err = t.doTwitchRequest("POST", "https://api.twitch.tv/helix/chat/announcements?"+queryParams.Encode(), nil, bytes.NewReader(bodyBytes), nil)
-	if err != nil {
+	if _, err := t.doTwitchRequest(context.Background(), twitchRequest{
+		Method: http.MethodPost,
+		URL:    "https://api.twitch.tv/helix/chat/announcements?" + params.Encode(),
+		Token:  nil,
+		Body:   bytes.NewReader(bodyBytes),
+	}, nil); err != nil {
 		return err
 	}
 
 	return nil
-}
-
-type AnnouncementRequest struct {
-	Message string `json:"message"`
-	Color   string `json:"color,omitempty"`
 }
 
 func (t *Twitch) DeleteChatMessage(channelName, channelID, messageID string) error {
@@ -110,8 +103,12 @@ func (t *Twitch) DeleteChatMessage(channelName, channelID, messageID string) err
 		params.Set("message_id", messageID)
 	}
 
-	err := t.doTwitchRequest("DELETE", "https://api.twitch.tv/helix/moderation/chat?"+params.Encode(), nil, nil, nil)
-	if err != nil {
+	if _, err := t.doTwitchRequest(context.Background(), twitchRequest{
+		Method: http.MethodDelete,
+		URL:    "https://api.twitch.tv/helix/moderation/chat?" + params.Encode(),
+		Token:  nil,
+		Body:   nil,
+	}, nil); err != nil {
 		return err
 	}
 
@@ -138,9 +135,13 @@ func (t *Twitch) TimeoutUser(channelName, channelID, userID string, duration int
 	params.Set("broadcaster_id", channelID)
 	params.Set("moderator_id", t.cfg.App.UserID)
 
-	err = t.doTwitchRequest("POST", "https://api.twitch.tv/helix/moderation/bans?"+params.Encode(), nil, bytes.NewReader(bodyBytes), nil)
-	if err != nil {
-		t.log.Error("Failed to send timeout request", err)
+	if _, err := t.doTwitchRequest(context.Background(), twitchRequest{
+		Method: http.MethodPost,
+		URL:    "https://api.twitch.tv/helix/moderation/bans?" + params.Encode(),
+		Token:  nil,
+		Body:   bytes.NewReader(bodyBytes),
+	}, nil); err != nil {
+		t.log.Error("Failed to timeout user", err, slog.Any("data", reqBody.Data))
 		return
 	}
 
