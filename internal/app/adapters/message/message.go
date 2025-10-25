@@ -74,11 +74,14 @@ func (m *Message) Check(msg *domain.ChatMessage) {
 		m.log.Trace("Added message to stream stats", slog.String("channel", m.stream.ChannelName()), slog.String("username", msg.Chatter.Username))
 	}
 
+	startProcessing := time.Now()
 	m.messages.Push(msg.Chatter.Username, msg.Message.ID, storage.Message{
 		Data:           msg,
 		Time:           time.Now(),
 		IgnoreAntispam: !m.cfg.Enabled || !m.template.SpamPause().CanProcess() || !m.cfg.Spam.SettingsDefault.Enabled,
 	})
+	endProcessing := time.Since(startProcessing).Seconds()
+	metrics.ModulesProcessingTime.With(prometheus.Labels{"module": "push_message"}).Observe(endProcessing)
 	m.log.Trace("Message pushed to storage", slog.String("username", msg.Chatter.Username), slog.String("message_id", msg.Message.ID))
 
 	if !strings.HasPrefix(msg.Message.Text.Text(), "!am al ") && !strings.HasPrefix(msg.Message.Text.Text(), "!am alg ") {
