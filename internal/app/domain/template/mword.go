@@ -65,26 +65,24 @@ func (t *MwordTemplate) Update(mwords []config.Mword, mwordGroups map[string]*co
 			options := mwg.Options
 			if mw.Options != nil {
 				src := make(map[string]bool)
-				if mw.Options.IsFirst != nil {
-					src["is_first"] = *mw.Options.IsFirst
+				opts := map[*bool][2]string{
+					mw.Options.IsFirst:       {"-first", "-nofirst"},
+					mw.Options.NoSub:         {"-nosub", "-sub"},
+					mw.Options.NoVip:         {"-novip", "-vip"},
+					mw.Options.NoRepeat:      {"-norepeat", "-repeat"},
+					mw.Options.OneWord:       {"-oneword", "-nooneword"},
+					mw.Options.Contains:      {"-contains", "-nocontains"},
+					mw.Options.CaseSensitive: {"-case", "-nocase"},
 				}
-				if mw.Options.NoSub != nil {
-					src["no_sub"] = *mw.Options.NoSub
-				}
-				if mw.Options.NoVip != nil {
-					src["no_vip"] = *mw.Options.NoVip
-				}
-				if mw.Options.NoRepeat != nil {
-					src["norepeat"] = *mw.Options.NoRepeat
-				}
-				if mw.Options.OneWord != nil {
-					src["one_word"] = *mw.Options.OneWord
-				}
-				if mw.Options.Contains != nil {
-					src["contains"] = *mw.Options.Contains
-				}
-				if mw.Options.CaseSensitive != nil {
-					src["case_sensitive"] = *mw.Options.CaseSensitive
+
+				for opt, vals := range opts {
+					if opt != nil {
+						if *opt {
+							src[vals[0]] = true
+						} else {
+							src[vals[1]] = true
+						}
+					}
 				}
 
 				options = t.options.MergeMword(mwg.Options, src)
@@ -204,7 +202,7 @@ func (t *MwordTemplate) matchMwordRule(msg *domain.ChatMessage, word string, re 
 		return re.MatchString(text)
 	}
 
-	if strings.Contains(word, " ") {
+	if (opts != nil && opts.Contains != nil && *opts.Contains) || strings.Contains(word, " ") {
 		return strings.Contains(text, word)
 	}
 	return slices.Contains(words, word)
