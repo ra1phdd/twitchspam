@@ -180,7 +180,7 @@ func (t *MwordTemplate) matchMwordRule(msg *domain.ChatMessage, word string, re 
 		if opts.IsFirst != nil && *opts.IsFirst && !msg.Message.IsFirst() {
 			return false
 		}
-		if opts.OneWord != nil && *opts.OneWord && len(msg.Message.Text.Words(domain.LowerOption, domain.RemovePunctuationOption, domain.RemoveDuplicateLettersOption)) > 1 {
+		if opts.OneWord != nil && *opts.OneWord && t.CheckOneWord(msg.Message.Text.Words(domain.LowerOption, domain.RemovePunctuationOption, domain.RemoveDuplicateLettersOption)) {
 			return false
 		}
 
@@ -213,4 +213,18 @@ func (t *MwordTemplate) matchMwordRule(msg *domain.ChatMessage, word string, re 
 func (t *MwordTemplate) getCacheKey(msg *domain.ChatMessage) string {
 	return fmt.Sprintf("%s_%v_%v", msg.Message.Text.Text(domain.RemovePunctuationOption),
 		msg.Chatter.IsVip, msg.Chatter.IsSubscriber)
+}
+
+func (t *MwordTemplate) CheckOneWord(words []string) bool {
+	if len(words) < 2 {
+		return true
+	}
+
+	first := words[0]
+	for _, w := range words[1:] {
+		if w != first {
+			return false
+		}
+	}
+	return true
 }

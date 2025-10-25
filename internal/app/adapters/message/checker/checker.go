@@ -1,12 +1,14 @@
 package checker
 
 import (
+	"github.com/prometheus/client_golang/prometheus"
 	"log/slog"
 	"net/http"
 	"regexp"
 	"slices"
 	"strings"
 	"time"
+	"twitchspam/internal/app/adapters/metrics"
 	"twitchspam/internal/app/adapters/seventv"
 	"twitchspam/internal/app/domain"
 	"twitchspam/internal/app/infrastructure/config"
@@ -59,6 +61,7 @@ func (c *Checker) Check(msg *domain.ChatMessage, checkSpam bool) *ports.CheckerA
 		return action
 	}
 
+	startProcessing := time.Now()
 	if action := c.template.Nuke().Check(&msg.Message.Text, false); action != nil {
 		c.log.Info("Message triggered nuke",
 			slog.String("user", msg.Chatter.Username),
@@ -67,6 +70,8 @@ func (c *Checker) Check(msg *domain.ChatMessage, checkSpam bool) *ports.CheckerA
 		)
 		return action
 	}
+	endProcessing := time.Since(startProcessing).Seconds()
+	metrics.ModulesProcessingTime.With(prometheus.Labels{"module": "nuke"}).Observe(endProcessing)
 
 	if !c.cfg.Enabled {
 		c.log.Debug("Bot disabled, skipping message",
@@ -76,6 +81,7 @@ func (c *Checker) Check(msg *domain.ChatMessage, checkSpam bool) *ports.CheckerA
 		return &ports.CheckerAction{Type: None}
 	}
 
+	startProcessing = time.Now()
 	if action := c.checkBanwords(msg); action != nil {
 		c.log.Info("Message contains banword",
 			slog.String("user", msg.Chatter.Username),
@@ -84,7 +90,10 @@ func (c *Checker) Check(msg *domain.ChatMessage, checkSpam bool) *ports.CheckerA
 		)
 		return action
 	}
+	endProcessing = time.Since(startProcessing).Seconds()
+	metrics.ModulesProcessingTime.With(prometheus.Labels{"module": "banwords"}).Observe(endProcessing)
 
+	startProcessing = time.Now()
 	if action := c.checkAds(msg.Message.Text.Text(domain.LowerOption), msg.Chatter.Username); action != nil {
 		c.log.Info("Message detected as advertisement",
 			slog.String("user", msg.Chatter.Username),
@@ -93,7 +102,10 @@ func (c *Checker) Check(msg *domain.ChatMessage, checkSpam bool) *ports.CheckerA
 		)
 		return action
 	}
+	endProcessing = time.Since(startProcessing).Seconds()
+	metrics.ModulesProcessingTime.With(prometheus.Labels{"module": "ads"}).Observe(endProcessing)
 
+	startProcessing = time.Now()
 	if action := c.checkMwords(msg); action != nil {
 		c.log.Info("Message contains muteword",
 			slog.String("user", msg.Chatter.Username),
@@ -102,8 +114,11 @@ func (c *Checker) Check(msg *domain.ChatMessage, checkSpam bool) *ports.CheckerA
 		)
 		return action
 	}
+	endProcessing = time.Since(startProcessing).Seconds()
+	metrics.ModulesProcessingTime.With(prometheus.Labels{"module": "mwords"}).Observe(endProcessing)
 
 	if checkSpam {
+		startProcessing = time.Now()
 		if action := c.checkSpam(msg); action != nil {
 			c.log.Info("Message flagged as spam",
 				slog.String("user", msg.Chatter.Username),
@@ -112,6 +127,8 @@ func (c *Checker) Check(msg *domain.ChatMessage, checkSpam bool) *ports.CheckerA
 			)
 			return action
 		}
+		endProcessing = time.Since(startProcessing).Seconds()
+		metrics.ModulesProcessingTime.With(prometheus.Labels{"module": "spam"}).Observe(endProcessing)
 	}
 
 	c.log.Debug("No violations detected, skipping", slog.String("user", msg.Chatter.Username))
@@ -584,7 +601,7 @@ func (c *Checker) matchExceptRule(msg *domain.ChatMessage, word string, re *rege
 	words := msg.Message.Text.Words(domain.LowerOption, domain.RemovePunctuationOption, domain.RemoveDuplicateLettersOption)
 
 	if (opts == nil || opts.OneWord == nil || *opts.OneWord) &&
-		c.template.CheckOneWord(msg.Message.Text.Words(domain.LowerOption, domain.RemovePunctuationOption, domain.RemoveDuplicateLettersOption)) {
+		c.template.Mword().CheckOneWord(msg.Message.Text.Words(domain.LowerOption, domain.RemovePunctuationOption, domain.RemoveDuplicateLettersOption)) {
 		return false
 	}
 

@@ -18,7 +18,6 @@ type TemplatePort interface {
 	SpamPause() SpamPausePort
 	Mword() MwordPort
 	Nuke() NukePort
-	CheckOneWord(words []string) bool
 }
 
 type AliasesPort interface {
@@ -68,6 +67,7 @@ type SpamPausePort interface {
 type MwordPort interface {
 	Update(mwords []config.Mword, mwordGroups map[string]*config.MwordGroup)
 	Check(msg *domain.ChatMessage, isLive bool) []config.Punishment
+	CheckOneWord(words []string) bool
 }
 
 type NukePort interface {

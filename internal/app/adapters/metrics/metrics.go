@@ -91,4 +91,14 @@ var (
 		},
 		[]string{"channel", "command"},
 	)
+
+	// ModulesProcessingTime - время обработки сообщений по модулям.
+	ModulesProcessingTime = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "bot_modules_processing_milliseconds",
+			Help:    "Average time to process a module",
+			Buckets: prometheus.ExponentialBuckets(0.00005, 1.5, 25),
+		},
+		[]string{"channel", "module"},
+	)
 )
