@@ -18,6 +18,7 @@ type TemplatePort interface {
 	SpamPause() SpamPausePort
 	Mword() MwordPort
 	Nuke() NukePort
+	CheckOneWord(words []string) bool
 }
 
 type AliasesPort interface {
@@ -35,15 +36,15 @@ type BanwordsPort interface {
 
 type OptionsPort interface {
 	ParseAll(input string, opts map[string]struct{}) (string, map[string]bool)
-	MergeExcept(dst config.ExceptOptions, src map[string]bool, isDefault bool) config.ExceptOptions
-	MergeEmoteExcept(dst config.ExceptOptions, src map[string]bool, isDefault bool) config.ExceptOptions
-	MergeMword(dst config.MwordOptions, src map[string]bool) config.MwordOptions
-	MergeTimer(dst config.TimerOptions, src map[string]bool) config.TimerOptions
-	MergeCommand(dst config.CommandOptions, src map[string]bool) config.CommandOptions
-	ExceptToString(opts config.ExceptOptions) string
-	MwordToString(opts config.MwordOptions) string
-	TimerToString(opts config.TimerOptions) string
-	CommandToString(opts config.CommandOptions) string
+	MergeExcept(dst *config.ExceptOptions, src map[string]bool) *config.ExceptOptions
+	MergeEmoteExcept(dst *config.ExceptOptions, src map[string]bool) *config.ExceptOptions
+	MergeMword(dst *config.MwordOptions, src map[string]bool) *config.MwordOptions
+	MergeTimer(dst *config.TimerOptions, src map[string]bool) *config.TimerOptions
+	MergeCommand(dst *config.CommandOptions, src map[string]bool) *config.CommandOptions
+	ExceptToString(opts *config.ExceptOptions) string
+	MwordToString(opts *config.MwordOptions) string
+	TimerToString(opts *config.TimerOptions) string
+	CommandToString(opts *config.CommandOptions) string
 }
 
 type ParserPort interface {

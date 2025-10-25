@@ -61,277 +61,308 @@ func (ot *OptionsTemplate) ParseAll(input string, opts map[string]struct{}) (str
 	return strings.Join(clean, " "), founds
 }
 
-func (ot *OptionsTemplate) MergeExcept(dst config.ExceptOptions, src map[string]bool, isDefault bool) config.ExceptOptions {
-	if isDefault && dst == (config.ExceptOptions{}) { // значение по умолчанию
-		dst.OneWord = true
-		dst.NoVip = true
-	}
-
+func (ot *OptionsTemplate) MergeExcept(dst *config.ExceptOptions, src map[string]bool) *config.ExceptOptions {
 	return ot.mergeExcept(dst, src)
 }
 
-func (ot *OptionsTemplate) MergeEmoteExcept(dst config.ExceptOptions, src map[string]bool, isDefault bool) config.ExceptOptions {
-	if isDefault && dst == (config.ExceptOptions{}) { // значение по умолчанию
-		dst.NoVip = true
-	}
-
+func (ot *OptionsTemplate) MergeEmoteExcept(dst *config.ExceptOptions, src map[string]bool) *config.ExceptOptions {
 	return ot.mergeExcept(dst, src)
 }
 
-func (ot *OptionsTemplate) mergeExcept(dst config.ExceptOptions, src map[string]bool) config.ExceptOptions {
+func (ot *OptionsTemplate) mergeExcept(dst *config.ExceptOptions, src map[string]bool) *config.ExceptOptions {
+	trueVal, falseVal := true, false
+	if dst == nil {
+		if len(src) == 0 {
+			return nil
+		}
+		dst = &config.ExceptOptions{}
+	}
+
 	if _, ok := src["-nosub"]; ok {
-		dst.NoSub = true
+		dst.NoSub = &trueVal
 	}
 
 	if _, ok := src["-sub"]; ok {
-		dst.NoSub = false
+		dst.NoSub = &falseVal
 	}
 
 	if _, ok := src["-novip"]; ok {
-		dst.NoVip = true
+		dst.NoVip = &trueVal
 	}
 
 	if _, ok := src["-vip"]; ok {
-		dst.NoVip = false
+		dst.NoVip = &falseVal
 	}
 
 	if _, ok := src["-norepeat"]; ok {
-		dst.NoRepeat = true
+		dst.NoRepeat = &trueVal
 	}
 
 	if _, ok := src["-repeat"]; ok {
-		dst.NoRepeat = false
+		dst.NoRepeat = &falseVal
 	}
 
 	if _, ok := src["-nooneword"]; ok {
-		dst.OneWord = false
+		dst.OneWord = &falseVal
 	}
 
 	if _, ok := src["-oneword"]; ok {
-		dst.OneWord = true
+		dst.OneWord = &trueVal
 	}
 
 	if _, ok := src["-nocontains"]; ok {
-		dst.Contains = false
+		dst.Contains = &falseVal
 	}
 
 	if _, ok := src["-contains"]; ok {
-		dst.Contains = true
+		dst.Contains = &trueVal
 	}
 
 	if _, ok := src["-nocase"]; ok {
-		dst.CaseSensitive = false
+		dst.CaseSensitive = &falseVal
 	}
 
 	if _, ok := src["-case"]; ok {
-		dst.CaseSensitive = true
+		dst.CaseSensitive = &trueVal
 	}
 
 	return dst
 }
 
-func (ot *OptionsTemplate) MergeMword(dst config.MwordOptions, src map[string]bool) config.MwordOptions {
-	if dst == (config.MwordOptions{}) { // значение по умолчанию
-		dst.Mode = config.OnlineMode
+func (ot *OptionsTemplate) MergeMword(dst *config.MwordOptions, src map[string]bool) *config.MwordOptions {
+	trueVal, falseVal := true, false
+	if dst == nil {
+		if len(src) == 0 {
+			return nil
+		}
+		dst = &config.MwordOptions{}
 	}
 
 	if _, ok := src["-always"]; ok {
-		dst.Mode = config.AlwaysMode
+		alwaysModeVal := config.AlwaysMode
+		dst.Mode = &alwaysModeVal
 	}
 
 	if _, ok := src["-online"]; ok {
-		dst.Mode = config.OnlineMode
+		onlineModeVal := config.OnlineMode
+		dst.Mode = &onlineModeVal
 	}
 
 	if _, ok := src["-offline"]; ok {
-		dst.Mode = config.OfflineMode
+		offlineModeVal := config.OfflineMode
+		dst.Mode = &offlineModeVal
 	}
 
 	if _, ok := src["-nofirst"]; ok {
-		dst.IsFirst = false
+		dst.IsFirst = &falseVal
 	}
 
 	if _, ok := src["-first"]; ok {
-		dst.IsFirst = true
+		dst.IsFirst = &trueVal
 	}
 
 	if _, ok := src["-nosub"]; ok {
-		dst.NoSub = true
+		dst.NoSub = &trueVal
 	}
 
 	if _, ok := src["-sub"]; ok {
-		dst.NoSub = false
+		dst.NoSub = &falseVal
 	}
 
 	if _, ok := src["-novip"]; ok {
-		dst.NoVip = true
+		dst.NoVip = &trueVal
 	}
 
 	if _, ok := src["-vip"]; ok {
-		dst.NoVip = false
+		dst.NoVip = &falseVal
 	}
 
 	if _, ok := src["-norepeat"]; ok {
-		dst.NoRepeat = true
+		dst.NoRepeat = &trueVal
 	}
 
 	if _, ok := src["-repeat"]; ok {
-		dst.NoRepeat = false
+		dst.NoRepeat = &falseVal
 	}
 
 	if _, ok := src["-nooneword"]; ok {
-		dst.OneWord = false
+		dst.OneWord = &falseVal
 	}
 
 	if _, ok := src["-oneword"]; ok {
-		dst.OneWord = true
+		dst.OneWord = &trueVal
 	}
 
 	if _, ok := src["-nocontains"]; ok {
-		dst.Contains = false
+		dst.Contains = &falseVal
 	}
 
 	if _, ok := src["-contains"]; ok {
-		dst.Contains = true
+		dst.Contains = &trueVal
 	}
 
 	if _, ok := src["-nocase"]; ok {
-		dst.CaseSensitive = false
+		dst.CaseSensitive = &falseVal
 	}
 
 	if _, ok := src["-case"]; ok {
-		dst.CaseSensitive = true
+		dst.CaseSensitive = &trueVal
 	}
 
 	return dst
 }
 
-func (ot *OptionsTemplate) MergeTimer(dst config.TimerOptions, src map[string]bool) config.TimerOptions {
-	if dst == (config.TimerOptions{}) { // значение по умолчанию
-		dst.Mode = config.OnlineMode
+func (ot *OptionsTemplate) MergeTimer(dst *config.TimerOptions, src map[string]bool) *config.TimerOptions {
+	if dst == nil {
+		if len(src) == 0 {
+			return nil
+		}
+		dst = &config.TimerOptions{}
+	}
+
+	if _, ok := src["-always"]; ok {
+		alwaysModeVal := config.AlwaysMode
+		dst.Mode = &alwaysModeVal
+	}
+
+	if _, ok := src["-online"]; ok {
+		onlineModeVal := config.OnlineMode
+		dst.Mode = &onlineModeVal
+	}
+
+	if _, ok := src["-offline"]; ok {
+		offlineModeVal := config.OfflineMode
+		dst.Mode = &offlineModeVal
 	}
 
 	if _, ok := src["-noa"]; ok {
-		dst.IsAnnounce = false
+		falseVal := false
+		dst.IsAnnounce = &falseVal
 	}
 
 	if _, ok := src["-a"]; ok {
-		dst.IsAnnounce = true
-	}
-
-	if _, ok := src["-always"]; ok {
-		dst.Mode = config.AlwaysMode
-	}
-
-	if _, ok := src["-online"]; ok {
-		dst.Mode = config.OnlineMode
-	}
-
-	if _, ok := src["-offline"]; ok {
-		dst.Mode = config.OfflineMode
+		trueVal := true
+		dst.IsAnnounce = &trueVal
 	}
 
 	if _, ok := src["-primary"]; ok {
-		dst.ColorAnnounce = "primary"
+		primaryVal := "primary"
+		dst.ColorAnnounce = &primaryVal
 	}
 
 	if _, ok := src["-blue"]; ok {
-		dst.ColorAnnounce = "blue"
+		blueVal := "blue"
+		dst.ColorAnnounce = &blueVal
 	}
 
 	if _, ok := src["-green"]; ok {
-		dst.ColorAnnounce = "green"
+		greenVal := "green"
+		dst.ColorAnnounce = &greenVal
 	}
 
 	if _, ok := src["-orange"]; ok {
-		dst.ColorAnnounce = "orange"
+		orangeVal := "orange"
+		dst.ColorAnnounce = &orangeVal
 	}
 
 	if _, ok := src["-purple"]; ok {
-		dst.ColorAnnounce = "purple"
+		purpleVal := "purple"
+		dst.ColorAnnounce = &purpleVal
 	}
 
-	if dst.ColorAnnounce == "" {
-		dst.ColorAnnounce = "primary"
+	if dst.ColorAnnounce == nil || *dst.ColorAnnounce == "" {
+		defaultVal := "primary"
+		dst.ColorAnnounce = &defaultVal
 	}
 
 	return dst
 }
 
-func (ot *OptionsTemplate) MergeCommand(dst config.CommandOptions, src map[string]bool) config.CommandOptions {
-	if dst == (config.CommandOptions{}) { // значение по умолчанию
-		dst.Mode = config.AlwaysMode
+func (ot *OptionsTemplate) MergeCommand(dst *config.CommandOptions, src map[string]bool) *config.CommandOptions {
+	if dst == nil {
+		if len(src) == 0 {
+			return nil
+		}
+		dst = &config.CommandOptions{}
 	}
 
 	if _, ok := src["-public"]; ok {
-		dst.IsPrivate = false
+		falseVal := false
+		dst.IsPrivate = &falseVal
 	}
 
 	if _, ok := src["-private"]; ok {
-		dst.IsPrivate = true
+		trueVal := true
+		dst.IsPrivate = &trueVal
 	}
 
 	if _, ok := src["-always"]; ok {
-		dst.Mode = config.AlwaysMode
+		alwaysModeVal := config.AlwaysMode
+		dst.Mode = &alwaysModeVal
 	}
 
 	if _, ok := src["-online"]; ok {
-		dst.Mode = config.OnlineMode
+		onlineModeVal := config.OnlineMode
+		dst.Mode = &onlineModeVal
 	}
 
 	if _, ok := src["-offline"]; ok {
-		dst.Mode = config.OfflineMode
+		offlineModeVal := config.OfflineMode
+		dst.Mode = &offlineModeVal
 	}
 
 	return dst
 }
 
-func (ot *OptionsTemplate) ExceptToString(opts config.ExceptOptions) string {
+func (ot *OptionsTemplate) ExceptToString(opts *config.ExceptOptions) string {
 	result := []string{
 		func() string {
-			if opts.NoRepeat {
-				return "-norepeat"
+			if opts == nil || opts.NoRepeat == nil || !*opts.NoRepeat {
+				return "-repeat"
 			}
-			return "-repeat"
+			return "-norepeat"
 		}(),
 		func() string {
-			if opts.OneWord {
-				return "-oneword"
+			if opts == nil || opts.OneWord == nil || !*opts.OneWord {
+				return "-nooneword"
 			}
-			return "-nooneword"
+			return "-oneword"
 		}(),
 		func() string {
-			if opts.Contains {
-				return "-contains"
+			if opts == nil || opts.Contains == nil || !*opts.Contains {
+				return "-nocontains"
 			}
-			return "-nocontains"
+			return "-contains"
 		}(),
 		func() string {
-			if opts.CaseSensitive {
-				return "-case"
+			if opts == nil || opts.CaseSensitive == nil || !*opts.CaseSensitive {
+				return "-nocase"
 			}
-			return "-nocase"
+			return "-case"
 		}(),
 		func() string {
-			if !opts.NoSub {
-				return "-sub"
+			if opts == nil || opts.NoSub == nil || *opts.NoSub {
+				return "-nosub"
 			}
-			return "-nosub"
+			return "-sub"
 		}(),
 		func() string {
-			if !opts.NoVip {
-				return "-vip"
+			if opts == nil || opts.NoVip == nil || *opts.NoVip {
+				return "-novip"
 			}
-			return "-novip"
+			return "-vip"
 		}(),
 	}
 	return strings.Join(result, " ")
 }
 
-func (ot *OptionsTemplate) MwordToString(opts config.MwordOptions) string {
+func (ot *OptionsTemplate) MwordToString(opts *config.MwordOptions) string {
 	result := []string{
 		func() string {
-			switch opts.Mode {
+			if opts == nil || opts.Mode == nil {
+				return "-online"
+			}
+			switch *opts.Mode {
 			case config.OnlineMode:
 				return "-online"
 			case config.OfflineMode:
@@ -341,61 +372,64 @@ func (ot *OptionsTemplate) MwordToString(opts config.MwordOptions) string {
 			}
 		}(),
 		func() string {
-			if opts.NoRepeat {
-				return "-norepeat"
+			if opts == nil || opts.NoRepeat == nil || !*opts.NoRepeat {
+				return "-repeat"
 			}
-			return "-repeat"
+			return "-norepeat"
 		}(),
 		func() string {
-			if opts.OneWord {
-				return "-oneword"
+			if opts == nil || opts.OneWord == nil || !*opts.OneWord {
+				return "-nooneword"
 			}
-			return "-nooneword"
+			return "-oneword"
 		}(),
 		func() string {
-			if opts.Contains {
-				return "-contains"
+			if opts == nil || opts.Contains == nil || !*opts.Contains {
+				return "-nocontains"
 			}
-			return "-nocontains"
+			return "-contains"
 		}(),
 		func() string {
-			if opts.CaseSensitive {
-				return "-case"
+			if opts == nil || opts.CaseSensitive == nil || !*opts.CaseSensitive {
+				return "-nocase"
 			}
-			return "-nocase"
+			return "-case"
 		}(),
 		func() string {
-			if opts.IsFirst {
-				return "-first"
+			if opts == nil || opts.IsFirst == nil || !*opts.IsFirst {
+				return "-nofirst"
 			}
-			return "-nofirst"
+			return "-first"
 		}(),
 		func() string {
-			if !opts.NoSub {
-				return "-sub"
+			if opts == nil || opts.NoSub == nil || *opts.NoSub {
+				return "-nosub"
 			}
-			return "-nosub"
+			return "-sub"
 		}(),
 		func() string {
-			if !opts.NoVip {
-				return "-vip"
+			if opts == nil || opts.NoVip == nil || *opts.NoVip {
+				return "-novip"
 			}
-			return "-novip"
+			return "-vip"
 		}(),
 	}
 	return strings.Join(result, " ")
 }
 
-func (ot *OptionsTemplate) TimerToString(opts config.TimerOptions) string {
+func (ot *OptionsTemplate) TimerToString(opts *config.TimerOptions) string {
 	result := []string{
 		func() string {
-			if opts.IsAnnounce {
-				return "-a"
+			if opts == nil || opts.IsAnnounce == nil || !*opts.IsAnnounce {
+				return "-noa"
 			}
-			return "-noa"
+			return "-a"
 		}(),
 		func() string {
-			switch opts.Mode {
+			if opts == nil || opts.Mode == nil {
+				return "-online"
+			}
+			switch *opts.Mode {
 			case config.OnlineMode:
 				return "-online"
 			case config.OfflineMode:
@@ -405,25 +439,28 @@ func (ot *OptionsTemplate) TimerToString(opts config.TimerOptions) string {
 			}
 		}(),
 		func() string {
-			if opts.ColorAnnounce == "" {
+			if opts == nil || opts.ColorAnnounce == nil || *opts.ColorAnnounce == "" {
 				return "-primary"
 			}
-			return "-" + opts.ColorAnnounce
+			return "-" + *opts.ColorAnnounce
 		}(),
 	}
 	return strings.Join(result, " ")
 }
 
-func (ot *OptionsTemplate) CommandToString(opts config.CommandOptions) string {
+func (ot *OptionsTemplate) CommandToString(opts *config.CommandOptions) string {
 	result := []string{
 		func() string {
-			if opts.IsPrivate {
-				return "-private"
+			if opts == nil || opts.IsPrivate == nil || !*opts.IsPrivate {
+				return "-public"
 			}
-			return "-public"
+			return "-private"
 		}(),
 		func() string {
-			switch opts.Mode {
+			if opts == nil || opts.Mode == nil {
+				return "-always"
+			}
+			switch *opts.Mode {
 			case config.OnlineMode:
 				return "-online"
 			case config.OfflineMode:

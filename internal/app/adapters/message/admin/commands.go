@@ -49,7 +49,7 @@ func (c *AddCommand) handleCommandAdd(cfg *config.Config, text *domain.MessageTe
 
 	cfg.Commands[cmd] = &config.Commands{
 		Text:    strings.TrimSpace(matches[2]),
-		Options: c.template.Options().MergeCommand(config.CommandOptions{}, opts),
+		Options: c.template.Options().MergeCommand(nil, opts),
 	}
 
 	return success

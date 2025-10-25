@@ -21,7 +21,7 @@ type MwordTemplate struct {
 
 type Mwords struct {
 	Punishments []config.Punishment
-	Options     config.MwordOptions
+	Options     *config.MwordOptions
 	Word        string
 	NameRegexp  string
 	Regexp      *regexp.Regexp
@@ -63,20 +63,31 @@ func (t *MwordTemplate) Update(mwords []config.Mword, mwordGroups map[string]*co
 			}
 
 			options := mwg.Options
-			if mw.Options != (config.MwordOptions{}) {
-				options = t.options.MergeMword(mwg.Options, map[string]bool{
-					"is_first":       mw.Options.IsFirst,
-					"no_sub":         mw.Options.NoSub,
-					"no_vip":         mw.Options.NoVip,
-					"norepeat":       mw.Options.NoRepeat,
-					"one_word":       mw.Options.OneWord,
-					"contains":       mw.Options.Contains,
-					"case_sensitive": mw.Options.CaseSensitive,
-				})
-
-				if mw.Options.Mode != 0 {
-					options.Mode = mw.Options.Mode
+			if mw.Options != nil {
+				src := make(map[string]bool)
+				if mw.Options.IsFirst != nil {
+					src["is_first"] = *mw.Options.IsFirst
 				}
+				if mw.Options.NoSub != nil {
+					src["no_sub"] = *mw.Options.NoSub
+				}
+				if mw.Options.NoVip != nil {
+					src["no_vip"] = *mw.Options.NoVip
+				}
+				if mw.Options.NoRepeat != nil {
+					src["norepeat"] = *mw.Options.NoRepeat
+				}
+				if mw.Options.OneWord != nil {
+					src["one_word"] = *mw.Options.OneWord
+				}
+				if mw.Options.Contains != nil {
+					src["contains"] = *mw.Options.Contains
+				}
+				if mw.Options.CaseSensitive != nil {
+					src["case_sensitive"] = *mw.Options.CaseSensitive
+				}
+
+				options = t.options.MergeMword(mwg.Options, src)
 			}
 
 			mws = append(mws, Mwords{
@@ -89,14 +100,17 @@ func (t *MwordTemplate) Update(mwords []config.Mword, mwordGroups map[string]*co
 		}
 	}
 
-	hasEnabledOptions := func(o config.MwordOptions) bool {
-		return o.IsFirst ||
-			o.NoSub ||
-			o.NoVip ||
-			o.NoRepeat ||
-			o.OneWord ||
-			o.Contains ||
-			o.CaseSensitive
+	hasEnabledOptions := func(o *config.MwordOptions) bool {
+		if o == nil {
+			return false
+		}
+		return (o.IsFirst != nil && *o.IsFirst) ||
+			(o.NoSub != nil && *o.NoSub) ||
+			(o.NoVip != nil && *o.NoVip) ||
+			(o.NoRepeat != nil && *o.NoRepeat) ||
+			(o.OneWord != nil && *o.OneWord) ||
+			(o.Contains != nil && *o.Contains) ||
+			(o.CaseSensitive != nil && *o.CaseSensitive)
 	}
 
 	sort.Slice(mws, func(i, j int) bool {
@@ -125,7 +139,11 @@ func (t *MwordTemplate) Check(msg *domain.ChatMessage, isLive bool) []config.Pun
 			continue
 		}
 
-		match[mw.Options.IsFirst] = mw.Punishments
+		isFirst := false
+		if mw.Options != nil && mw.Options.IsFirst != nil {
+			isFirst = *mw.Options.IsFirst
+		}
+		match[isFirst] = mw.Punishments
 		t.cache.Set(t.getCacheKey(msg), match)
 
 		return mw.Punishments
@@ -136,54 +154,57 @@ func (t *MwordTemplate) Check(msg *domain.ChatMessage, isLive bool) []config.Pun
 	return nil
 }
 
-func (t *MwordTemplate) matchMwordRule(msg *domain.ChatMessage, word string, re *regexp.Regexp, opts config.MwordOptions, isLive bool) bool {
-	if opts.NoVip && msg.Chatter.IsVip {
-		return false
-	}
-	if opts.NoSub && msg.Chatter.IsSubscriber {
-		return false
-	}
-	if opts.IsFirst && !msg.Message.IsFirst() {
-		return false
-	}
-	if opts.OneWord && len(msg.Message.Text.Words()) > 1 {
+func (t *MwordTemplate) matchMwordRule(msg *domain.ChatMessage, word string, re *regexp.Regexp, opts *config.MwordOptions, isLive bool) bool {
+	if word == "" {
 		return false
 	}
 
-	if ((opts.Mode == config.OnlineMode || opts.Mode == 0) && !isLive) ||
-		(opts.Mode == config.OfflineMode && isLive) {
+	mode := config.OnlineMode
+	if opts != nil && opts.Mode != nil {
+		mode = *opts.Mode
+	}
+
+	if ((mode == config.OnlineMode || mode == 0) && !isLive) || (mode == config.OfflineMode && isLive) {
 		return false
 	}
 
-	var text string
-	var words []string
-	switch {
-	case opts.CaseSensitive && opts.NoRepeat:
-		text = msg.Message.Text.Text()
-		words = msg.Message.Text.Words()
-	case opts.NoRepeat:
-		text = msg.Message.Text.Text(domain.LowerOption)
-		words = msg.Message.Text.Words(domain.LowerOption)
-	case opts.CaseSensitive:
-		text = msg.Message.Text.Text(domain.RemovePunctuationOption, domain.RemoveDuplicateLettersOption)
-		words = msg.Message.Text.Words(domain.RemovePunctuationOption, domain.RemoveDuplicateLettersOption)
-	case opts.Contains:
-		text = msg.Message.Text.Text(domain.LowerOption)
-		words = msg.Message.Text.Words(domain.LowerOption)
-	default:
-		text = msg.Message.Text.Text(domain.LowerOption, domain.RemovePunctuationOption, domain.RemoveDuplicateLettersOption)
-		words = msg.Message.Text.Words(domain.LowerOption, domain.RemovePunctuationOption, domain.RemoveDuplicateLettersOption)
+	text := msg.Message.Text.Text(domain.LowerOption, domain.RemovePunctuationOption, domain.RemoveDuplicateLettersOption)
+	words := msg.Message.Text.Words(domain.LowerOption, domain.RemovePunctuationOption, domain.RemoveDuplicateLettersOption)
+	if opts != nil {
+		if opts.NoVip != nil && *opts.NoVip && msg.Chatter.IsVip {
+			return false
+		}
+		if opts.NoSub != nil && *opts.NoSub && msg.Chatter.IsSubscriber {
+			return false
+		}
+		if opts.IsFirst != nil && *opts.IsFirst && !msg.Message.IsFirst() {
+			return false
+		}
+		if opts.OneWord != nil && *opts.OneWord && len(msg.Message.Text.Words(domain.LowerOption, domain.RemovePunctuationOption, domain.RemoveDuplicateLettersOption)) > 1 {
+			return false
+		}
+
+		switch {
+		case opts.CaseSensitive != nil && opts.NoRepeat != nil && *opts.CaseSensitive && *opts.NoRepeat:
+			text = msg.Message.Text.Text()
+			words = msg.Message.Text.Words()
+		case opts.NoRepeat != nil && *opts.NoRepeat:
+			text = msg.Message.Text.Text(domain.LowerOption)
+			words = msg.Message.Text.Words(domain.LowerOption)
+		case opts.CaseSensitive != nil && *opts.CaseSensitive:
+			text = msg.Message.Text.Text(domain.RemovePunctuationOption, domain.RemoveDuplicateLettersOption)
+			words = msg.Message.Text.Words(domain.RemovePunctuationOption, domain.RemoveDuplicateLettersOption)
+		case opts.Contains != nil && *opts.Contains:
+			text = msg.Message.Text.Text(domain.LowerOption)
+			return strings.Contains(text, word)
+		}
 	}
 
 	if re != nil {
 		return re.MatchString(text)
 	}
 
-	if word == "" {
-		return false
-	}
-
-	if opts.Contains || strings.Contains(word, " ") {
+	if strings.Contains(word, " ") {
 		return strings.Contains(text, word)
 	}
 	return slices.Contains(words, word)

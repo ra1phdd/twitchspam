@@ -1,7 +1,7 @@
 package config
 
 import (
-	"encoding/json"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"os"
@@ -27,7 +27,7 @@ func New(path string) (*Manager, error) {
 
 	if errors.Is(err, os.ErrNotExist) {
 		m.cfg = m.GetDefault()
-		data, err := json.MarshalIndent(m.cfg, "", "  ")
+		data, err := json.Marshal(m.cfg, json.OmitZeroStructFields(true))
 		if err != nil {
 			return nil, fmt.Errorf("marshal config: %w", err)
 		}
@@ -93,7 +93,7 @@ func (m *Manager) saveLocked() error {
 		return errors.New("no config to save")
 	}
 
-	data, err := json.MarshalIndent(m.cfg, "", "  ")
+	data, err := json.Marshal(m.cfg, json.OmitZeroStructFields(true))
 	if err != nil {
 		return fmt.Errorf("marshal config: %w", err)
 	}

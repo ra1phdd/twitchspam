@@ -96,7 +96,7 @@ type ExceptionsSettings struct {
 	Enabled      bool           `json:"enabled"`
 	MessageLimit int            `json:"message_limit"`
 	Punishments  []Punishment   `json:"punishments"`
-	Options      ExceptOptions  `json:"options"`
+	Options      *ExceptOptions `json:"options"`
 	Regexp       *regexp.Regexp `json:"regexp"`
 }
 
@@ -108,37 +108,37 @@ type AliasGroups struct {
 
 type Mword struct {
 	Punishments []Punishment   `json:"punishments"`
-	Options     MwordOptions   `json:"options"`
+	Options     *MwordOptions  `json:"options"`
 	Word        string         `json:"word"`
 	NameRegexp  string         `json:"name_regexp"`
 	Regexp      *regexp.Regexp `json:"regexp"`
 }
 
 type MwordGroup struct {
-	Enabled     bool         `json:"enabled"`
-	Punishments []Punishment `json:"punishments"` // глобальные наказания
-	Options     MwordOptions `json:"options"`     // глобальные опции
-	Words       []Mword      `json:"words"`
+	Enabled     bool          `json:"enabled"`
+	Punishments []Punishment  `json:"punishments"` // глобальные наказания
+	Options     *MwordOptions `json:"options"`     // глобальные опции
+	Words       []Mword       `json:"words"`
 }
 
 type Markers struct {
 	StreamID  string        `json:"stream_id"`
 	CreatedAt time.Time     `json:"date"`
-	Timecode  time.Duration `json:"time_code"`
+	Timecode  time.Duration `json:"time_code,format:nano"`
 }
 
 type Commands struct {
-	Text    string         `json:"text"`
-	Options CommandOptions `json:"options"`
-	Timer   *Timers        `json:"timer"`
-	Limiter *Limiter       `json:"limiter"`
+	Text    string          `json:"text"`
+	Options *CommandOptions `json:"options"`
+	Timer   *Timers         `json:"timer"`
+	Limiter *Limiter        `json:"limiter"`
 }
 
 type Timers struct {
 	Enabled  bool          `json:"enabled"`
-	Interval time.Duration `json:"interval"`
+	Interval time.Duration `json:"interval,format:nano"`
 	Count    int           `json:"count"`
-	Options  TimerOptions  `json:"options"`
+	Options  *TimerOptions `json:"options"`
 }
 
 type Banwords struct {
@@ -152,38 +152,38 @@ type Punishment struct {
 }
 
 type ExceptOptions struct {
-	NoSub         bool `json:"no_sub"`
-	NoVip         bool `json:"no_vip"`
-	NoRepeat      bool `json:"norepeat"`
-	OneWord       bool `json:"one_word"`
-	Contains      bool `json:"contains"`
-	CaseSensitive bool `json:"case_sensitive"`
+	NoSub         *bool `json:"no_sub"`
+	NoVip         *bool `json:"no_vip"`
+	NoRepeat      *bool `json:"norepeat"`
+	OneWord       *bool `json:"one_word"`
+	Contains      *bool `json:"contains"`
+	CaseSensitive *bool `json:"case_sensitive"`
 }
 
 type MwordOptions struct {
-	Mode          int  `json:"mode"`
-	IsFirst       bool `json:"is_first"`
-	NoSub         bool `json:"no_sub"`
-	NoVip         bool `json:"no_vip"`
-	NoRepeat      bool `json:"norepeat"`
-	OneWord       bool `json:"one_word"`
-	Contains      bool `json:"contains"`
-	CaseSensitive bool `json:"case_sensitive"`
+	Mode          *int  `json:"mode"`
+	IsFirst       *bool `json:"is_first"`
+	NoSub         *bool `json:"no_sub"`
+	NoVip         *bool `json:"no_vip"`
+	NoRepeat      *bool `json:"norepeat"`
+	OneWord       *bool `json:"one_word"`
+	Contains      *bool `json:"contains"`
+	CaseSensitive *bool `json:"case_sensitive"`
 }
 
 type TimerOptions struct {
-	Mode          int    `json:"mode"`
-	IsAnnounce    bool   `json:"is_announce"`
-	ColorAnnounce string `json:"color_announce"`
+	Mode          *int    `json:"mode"`
+	IsAnnounce    *bool   `json:"is_announce"`
+	ColorAnnounce *string `json:"color_announce"`
 }
 
 type CommandOptions struct {
-	IsPrivate bool `json:"is_private"`
-	Mode      int  `json:"mode"`
+	IsPrivate *bool `json:"is_private"`
+	Mode      *int  `json:"mode"`
 }
 
 type Limiter struct {
-	Requests int           `json:"requests"` // сколько запросов
-	Per      time.Duration `json:"per"`      // за какое время
+	Requests int           `json:"requests"`        // сколько запросов
+	Per      time.Duration `json:"per,format:nano"` // за какое время
 	Rate     *rate.Limiter `json:"-"`
 }

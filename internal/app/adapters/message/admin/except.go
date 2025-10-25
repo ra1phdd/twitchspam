@@ -88,7 +88,7 @@ func (e *AddExcept) handleExceptAdd(cfg *config.Config, text *domain.MessageText
 			MessageLimit: messageLimit,
 			Punishments:  punishments,
 			Regexp:       re,
-			Options:      fn(config.ExceptOptions{}, opts, e.typeExcept != "emote"),
+			Options:      fn(nil, opts),
 		}
 
 		return success
@@ -111,7 +111,7 @@ func (e *AddExcept) handleExceptAdd(cfg *config.Config, text *domain.MessageText
 			Enabled:      true,
 			MessageLimit: messageLimit,
 			Punishments:  punishments,
-			Options:      e.template.Options().MergeExcept(config.ExceptOptions{}, opts, e.typeExcept != "emote"),
+			Options:      e.template.Options().MergeExcept(nil, opts),
 		}
 		added = append(added, word)
 	}
@@ -212,7 +212,7 @@ func (e *SetExcept) handleExceptSet(cfg *config.Config, text *domain.MessageText
 			continue
 		}
 
-		exSettings[word].Options = fn(exSettings[word].Options, opts, e.typeExcept != "emote")
+		exSettings[word].Options = fn(exSettings[word].Options, opts)
 
 		if strings.TrimSpace(matches[1]) != "" {
 			answer := cmds[strings.TrimSpace(matches[1])](exSettings[word], strings.TrimSpace(matches[2]))

@@ -27,9 +27,28 @@ func (t *ListTimers) handleTimersList(cfg *config.Config) *ports.AnswerType {
 
 	return buildList(timers, "таймеры", "таймеры не найдены!",
 		func(key string, timer *config.Timers) string {
+			if timer == nil {
+				return ""
+			}
+
 			options := make([]string, 2)
-			options[0] = map[bool]string{true: "-a", false: "-noa"}[timer.Options.IsAnnounce]
-			options[1] = map[int]string{0: "-online", config.OnlineMode: "-online", config.OfflineMode: "-offline", config.AlwaysMode: "-always"}[timer.Options.Mode]
+			isAnnounce := timer.Options != nil && timer.Options.IsAnnounce != nil && *timer.Options.IsAnnounce
+			options[0] = map[bool]string{
+				true:  "-a",
+				false: "-noa",
+			}[isAnnounce]
+
+			mode := config.OnlineMode
+			if timer.Options != nil && timer.Options.Mode != nil {
+				mode = *timer.Options.Mode
+			}
+
+			options[1] = map[int]string{
+				0:                  "-online",
+				config.OnlineMode:  "-online",
+				config.OfflineMode: "-offline",
+				config.AlwaysMode:  "-always",
+			}[mode]
 
 			return fmt.Sprintf("- %s (включен: %v, интервал: %s, кол-во сообщений: %d, опции: %s)",
 				key, timer.Enabled, timer.Interval, timer.Count, strings.Join(options, " "))

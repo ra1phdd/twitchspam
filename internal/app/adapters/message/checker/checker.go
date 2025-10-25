@@ -575,43 +575,48 @@ func (c *Checker) handleExceptions(msg *domain.ChatMessage, countSpam int, typeS
 	return nil
 }
 
-func (c *Checker) matchExceptRule(msg *domain.ChatMessage, word string, re *regexp.Regexp, opts config.ExceptOptions) bool {
-	if opts.NoVip && msg.Chatter.IsVip {
-		return false
-	}
-	if opts.NoSub && msg.Chatter.IsSubscriber {
-		return false
-	}
-	if opts.OneWord && len(msg.Message.Text.Words(domain.LowerOption, domain.RemovePunctuationOption, domain.RemoveDuplicateLettersOption)) > 1 {
+func (c *Checker) matchExceptRule(msg *domain.ChatMessage, word string, re *regexp.Regexp, opts *config.ExceptOptions) bool {
+	if word == "" {
 		return false
 	}
 
-	var text string
-	var words []string
-	switch {
-	case opts.CaseSensitive && opts.NoRepeat:
-		text = msg.Message.Text.Text()
-		words = msg.Message.Text.Words()
-	case opts.NoRepeat:
-		text = msg.Message.Text.Text()
-		words = msg.Message.Text.Words()
-	case opts.CaseSensitive:
-		text = msg.Message.Text.Text(domain.RemovePunctuationOption, domain.RemoveDuplicateLettersOption)
-		words = msg.Message.Text.Words(domain.RemovePunctuationOption, domain.RemoveDuplicateLettersOption)
-	default:
-		text = msg.Message.Text.Text(domain.LowerOption, domain.RemovePunctuationOption, domain.RemoveDuplicateLettersOption)
-		words = msg.Message.Text.Words(domain.LowerOption, domain.RemovePunctuationOption, domain.RemoveDuplicateLettersOption)
+	text := msg.Message.Text.Text(domain.LowerOption, domain.RemovePunctuationOption, domain.RemoveDuplicateLettersOption)
+	words := msg.Message.Text.Words(domain.LowerOption, domain.RemovePunctuationOption, domain.RemoveDuplicateLettersOption)
+
+	if (opts == nil || opts.OneWord == nil || *opts.OneWord) &&
+		c.template.CheckOneWord(msg.Message.Text.Words(domain.LowerOption, domain.RemovePunctuationOption, domain.RemoveDuplicateLettersOption)) {
+		return false
+	}
+
+	if opts != nil {
+		if opts.NoVip != nil && *opts.NoVip && msg.Chatter.IsVip {
+			return false
+		}
+		if opts.NoSub != nil && *opts.NoSub && msg.Chatter.IsSubscriber {
+			return false
+		}
+
+		switch {
+		case opts.CaseSensitive != nil && opts.NoRepeat != nil && *opts.CaseSensitive && *opts.NoRepeat:
+			text = msg.Message.Text.Text()
+			words = msg.Message.Text.Words()
+		case opts.NoRepeat != nil && *opts.NoRepeat:
+			text = msg.Message.Text.Text(domain.LowerOption)
+			words = msg.Message.Text.Words(domain.LowerOption)
+		case opts.CaseSensitive != nil && *opts.CaseSensitive:
+			text = msg.Message.Text.Text(domain.RemovePunctuationOption, domain.RemoveDuplicateLettersOption)
+			words = msg.Message.Text.Words(domain.RemovePunctuationOption, domain.RemoveDuplicateLettersOption)
+		case opts.Contains != nil && *opts.Contains:
+			text = msg.Message.Text.Text(domain.LowerOption)
+			return strings.Contains(text, word)
+		}
 	}
 
 	if re != nil {
 		return re.MatchString(text)
 	}
 
-	if word == "" {
-		return false
-	}
-
-	if opts.Contains || strings.Contains(word, " ") {
+	if strings.Contains(word, " ") {
 		return strings.Contains(text, word)
 	}
 	return slices.Contains(words, word)

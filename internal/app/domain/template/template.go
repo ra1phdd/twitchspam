@@ -94,3 +94,17 @@ func (t *Template) Mword() ports.MwordPort {
 func (t *Template) Nuke() ports.NukePort {
 	return t.nuke
 }
+
+func (t *Template) CheckOneWord(words []string) bool {
+	if len(words) == 1 {
+		return true
+	}
+
+	first := words[0]
+	for _, w := range words[1:] {
+		if w != first {
+			return false
+		}
+	}
+	return true
+}

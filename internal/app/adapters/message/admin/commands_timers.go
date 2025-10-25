@@ -57,7 +57,7 @@ func (c *AddCommandTimer) handleCommandTimersAdd(cfg *config.Config, text *domai
 		Enabled:  true,
 		Interval: time.Duration(interval) * time.Second,
 		Count:    count,
-		Options:  c.template.Options().MergeTimer(config.TimerOptions{}, opts),
+		Options:  c.template.Options().MergeTimer(nil, opts),
 	}
 	c.t.AddTimer(name, cfg.Commands[name])
 
@@ -253,8 +253,12 @@ func (a *AddTimer) AddTimer(key string, cmd *config.Commands) {
 			return
 		}
 
-		if ((timer.Options.Mode == config.OnlineMode || timer.Options.Mode == 0) && !a.Stream.IsLive()) ||
-			(timer.Options.Mode == config.OfflineMode && a.Stream.IsLive()) {
+		mode := config.OnlineMode
+		if timer.Options != nil && timer.Options.Mode != nil {
+			mode = *timer.Options.Mode
+		}
+
+		if ((mode == config.OnlineMode || mode == 0) && !a.Stream.IsLive()) || (mode == config.OfflineMode && a.Stream.IsLive()) {
 			return
 		}
 
@@ -263,8 +267,8 @@ func (a *AddTimer) AddTimer(key string, cmd *config.Commands) {
 			msg.Text = append(msg.Text, args["text"].(string))
 		}
 
-		if _, ok := a.Cfg.UsersTokens[a.Stream.ChannelID()]; ok && timer.Options.IsAnnounce {
-			a.Api.SendChatAnnouncements(a.Stream.ChannelID(), msg, timer.Options.ColorAnnounce)
+		if _, ok := a.Cfg.UsersTokens[a.Stream.ChannelID()]; ok && timer.Options != nil && timer.Options.IsAnnounce != nil && *timer.Options.IsAnnounce {
+			a.Api.SendChatAnnouncements(a.Stream.ChannelID(), msg, *timer.Options.ColorAnnounce)
 			return
 		}
 

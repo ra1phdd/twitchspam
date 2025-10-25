@@ -24,6 +24,8 @@ func TestMatchMwordRule_CaseSensitiveAlwaysMode(t *testing.T) {
 	matched := tmpl.Mword().Check(msg, true)
 	assert.Empty(t, matched, "issuing punishments without mwords")
 
+	trueVal := true
+	alwaysModeVal := config.AlwaysMode
 	tmpl.Mword().Update([]config.Mword{
 		{
 			Punishments: []config.Punishment{
@@ -32,9 +34,9 @@ func TestMatchMwordRule_CaseSensitiveAlwaysMode(t *testing.T) {
 					Duration: 600,
 				},
 			},
-			Options: config.MwordOptions{
-				CaseSensitive: true,
-				Mode:          config.AlwaysMode,
+			Options: &config.MwordOptions{
+				CaseSensitive: &trueVal,
+				Mode:          &alwaysModeVal,
 			},
 			Word: "беZ пОлитики",
 		},

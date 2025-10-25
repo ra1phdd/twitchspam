@@ -137,7 +137,7 @@ func (u *User) handleCommands(msg *domain.ChatMessage) *ports.AnswerType {
 			continue
 		}
 
-		if cmd.Options.IsPrivate && !msg.Chatter.IsBroadcaster && !msg.Chatter.IsMod {
+		if cmd.Options != nil && cmd.Options.IsPrivate != nil && *cmd.Options.IsPrivate && !msg.Chatter.IsBroadcaster && !msg.Chatter.IsMod {
 			u.log.Warn("Private command attempted by unauthorized user",
 				slog.String("username", msg.Chatter.Username),
 				slog.String("command", word))
@@ -167,11 +167,15 @@ func (u *User) handleCommands(msg *domain.ChatMessage) *ports.AnswerType {
 			}
 		}
 
-		if (cmd.Options.Mode == config.OnlineMode && !u.stream.IsLive()) ||
-			(cmd.Options.Mode == config.OfflineMode && u.stream.IsLive()) {
+		mode := config.AlwaysMode
+		if cmd.Options != nil && cmd.Options.Mode != nil {
+			mode = *cmd.Options.Mode
+		}
+
+		if (mode == config.OnlineMode && !u.stream.IsLive()) || (mode == config.OfflineMode && u.stream.IsLive()) {
 			u.log.Trace("Command mode does not match stream status, skipping",
 				slog.String("command", word),
-				slog.Int("option_mode", cmd.Options.Mode),
+				slog.Int("option_mode", mode),
 				slog.Bool("stream_live", u.stream.IsLive()),
 			)
 			return nil

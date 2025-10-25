@@ -1,7 +1,6 @@
 package message
 
 import (
-	"github.com/prometheus/client_golang/prometheus"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -10,7 +9,6 @@ import (
 	"twitchspam/internal/app/adapters/message/admin"
 	"twitchspam/internal/app/adapters/message/checker"
 	"twitchspam/internal/app/adapters/message/user"
-	"twitchspam/internal/app/adapters/metrics"
 	"twitchspam/internal/app/domain"
 	"twitchspam/internal/app/domain/template"
 	"twitchspam/internal/app/infrastructure/config"
@@ -71,7 +69,6 @@ func (m *Message) Check(msg *domain.ChatMessage) {
 	m.log.Trace("Processing new message", slog.String("username", msg.Chatter.Username), slog.String("message", msg.Message.Text.Text()))
 	if m.stream.IsLive() {
 		m.stream.Stats().AddMessage(msg.Chatter.Username)
-		metrics.MessagesPerStream.With(prometheus.Labels{"channel": m.stream.ChannelName()}).Inc()
 		m.log.Trace("Added message to stream stats", slog.String("channel", m.stream.ChannelName()), slog.String("username", msg.Chatter.Username))
 	}
 
@@ -118,7 +115,6 @@ func (m *Message) Check(msg *domain.ChatMessage) {
 func (m *Message) CheckAutomod(msg *domain.ChatMessage) {
 	if m.stream.IsLive() {
 		m.stream.Stats().AddMessage(msg.Chatter.Username)
-		metrics.MessagesPerStream.With(prometheus.Labels{"channel": m.stream.ChannelName()}).Inc()
 	}
 
 	if m.cfg.Enabled && m.cfg.Automod.Enabled {

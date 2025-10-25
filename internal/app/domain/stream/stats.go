@@ -50,10 +50,11 @@ func newStats(channelName string, fs ports.FileServerPort, cache ports.CachePort
 		fs:          fs,
 		cache:       cache,
 		stats: SessionStats{
-			CountMessages: make(map[string]int),
-			CountDeletes:  make(map[string]int),
-			CountTimeouts: make(map[string]int),
-			CountBans:     make(map[string]int),
+			CountMessages:   make(map[string]int),
+			CountDeletes:    make(map[string]int),
+			CountTimeouts:   make(map[string]int),
+			CountBans:       make(map[string]int),
+			CategoryHistory: make([]CategoryInterval, 0),
 		},
 	}
 
@@ -80,9 +81,22 @@ func (s *Stats) SetStartTime(t time.Time) {
 	}
 	s.stats.StartStreamTime = t
 	s.stats.EndStreamTime = t
+	s.stats.Online.MaxViewers = 0
+	s.stats.Online.SumViewers = 0
+	s.stats.Online.Count = 0
+	s.stats.CountMessages = make(map[string]int)
+	s.stats.CountDeletes = make(map[string]int)
+	s.stats.CountTimeouts = make(map[string]int)
+	s.stats.CountBans = make(map[string]int)
+	s.stats.CategoryHistory = make([]CategoryInterval, 0)
 
 	s.cache.Set(s.channelName, s.stats)
 	metrics.StreamStartTime.With(prometheus.Labels{"channel": s.channelName}).Set(float64(s.stats.StartStreamTime.Unix()))
+	metrics.StreamEndTime.With(prometheus.Labels{"channel": s.channelName}).Set(float64(s.stats.StartStreamTime.Unix()))
+	metrics.OnlineViewers.With(prometheus.Labels{"channel": s.channelName}).Set(0)
+	metrics.MessagesPerStream.Delete(prometheus.Labels{"channel": s.channelName})
+	metrics.ModerationActions.Delete(prometheus.Labels{"channel": s.channelName})
+	metrics.UserCommands.Delete(prometheus.Labels{"channel": s.channelName})
 }
 
 func (s *Stats) GetStartTime() time.Time {
@@ -133,6 +147,7 @@ func (s *Stats) AddMessage(username string) {
 	}
 
 	s.stats.CountMessages[strings.ToLower(username)]++
+	metrics.MessagesPerStream.With(prometheus.Labels{"channel": s.channelName}).Inc()
 }
 
 func (s *Stats) AddDeleted(username string) {

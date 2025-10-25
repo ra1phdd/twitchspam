@@ -63,7 +63,7 @@ func (m *AddMword) handleMwAdd(cfg *config.Config, text *domain.MessageText) *po
 
 		cfg.Mword = append(cfg.Mword, config.Mword{
 			Punishments: punishments,
-			Options:     m.template.Options().MergeMword(config.MwordOptions{}, opts),
+			Options:     m.template.Options().MergeMword(nil, opts),
 			NameRegexp:  name,
 			Regexp:      re,
 		})
@@ -87,7 +87,7 @@ func (m *AddMword) handleMwAdd(cfg *config.Config, text *domain.MessageText) *po
 
 		cfg.Mword = append(cfg.Mword, config.Mword{
 			Punishments: punishments,
-			Options:     m.template.Options().MergeMword(config.MwordOptions{}, opts),
+			Options:     m.template.Options().MergeMword(nil, opts),
 			Word:        word,
 		})
 		added = append(added, word)
@@ -269,7 +269,7 @@ func (m *CreateMwordGroup) handleMwgCreate(cfg *config.Config, text *domain.Mess
 	cfg.MwordGroup[groupName] = &config.MwordGroup{
 		Enabled:     true,
 		Punishments: punishments,
-		Options:     m.template.Options().MergeMword(config.MwordOptions{}, opts),
+		Options:     m.template.Options().MergeMword(nil, opts),
 	}
 
 	m.template.Mword().Update(cfg.Mword, cfg.MwordGroup)
@@ -552,7 +552,7 @@ func (m *ListMwordGroup) handleMwgList(cfg *config.Config) *ports.AnswerType {
 				}
 
 				options := "стандартные"
-				if mw.Options != (config.MwordOptions{}) {
+				if mw.Options != (nil) {
 					options = m.template.Options().MwordToString(mw.Options)
 				}
 
