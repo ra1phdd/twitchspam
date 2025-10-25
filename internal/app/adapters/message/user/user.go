@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 	"twitchspam/internal/app/adapters/metrics"
 	"twitchspam/internal/app/domain"
 	"twitchspam/internal/app/infrastructure/config"
@@ -49,6 +50,7 @@ func (u *User) FindMessages(msg *domain.ChatMessage) *ports.AnswerType {
 		return nil
 	}
 
+	startProcessing := time.Now()
 	if action := u.handleStats(msg); action != nil {
 		u.log.Debug("Handled stats command",
 			slog.String("username", msg.Chatter.Username),
@@ -56,7 +58,10 @@ func (u *User) FindMessages(msg *domain.ChatMessage) *ports.AnswerType {
 		)
 		return action
 	}
+	endProcessing := time.Since(startProcessing).Seconds()
+	metrics.ModulesProcessingTime.With(prometheus.Labels{"module": "stats"}).Observe(endProcessing)
 
+	startProcessing = time.Now()
 	if action := u.handleCommands(msg); action != nil {
 		u.log.Debug("Handled user command",
 			slog.String("username", msg.Chatter.Username),
@@ -64,6 +69,8 @@ func (u *User) FindMessages(msg *domain.ChatMessage) *ports.AnswerType {
 		)
 		return action
 	}
+	endProcessing = time.Since(startProcessing).Seconds()
+	metrics.ModulesProcessingTime.With(prometheus.Labels{"module": "user_commands"}).Observe(endProcessing)
 
 	return nil
 }

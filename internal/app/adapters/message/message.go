@@ -1,6 +1,7 @@
 package message
 
 import (
+	"github.com/prometheus/client_golang/prometheus"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -9,6 +10,7 @@ import (
 	"twitchspam/internal/app/adapters/message/admin"
 	"twitchspam/internal/app/adapters/message/checker"
 	"twitchspam/internal/app/adapters/message/user"
+	"twitchspam/internal/app/adapters/metrics"
 	"twitchspam/internal/app/domain"
 	"twitchspam/internal/app/domain/template"
 	"twitchspam/internal/app/infrastructure/config"
@@ -81,6 +83,8 @@ func (m *Message) Check(msg *domain.ChatMessage) {
 	m.log.Trace("Message pushed to storage", slog.String("username", msg.Chatter.Username), slog.String("message_id", msg.Message.ID))
 
 	if !strings.HasPrefix(msg.Message.Text.Text(), "!am al ") && !strings.HasPrefix(msg.Message.Text.Text(), "!am alg ") {
+		startProcessing := time.Now()
+
 		text, ok := m.template.Aliases().Replace(msg.Message.Text.Words(domain.RemovePunctuationOption))
 		if ok {
 			m.log.Debug("Message text replaced via alias",
@@ -92,6 +96,9 @@ func (m *Message) Check(msg *domain.ChatMessage) {
 		} else {
 			m.log.Trace("No alias replacement applied", slog.String("username", msg.Chatter.Username))
 		}
+
+		endProcessing := time.Since(startProcessing).Seconds()
+		metrics.ModulesProcessingTime.With(prometheus.Labels{"module": "aliases"}).Observe(endProcessing)
 	}
 
 	if adminAction := m.admin.FindMessages(msg); adminAction != nil {
@@ -138,6 +145,8 @@ func (m *Message) CheckAutomod(msg *domain.ChatMessage) {
 
 func (m *Message) getAction(action *ports.CheckerAction, msg *domain.ChatMessage) {
 	switch action.Type {
+	case checker.None:
+		return
 	case checker.Ban:
 		m.log.Warn("Ban user", slog.String("username", msg.Chatter.Username), slog.String("text", msg.Message.Text.Text()))
 		m.api.BanUser(m.stream.ChannelName(), m.stream.ChannelID(), msg.Chatter.UserID, action.Reason)
