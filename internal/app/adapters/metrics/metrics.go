@@ -6,11 +6,6 @@ import (
 )
 
 var (
-	BotStartEvents = promauto.NewCounter(prometheus.CounterOpts{
-		Name: "bot_start_events_total",
-		Help: "Number of bot starts (for alerting)",
-	})
-
 	// BotEnabled - включен ли бот.
 	BotEnabled = promauto.NewGauge(prometheus.GaugeOpts{
 		Name: "bot_enabled",
