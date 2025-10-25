@@ -55,7 +55,7 @@ func New() error {
 	log.SetLogLevel(cfg.App.LogLevel)
 	gin.SetMode(cfg.App.GinMode)
 
-	prometheus.MustRegister(metrics.MessageProcessingTime)
+	prometheus.MustRegister(metrics.MessageProcessingTime, metrics.ModulesProcessingTime)
 
 	metrics.BotEnabled.Set(map[bool]float64{true: 1, false: 0}[cfg.Enabled])
 	metrics.AntiSpamEnabled.With(prometheus.Labels{"type": "default"}).Set(map[bool]float64{true: 1, false: 0}[cfg.Spam.SettingsDefault.Enabled])
