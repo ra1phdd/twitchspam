@@ -161,14 +161,15 @@ type ExceptOptions struct {
 }
 
 type MwordOptions struct {
-	Mode          *int  `json:"mode"`
-	IsFirst       *bool `json:"is_first"`
-	NoSub         *bool `json:"no_sub"`
-	NoVip         *bool `json:"no_vip"`
-	NoRepeat      *bool `json:"norepeat"`
-	OneWord       *bool `json:"one_word"`
-	Contains      *bool `json:"contains"`
-	CaseSensitive *bool `json:"case_sensitive"`
+	Mode            *int  `json:"mode"`
+	IsFirst         *bool `json:"is_first"`
+	NoSub           *bool `json:"no_sub"`
+	NoVip           *bool `json:"no_vip"`
+	NoRepeat        *bool `json:"norepeat"`
+	OneWord         *bool `json:"one_word"`
+	Contains        *bool `json:"contains"`
+	CaseSensitive   *bool `json:"case_sensitive"`
+	SavePunctuation *bool `json:"save_punctuation"`
 }
 
 type TimerOptions struct {

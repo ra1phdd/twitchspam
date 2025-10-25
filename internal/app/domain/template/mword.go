@@ -166,8 +166,8 @@ func (t *MwordTemplate) matchMwordRule(msg *domain.ChatMessage, word string, re 
 		return false
 	}
 
-	text := msg.Message.Text.Text(domain.LowerOption, domain.RemovePunctuationOption, domain.RemoveDuplicateLettersOption)
-	words := msg.Message.Text.Words(domain.LowerOption, domain.RemovePunctuationOption, domain.RemoveDuplicateLettersOption)
+	var text string
+	var words []string
 	if opts != nil {
 		if opts.NoVip != nil && *opts.NoVip && msg.Chatter.IsVip {
 			return false
@@ -178,24 +178,23 @@ func (t *MwordTemplate) matchMwordRule(msg *domain.ChatMessage, word string, re 
 		if opts.IsFirst != nil && *opts.IsFirst && !msg.Message.IsFirst() {
 			return false
 		}
-		if opts.OneWord != nil && *opts.OneWord && t.CheckOneWord(msg.Message.Text.Words(domain.LowerOption, domain.RemovePunctuationOption, domain.RemoveDuplicateLettersOption)) {
+		if opts.OneWord != nil && *opts.OneWord && !t.CheckOneWord(msg.Message.Text.Words(domain.LowerOption, domain.RemovePunctuationOption, domain.RemoveDuplicateLettersOption)) {
 			return false
 		}
 
-		switch {
-		case opts.CaseSensitive != nil && opts.NoRepeat != nil && *opts.CaseSensitive && *opts.NoRepeat:
-			text = msg.Message.Text.Text()
-			words = msg.Message.Text.Words()
-		case opts.NoRepeat != nil && *opts.NoRepeat:
-			text = msg.Message.Text.Text(domain.LowerOption)
-			words = msg.Message.Text.Words(domain.LowerOption)
-		case opts.CaseSensitive != nil && *opts.CaseSensitive:
-			text = msg.Message.Text.Text(domain.RemovePunctuationOption, domain.RemoveDuplicateLettersOption)
-			words = msg.Message.Text.Words(domain.RemovePunctuationOption, domain.RemoveDuplicateLettersOption)
-		case opts.Contains != nil && *opts.Contains:
-			text = msg.Message.Text.Text(domain.LowerOption)
-			return strings.Contains(text, word)
+		textOpts := make([]domain.TextOptionFuncWithID, 0, 3)
+		if opts.SavePunctuation != nil && !*opts.SavePunctuation {
+			textOpts = append(textOpts, domain.RemovePunctuationOption)
 		}
+		if opts.NoRepeat == nil || !*opts.NoRepeat {
+			textOpts = append(textOpts, domain.RemoveDuplicateLettersOption)
+		}
+		if opts.CaseSensitive == nil || !*opts.CaseSensitive {
+			textOpts = append(textOpts, domain.LowerOption)
+		}
+
+		text = msg.Message.Text.Text(textOpts...)
+		words = msg.Message.Text.Words(textOpts...)
 	}
 
 	if re != nil {
