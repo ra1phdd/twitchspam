@@ -57,7 +57,7 @@ func New() error {
 
 	prometheus.MustRegister(metrics.MessageProcessingTime)
 
-	metrics.BotStartTime.Set(float64(time.Now().Unix()))
+	metrics.BotStartEvents.Inc()
 	metrics.BotEnabled.Set(map[bool]float64{true: 1, false: 0}[cfg.Enabled])
 	metrics.AntiSpamEnabled.With(prometheus.Labels{"type": "default"}).Set(map[bool]float64{true: 1, false: 0}[cfg.Spam.SettingsDefault.Enabled])
 	metrics.AntiSpamEnabled.With(prometheus.Labels{"type": "vip"}).Set(map[bool]float64{true: 1, false: 0}[cfg.Spam.SettingsVIP.Enabled])

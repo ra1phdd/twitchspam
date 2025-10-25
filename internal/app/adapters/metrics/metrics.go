@@ -6,10 +6,9 @@ import (
 )
 
 var (
-	// BotStartTime - хранит время старта бота в виде Unix timestamp.
-	BotStartTime = promauto.NewGauge(prometheus.GaugeOpts{
-		Name: "bot_start_timestamp",
-		Help: "Unix timestamp of when the bot was started",
+	BotStartEvents = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "bot_start_events_total",
+		Help: "Number of bot starts (for alerting)",
 	})
 
 	// BotEnabled - включен ли бот.
