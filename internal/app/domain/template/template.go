@@ -96,7 +96,7 @@ func (t *Template) Nuke() ports.NukePort {
 }
 
 func (t *Template) CheckOneWord(words []string) bool {
-	if len(words) == 1 {
+	if len(words) < 2 {
 		return true
 	}
 
