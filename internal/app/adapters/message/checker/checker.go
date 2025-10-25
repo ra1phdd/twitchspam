@@ -352,7 +352,6 @@ func (c *Checker) calculateSpamMessages(msg *domain.ChatMessage, settings config
 	var countSpam, gap int
 	var timestamps []time.Time
 
-	hash := domain.WordsToHashes(msg.Message.Text.Words(domain.RemovePunctuationOption))
 	c.messages.ForEach(msg.Chatter.Username, func(item *storage.Message) {
 		c.log.Trace("Processing previous message",
 			slog.String("user", msg.Chatter.Username),
@@ -366,7 +365,7 @@ func (c *Checker) calculateSpamMessages(msg *domain.ChatMessage, settings config
 			return
 		}
 
-		similarity := domain.JaccardHashSimilarity(hash, item.HashWordsLowerNorm)
+		similarity := domain.JaccardHashSimilarity(msg.Message.Text.Words(domain.RemovePunctuationOption), item.Data.Message.Text.Words(domain.RemovePunctuationOption))
 		c.log.Trace("Calculated similarity with previous message",
 			slog.String("user", msg.Chatter.Username),
 			slog.String("message", msg.Message.Text.Text()),

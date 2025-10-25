@@ -6,9 +6,8 @@ import (
 )
 
 type Message struct {
-	Data               *domain.ChatMessage
-	Time               time.Time
-	HashWordsLowerNorm []uint64
-	IgnoreAntispam     bool
-	IgnoreNuke         bool
+	Data           *domain.ChatMessage
+	Time           time.Time
+	IgnoreAntispam bool
+	IgnoreNuke     bool
 }

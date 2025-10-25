@@ -3,28 +3,16 @@ package domain
 import (
 	"errors"
 	"fmt"
-	"hash/fnv"
 	"strings"
 	"time"
 )
 
-func WordsToHashes(words []string) []uint64 {
-	hashes := make([]uint64, len(words))
-	h := fnv.New64a()
-	for i, w := range words {
-		h.Reset()
-		_, _ = h.Write([]byte(w))
-		hashes[i] = h.Sum64()
-	}
-	return hashes
-}
-
-func JaccardHashSimilarity(a, b []uint64) float64 {
+func JaccardHashSimilarity(a, b []string) float64 {
 	if len(a) > len(b) {
 		a, b = b, a
 	}
 
-	set := make(map[uint64]struct{}, len(a))
+	set := make(map[string]struct{}, len(a))
 	for _, h := range a {
 		set[h] = struct{}{}
 	}

@@ -75,10 +75,9 @@ func (m *Message) Check(msg *domain.ChatMessage) {
 	}
 
 	m.messages.Push(msg.Chatter.Username, msg.Message.ID, storage.Message{
-		Data:               msg,
-		Time:               time.Now(),
-		HashWordsLowerNorm: domain.WordsToHashes(msg.Message.Text.Words(domain.RemovePunctuationOption)),
-		IgnoreAntispam:     !m.cfg.Enabled || !m.template.SpamPause().CanProcess() || !m.cfg.Spam.SettingsDefault.Enabled,
+		Data:           msg,
+		Time:           time.Now(),
+		IgnoreAntispam: !m.cfg.Enabled || !m.template.SpamPause().CanProcess() || !m.cfg.Spam.SettingsDefault.Enabled,
 	})
 	m.log.Trace("Message pushed to storage", slog.String("username", msg.Chatter.Username), slog.String("message_id", msg.Message.ID))
 
