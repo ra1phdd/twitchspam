@@ -68,24 +68,25 @@ func New(log logger.Logger, manager *config.Manager, stream ports.StreamPort, ap
 }
 
 func (m *Message) Check(msg *domain.ChatMessage) {
+	startProcessing := time.Now()
 	m.log.Trace("Processing new message", slog.String("username", msg.Chatter.Username), slog.String("message", msg.Message.Text.Text()))
 	if m.stream.IsLive() {
 		m.stream.Stats().AddMessage(msg.Chatter.Username)
 		m.log.Trace("Added message to stream stats", slog.String("channel", m.stream.ChannelName()), slog.String("username", msg.Chatter.Username))
 	}
 
-	startProcessing := time.Now()
+	startModuleProcessing := time.Now()
 	m.messages.Push(msg.Chatter.Username, msg.Message.ID, storage.Message{
 		Data:           msg,
 		Time:           time.Now(),
 		IgnoreAntispam: !m.cfg.Channels[m.stream.ChannelName()].Enabled || !m.template.SpamPause().CanProcess() || !m.cfg.Channels[m.stream.ChannelName()].Spam.SettingsDefault.Enabled,
 	})
-	endProcessing := time.Since(startProcessing).Seconds()
-	metrics.ModulesProcessingTime.With(prometheus.Labels{"module": "push_message"}).Observe(endProcessing)
+	endModuleProcessing := time.Since(startModuleProcessing).Seconds()
+	metrics.ModulesProcessingTime.With(prometheus.Labels{"module": "push_message"}).Observe(endModuleProcessing)
 	m.log.Trace("Message pushed to storage", slog.String("username", msg.Chatter.Username), slog.String("message_id", msg.Message.ID))
 
 	if !strings.HasPrefix(msg.Message.Text.Text(), "!am al ") && !strings.HasPrefix(msg.Message.Text.Text(), "!am alg ") {
-		startProcessing := time.Now()
+		startModuleProcessing = time.Now()
 
 		text, ok := m.template.Aliases().Replace(msg.Message.Text.Words(domain.RemovePunctuationOption))
 		if ok {
@@ -99,8 +100,8 @@ func (m *Message) Check(msg *domain.ChatMessage) {
 			m.log.Trace("No alias replacement applied", slog.String("username", msg.Chatter.Username))
 		}
 
-		endProcessing := time.Since(startProcessing).Seconds()
-		metrics.ModulesProcessingTime.With(prometheus.Labels{"module": "aliases"}).Observe(endProcessing)
+		endModuleProcessing = time.Since(startModuleProcessing).Seconds()
+		metrics.ModulesProcessingTime.With(prometheus.Labels{"module": "aliases"}).Observe(endModuleProcessing)
 	}
 
 	if adminAction := m.admin.FindMessages(msg); adminAction != nil {
@@ -118,10 +119,14 @@ func (m *Message) Check(msg *domain.ChatMessage) {
 	}
 
 	action := m.checker.Check(msg, true)
+	endProcessing := time.Since(startProcessing).Seconds()
+	metrics.MessageProcessingTime.Observe(endProcessing)
+
 	m.getAction(action, msg)
 }
 
 func (m *Message) CheckAutomod(msg *domain.ChatMessage) {
+	startProcessing := time.Now()
 	if m.stream.IsLive() {
 		m.stream.Stats().AddMessage(msg.Chatter.Username)
 	}
@@ -142,6 +147,9 @@ func (m *Message) CheckAutomod(msg *domain.ChatMessage) {
 	}
 
 	action := m.checker.Check(msg, false)
+	endProcessing := time.Since(startProcessing).Seconds()
+	metrics.MessageProcessingTime.Observe(endProcessing)
+
 	m.getAction(action, msg)
 }
 
