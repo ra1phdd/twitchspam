@@ -42,7 +42,7 @@ func (u *User) FindMessages(msg *domain.ChatMessage) *ports.AnswerType {
 	cfg := u.manager.Get()
 	u.ensureUserLimiter(msg.Chatter.Username, cfg.Limiter)
 
-	if !cfg.Enabled {
+	if !cfg.Channels[u.stream.ChannelName()].Enabled {
 		u.log.Debug("Bot disabled, skipping message",
 			slog.String("username", msg.Chatter.Username),
 			slog.String("message", msg.Message.Text.Text()),
@@ -139,7 +139,7 @@ func (u *User) handleCommands(msg *domain.ChatMessage) *ports.AnswerType {
 			u.log.Debug("Detected reply username from @ mention", slog.String("reply_username", replyUsername))
 		}
 
-		cmd, ok := cfg.Commands[strings.ToLower(word)]
+		cmd, ok := cfg.Channels[u.stream.ChannelName()].Commands[strings.ToLower(word)]
 		if !ok {
 			continue
 		}
@@ -272,7 +272,7 @@ func (u *User) allowCommand(command string, limiter *config.Limiter) bool {
 
 	if limiter.Rate == nil && limiter.Per > 0 && limiter.Requests > 0 {
 		if err := u.manager.Update(func(cfg *config.Config) {
-			cfg.Commands[command].Limiter.Rate = rate.NewLimiter(rate.Every(limiter.Per), limiter.Requests)
+			cfg.Channels[u.stream.ChannelName()].Commands[command].Limiter.Rate = rate.NewLimiter(rate.Every(limiter.Per), limiter.Requests)
 		}); err != nil {
 			u.log.Error("Failed to update command rate limiter", err)
 		}

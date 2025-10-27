@@ -44,19 +44,19 @@ func New(log logger.Logger, manager *config.Manager, stream ports.StreamPort, ap
 		api:    api,
 		stream: stream,
 		template: template.New(
-			template.WithAliases(cfg.Aliases, cfg.AliasGroups, cfg.GlobalAliases),
+			template.WithAliases(cfg.Channels[stream.ChannelName()].Aliases, cfg.Channels[stream.ChannelName()].AliasGroups, cfg.GlobalAliases),
 			template.WithPlaceholders(stream),
 			template.WithBanwords(log, cfg.Banwords.Words, cfg.Banwords.Regexp),
-			template.WithMword(cfg.Mword, cfg.MwordGroup),
+			template.WithMword(cfg.Channels[stream.ChannelName()].Mword, cfg.Channels[stream.ChannelName()].MwordGroup),
 		),
-		messages: storage.New[storage.Message](50, time.Duration(cfg.WindowSecs)*time.Second),
+		messages: storage.New[storage.Message](50, time.Duration(cfg.Channels[stream.ChannelName()].WindowSecs)*time.Second),
 		timeouts: storage.New[int](15, 0),
 	}
 	m.admin = admin.New(log, manager, stream, api, m.template, fs, timer, m.messages)
 	m.user = user.New(log, manager, stream, m.template, fs, api)
 	m.checker = checker.NewCheck(log, cfg, stream, m.template, m.messages, m.timeouts, client)
 
-	for cmd, data := range cfg.Commands {
+	for cmd, data := range cfg.Channels[m.stream.ChannelName()].Commands {
 		if data.Timer == nil {
 			continue
 		}
@@ -78,7 +78,7 @@ func (m *Message) Check(msg *domain.ChatMessage) {
 	m.messages.Push(msg.Chatter.Username, msg.Message.ID, storage.Message{
 		Data:           msg,
 		Time:           time.Now(),
-		IgnoreAntispam: !m.cfg.Enabled || !m.template.SpamPause().CanProcess() || !m.cfg.Spam.SettingsDefault.Enabled,
+		IgnoreAntispam: !m.cfg.Channels[m.stream.ChannelName()].Enabled || !m.template.SpamPause().CanProcess() || !m.cfg.Channels[m.stream.ChannelName()].Spam.SettingsDefault.Enabled,
 	})
 	endProcessing := time.Since(startProcessing).Seconds()
 	metrics.ModulesProcessingTime.With(prometheus.Labels{"module": "push_message"}).Observe(endProcessing)
@@ -126,12 +126,12 @@ func (m *Message) CheckAutomod(msg *domain.ChatMessage) {
 		m.stream.Stats().AddMessage(msg.Chatter.Username)
 	}
 
-	if m.cfg.Enabled && m.cfg.Automod.Enabled {
+	if m.cfg.Channels[m.stream.ChannelName()].Enabled && m.cfg.Channels[m.stream.ChannelName()].Automod.Enabled {
 		return
 	}
 
-	if m.cfg.Automod.Delay > 0 {
-		time.Sleep(time.Duration(m.cfg.Automod.Delay) * time.Second)
+	if m.cfg.Channels[m.stream.ChannelName()].Automod.Delay > 0 {
+		time.Sleep(time.Duration(m.cfg.Channels[m.stream.ChannelName()].Automod.Delay) * time.Second)
 	}
 
 	if msg.Message.Text.Text(domain.RemoveDuplicateLettersOption) == "(" {

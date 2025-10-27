@@ -28,7 +28,8 @@ type EventSubEnvelope struct {
 }
 
 type StreamMessageEvent struct {
-	BroadcasterUserID string `json:"broadcaster_user_id"`
+	BroadcasterUserID    string `json:"broadcaster_user_id"`
+	BroadcasterUserLogin string `json:"broadcaster_user_login"`
 }
 
 type ChatMessageEvent struct {

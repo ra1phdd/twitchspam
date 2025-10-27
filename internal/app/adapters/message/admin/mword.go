@@ -19,11 +19,11 @@ type AddMword struct {
 	template ports.TemplatePort
 }
 
-func (m *AddMword) Execute(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
-	return m.handleMwAdd(cfg, text)
+func (m *AddMword) Execute(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
+	return m.handleMwAdd(cfg, channel, text)
 }
 
-func (m *AddMword) handleMwAdd(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
+func (m *AddMword) handleMwAdd(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
 	textWithoutOpts, opts := m.template.Options().ParseAll(text.Text(), template.MwordOptions)
 
 	// !am mw (add) <наказания через запятую> <слова/фразы через запятую>
@@ -61,14 +61,14 @@ func (m *AddMword) handleMwAdd(cfg *config.Config, text *domain.MessageText) *po
 			return invalidRegex
 		}
 
-		cfg.Mword = append(cfg.Mword, config.Mword{
+		cfg.Channels[channel].Mword = append(cfg.Channels[channel].Mword, config.Mword{
 			Punishments: punishments,
 			Options:     m.template.Options().MergeMword(nil, opts),
 			NameRegexp:  name,
 			Regexp:      re,
 		})
 
-		m.template.Mword().Update(cfg.Mword, cfg.MwordGroup)
+		m.template.Mword().Update(cfg.Channels[channel].Mword, cfg.Channels[channel].MwordGroup)
 		return success
 	}
 
@@ -80,12 +80,12 @@ func (m *AddMword) handleMwAdd(cfg *config.Config, text *domain.MessageText) *po
 			continue
 		}
 
-		if slices.ContainsFunc(cfg.Mword, func(w config.Mword) bool { return w.Word == word }) {
+		if slices.ContainsFunc(cfg.Channels[channel].Mword, func(w config.Mword) bool { return w.Word == word }) {
 			exists = append(exists, word)
 			continue
 		}
 
-		cfg.Mword = append(cfg.Mword, config.Mword{
+		cfg.Channels[channel].Mword = append(cfg.Channels[channel].Mword, config.Mword{
 			Punishments: punishments,
 			Options:     m.template.Options().MergeMword(nil, opts),
 			Word:        word,
@@ -93,7 +93,7 @@ func (m *AddMword) handleMwAdd(cfg *config.Config, text *domain.MessageText) *po
 		added = append(added, word)
 	}
 
-	m.template.Mword().Update(cfg.Mword, cfg.MwordGroup)
+	m.template.Mword().Update(cfg.Channels[channel].Mword, cfg.Channels[channel].MwordGroup)
 	return buildResponse("мворды не указаны", RespArg{Items: added, Name: "добавлены"}, RespArg{Items: exists, Name: "уже существуют"})
 }
 
@@ -102,11 +102,11 @@ type SetMword struct {
 	template ports.TemplatePort
 }
 
-func (m *SetMword) Execute(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
-	return m.handleMwSet(cfg, text)
+func (m *SetMword) Execute(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
+	return m.handleMwSet(cfg, channel, text)
 }
 
-func (m *SetMword) handleMwSet(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
+func (m *SetMword) handleMwSet(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
 	textWithoutOpts, opts := m.template.Options().ParseAll(text.Text(), template.MwordOptions)
 
 	// или !am mw set <наказания через запятую> <слова или фразы через запятую>
@@ -140,21 +140,21 @@ func (m *SetMword) handleMwSet(cfg *config.Config, text *domain.MessageText) *po
 			continue
 		}
 
-		index := slices.IndexFunc(cfg.Mword, func(w config.Mword) bool { return w.Word == word })
+		index := slices.IndexFunc(cfg.Channels[channel].Mword, func(w config.Mword) bool { return w.Word == word })
 		if index == -1 {
 			notFound = append(notFound, word)
 			continue
 		}
 
 		if len(punishments) != 0 {
-			cfg.Mword[index].Punishments = punishments
+			cfg.Channels[channel].Mword[index].Punishments = punishments
 		}
-		cfg.Mword[index].Options = m.template.Options().MergeMword(cfg.Mword[index].Options, opts)
+		cfg.Channels[channel].Mword[index].Options = m.template.Options().MergeMword(cfg.Channels[channel].Mword[index].Options, opts)
 
 		edited = append(edited, word)
 	}
 
-	m.template.Mword().Update(cfg.Mword, cfg.MwordGroup)
+	m.template.Mword().Update(cfg.Channels[channel].Mword, cfg.Channels[channel].MwordGroup)
 	return buildResponse("мворды не указаны", RespArg{Items: edited, Name: "изменены"}, RespArg{Items: notFound, Name: "не найдены"})
 }
 
@@ -163,11 +163,11 @@ type DelMword struct {
 	template ports.TemplatePort
 }
 
-func (m *DelMword) Execute(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
-	return m.handleMwDel(cfg, text)
+func (m *DelMword) Execute(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
+	return m.handleMwDel(cfg, channel, text)
 }
 
-func (m *DelMword) handleMwDel(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
+func (m *DelMword) handleMwDel(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
 	matches := m.re.FindStringSubmatch(text.Text()) // !am mw del <слова/фразы через запятую или regex>
 	if len(matches) != 2 {
 		return nonParametr
@@ -181,17 +181,17 @@ func (m *DelMword) handleMwDel(cfg *config.Config, text *domain.MessageText) *po
 			continue
 		}
 
-		index := slices.IndexFunc(cfg.Mword, func(w config.Mword) bool { return w.Word == word })
+		index := slices.IndexFunc(cfg.Channels[channel].Mword, func(w config.Mword) bool { return w.Word == word })
 		if index == -1 {
 			notFound = append(notFound, word)
 			continue
 		}
 
-		cfg.Mword = slices.Delete(cfg.Mword, index, index+1)
+		cfg.Channels[channel].Mword = slices.Delete(cfg.Channels[channel].Mword, index, index+1)
 		removed = append(removed, word)
 	}
 
-	m.template.Mword().Update(cfg.Mword, cfg.MwordGroup)
+	m.template.Mword().Update(cfg.Channels[channel].Mword, cfg.Channels[channel].MwordGroup)
 	return buildResponse("мворды не указаны", RespArg{Items: removed, Name: "удалены"}, RespArg{Items: notFound, Name: "не найдены"})
 }
 
@@ -200,13 +200,13 @@ type ListMword struct {
 	fs       ports.FileServerPort
 }
 
-func (m *ListMword) Execute(cfg *config.Config, _ *domain.MessageText) *ports.AnswerType {
-	return m.handleMwList(cfg)
+func (m *ListMword) Execute(cfg *config.Config, channel string, _ *domain.MessageText) *ports.AnswerType {
+	return m.handleMwList(cfg, channel)
 }
 
-func (m *ListMword) handleMwList(cfg *config.Config) *ports.AnswerType {
-	mwords := make(map[string]config.Mword, len(cfg.Mword))
-	for i, mw := range cfg.Mword {
+func (m *ListMword) handleMwList(cfg *config.Config, channel string) *ports.AnswerType {
+	mwords := make(map[string]config.Mword, len(cfg.Channels[channel].Mword))
+	for i, mw := range cfg.Channels[channel].Mword {
 		mwords[strconv.Itoa(i)] = mw
 	}
 
@@ -229,11 +229,11 @@ type CreateMwordGroup struct {
 	template ports.TemplatePort
 }
 
-func (m *CreateMwordGroup) Execute(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
-	return m.handleMwgCreate(cfg, text)
+func (m *CreateMwordGroup) Execute(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
+	return m.handleMwgCreate(cfg, channel, text)
 }
 
-func (m *CreateMwordGroup) handleMwgCreate(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
+func (m *CreateMwordGroup) handleMwgCreate(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
 	textWithoutOpts, opts := m.template.Options().ParseAll(text.Text(), template.MwordOptions)
 
 	matches := m.re.FindStringSubmatch(textWithoutOpts) // !am mwg create <название_группы> <наказания через запятую>
@@ -242,7 +242,7 @@ func (m *CreateMwordGroup) handleMwgCreate(cfg *config.Config, text *domain.Mess
 	}
 
 	groupName := strings.TrimSpace(matches[1])
-	if _, exists := cfg.MwordGroup[groupName]; exists {
+	if _, exists := cfg.Channels[channel].MwordGroup[groupName]; exists {
 		return existsMwordGroup
 	}
 
@@ -266,13 +266,13 @@ func (m *CreateMwordGroup) handleMwgCreate(cfg *config.Config, text *domain.Mess
 		return invalidPunishmentFormat
 	}
 
-	cfg.MwordGroup[groupName] = &config.MwordGroup{
+	cfg.Channels[channel].MwordGroup[groupName] = &config.MwordGroup{
 		Enabled:     true,
 		Punishments: punishments,
 		Options:     m.template.Options().MergeMword(nil, opts),
 	}
 
-	m.template.Mword().Update(cfg.Mword, cfg.MwordGroup)
+	m.template.Mword().Update(cfg.Channels[channel].Mword, cfg.Channels[channel].MwordGroup)
 	return success
 }
 
@@ -281,11 +281,11 @@ type AddMwordGroup struct {
 	template ports.TemplatePort
 }
 
-func (m *AddMwordGroup) Execute(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
-	return m.handleMwgAdd(cfg, text)
+func (m *AddMwordGroup) Execute(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
+	return m.handleMwgAdd(cfg, channel, text)
 }
 
-func (m *AddMwordGroup) handleMwgAdd(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
+func (m *AddMwordGroup) handleMwgAdd(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
 	// !am mwg add <название_группы> <слова/фразы через запятую>
 	// или !am mwg add <название_группы> re <name> <regex>
 	matches := m.re.FindStringSubmatch(text.Text())
@@ -294,7 +294,7 @@ func (m *AddMwordGroup) handleMwgAdd(cfg *config.Config, text *domain.MessageTex
 	}
 
 	groupName := strings.TrimSpace(matches[1])
-	if _, ok := cfg.MwordGroup[groupName]; !ok {
+	if _, ok := cfg.Channels[channel].MwordGroup[groupName]; !ok {
 		return notFoundMwordGroup
 	}
 
@@ -306,11 +306,11 @@ func (m *AddMwordGroup) handleMwgAdd(cfg *config.Config, text *domain.MessageTex
 			return invalidRegex
 		}
 
-		cfg.MwordGroup[groupName].Words = append(cfg.MwordGroup[groupName].Words, config.Mword{
+		cfg.Channels[channel].MwordGroup[groupName].Words = append(cfg.Channels[channel].MwordGroup[groupName].Words, config.Mword{
 			NameRegexp: name,
 			Regexp:     re,
 		})
-		m.template.Mword().Update(cfg.Mword, cfg.MwordGroup)
+		m.template.Mword().Update(cfg.Channels[channel].Mword, cfg.Channels[channel].MwordGroup)
 		return success
 	}
 
@@ -322,18 +322,18 @@ func (m *AddMwordGroup) handleMwgAdd(cfg *config.Config, text *domain.MessageTex
 			continue
 		}
 
-		if slices.ContainsFunc(cfg.Mword, func(w config.Mword) bool { return w.Word == word }) {
+		if slices.ContainsFunc(cfg.Channels[channel].Mword, func(w config.Mword) bool { return w.Word == word }) {
 			exists = append(exists, word)
 			continue
 		}
 
-		cfg.MwordGroup[groupName].Words = append(cfg.MwordGroup[groupName].Words, config.Mword{
+		cfg.Channels[channel].MwordGroup[groupName].Words = append(cfg.Channels[channel].MwordGroup[groupName].Words, config.Mword{
 			Word: word,
 		})
 		added = append(added, word)
 	}
 
-	m.template.Mword().Update(cfg.Mword, cfg.MwordGroup)
+	m.template.Mword().Update(cfg.Channels[channel].Mword, cfg.Channels[channel].MwordGroup)
 	return buildResponse("мворды не указаны", RespArg{Items: added, Name: "добавлены"}, RespArg{Items: exists, Name: "уже существуют"})
 }
 
@@ -342,11 +342,11 @@ type GlobalSetMwordGroup struct {
 	template ports.TemplatePort
 }
 
-func (m *GlobalSetMwordGroup) Execute(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
-	return m.handleMwgGlobalSet(cfg, text)
+func (m *GlobalSetMwordGroup) Execute(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
+	return m.handleMwgGlobalSet(cfg, channel, text)
 }
 
-func (m *GlobalSetMwordGroup) handleMwgGlobalSet(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
+func (m *GlobalSetMwordGroup) handleMwgGlobalSet(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
 	textWithoutOpts, opts := m.template.Options().ParseAll(text.Text(), template.MwordOptions)
 
 	// !am mwg glset <название_группы> <*наказания через запятую> <*опции>
@@ -356,7 +356,7 @@ func (m *GlobalSetMwordGroup) handleMwgGlobalSet(cfg *config.Config, text *domai
 	}
 
 	groupName := strings.TrimSpace(matches[1])
-	if _, exists := cfg.MwordGroup[groupName]; !exists {
+	if _, exists := cfg.Channels[channel].MwordGroup[groupName]; !exists {
 		return notFoundMwordGroup
 	}
 
@@ -376,12 +376,12 @@ func (m *GlobalSetMwordGroup) handleMwgGlobalSet(cfg *config.Config, text *domai
 		}
 	}
 
-	cfg.MwordGroup[groupName].Options = m.template.Options().MergeMword(cfg.MwordGroup[groupName].Options, opts)
+	cfg.Channels[channel].MwordGroup[groupName].Options = m.template.Options().MergeMword(cfg.Channels[channel].MwordGroup[groupName].Options, opts)
 	if len(punishments) != 0 {
-		cfg.MwordGroup[groupName].Punishments = punishments
+		cfg.Channels[channel].MwordGroup[groupName].Punishments = punishments
 	}
 
-	m.template.Mword().Update(cfg.Mword, cfg.MwordGroup)
+	m.template.Mword().Update(cfg.Channels[channel].Mword, cfg.Channels[channel].MwordGroup)
 	return success
 }
 
@@ -390,11 +390,11 @@ type SetMwordGroup struct {
 	template ports.TemplatePort
 }
 
-func (m *SetMwordGroup) Execute(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
-	return m.handleMwgSet(cfg, text)
+func (m *SetMwordGroup) Execute(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
+	return m.handleMwgSet(cfg, channel, text)
 }
 
-func (m *SetMwordGroup) handleMwgSet(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
+func (m *SetMwordGroup) handleMwgSet(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
 	textWithoutOpts, opts := m.template.Options().ParseAll(text.Text(), template.MwordOptions)
 
 	// !am mwg set <название_группы> <*наказания через запятую> <слова/фразы или regex> <*опции>
@@ -404,7 +404,7 @@ func (m *SetMwordGroup) handleMwgSet(cfg *config.Config, text *domain.MessageTex
 	}
 
 	groupName := strings.TrimSpace(matches[1])
-	if _, exists := cfg.MwordGroup[groupName]; !exists {
+	if _, exists := cfg.Channels[channel].MwordGroup[groupName]; !exists {
 		return notFoundMwordGroup
 	}
 
@@ -432,21 +432,21 @@ func (m *SetMwordGroup) handleMwgSet(cfg *config.Config, text *domain.MessageTex
 			continue
 		}
 
-		index := slices.IndexFunc(cfg.MwordGroup[groupName].Words, func(w config.Mword) bool { return w.Word == word })
+		index := slices.IndexFunc(cfg.Channels[channel].MwordGroup[groupName].Words, func(w config.Mword) bool { return w.Word == word })
 		if index == -1 {
 			notFound = append(notFound, word)
 			continue
 		}
 
 		if len(punishments) != 0 {
-			cfg.MwordGroup[groupName].Words[index].Punishments = punishments
+			cfg.Channels[channel].MwordGroup[groupName].Words[index].Punishments = punishments
 		}
-		cfg.MwordGroup[groupName].Words[index].Options = m.template.Options().MergeMword(cfg.MwordGroup[groupName].Words[index].Options, opts)
+		cfg.Channels[channel].MwordGroup[groupName].Words[index].Options = m.template.Options().MergeMword(cfg.Channels[channel].MwordGroup[groupName].Words[index].Options, opts)
 
 		edited = append(edited, word)
 	}
 
-	m.template.Mword().Update(cfg.Mword, cfg.MwordGroup)
+	m.template.Mword().Update(cfg.Channels[channel].Mword, cfg.Channels[channel].MwordGroup)
 	return buildResponse("мворды не указаны", RespArg{Items: edited, Name: "изменены"}, RespArg{Items: notFound, Name: "не найдены"})
 }
 
@@ -455,11 +455,11 @@ type DelMwordGroup struct {
 	template ports.TemplatePort
 }
 
-func (m *DelMwordGroup) Execute(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
-	return m.handleMwgDel(cfg, text)
+func (m *DelMwordGroup) Execute(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
+	return m.handleMwgDel(cfg, channel, text)
 }
 
-func (m *DelMwordGroup) handleMwgDel(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
+func (m *DelMwordGroup) handleMwgDel(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
 	// !am mwg del <название_группы> <слова/фразы через запятую или ничего для all>
 	matches := m.re.FindStringSubmatch(text.Text())
 	if len(matches) != 3 {
@@ -467,14 +467,14 @@ func (m *DelMwordGroup) handleMwgDel(cfg *config.Config, text *domain.MessageTex
 	}
 
 	groupName := strings.TrimSpace(matches[1])
-	if _, ok := cfg.MwordGroup[groupName]; !ok {
+	if _, ok := cfg.Channels[channel].MwordGroup[groupName]; !ok {
 		return notFoundMwordGroup
 	}
 
 	if strings.TrimSpace(matches[2]) == "" {
-		delete(cfg.MwordGroup, groupName)
+		delete(cfg.Channels[channel].MwordGroup, groupName)
 
-		m.template.Mword().Update(cfg.Mword, cfg.MwordGroup)
+		m.template.Mword().Update(cfg.Channels[channel].Mword, cfg.Channels[channel].MwordGroup)
 		return success
 	}
 
@@ -486,17 +486,17 @@ func (m *DelMwordGroup) handleMwgDel(cfg *config.Config, text *domain.MessageTex
 			continue
 		}
 
-		index := slices.IndexFunc(cfg.MwordGroup[groupName].Words, func(w config.Mword) bool { return w.Word == word || w.NameRegexp == word })
+		index := slices.IndexFunc(cfg.Channels[channel].MwordGroup[groupName].Words, func(w config.Mword) bool { return w.Word == word || w.NameRegexp == word })
 		if index == -1 {
 			notFound = append(notFound, word)
 			continue
 		}
 
 		removed = append(removed, word)
-		cfg.MwordGroup[groupName].Words = slices.Delete(cfg.MwordGroup[groupName].Words, index, index+1)
+		cfg.Channels[channel].MwordGroup[groupName].Words = slices.Delete(cfg.Channels[channel].MwordGroup[groupName].Words, index, index+1)
 	}
 
-	m.template.Mword().Update(cfg.Mword, cfg.MwordGroup)
+	m.template.Mword().Update(cfg.Channels[channel].Mword, cfg.Channels[channel].MwordGroup)
 	return buildResponse("мворды не указаны", RespArg{Items: removed, Name: "удалены"}, RespArg{Items: notFound, Name: "не найдены"})
 }
 
@@ -505,11 +505,11 @@ type OnOffMwordGroup struct {
 	template ports.TemplatePort
 }
 
-func (m *OnOffMwordGroup) Execute(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
-	return m.handleMwgOnOff(cfg, text)
+func (m *OnOffMwordGroup) Execute(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
+	return m.handleMwgOnOff(cfg, channel, text)
 }
 
-func (m *OnOffMwordGroup) handleMwgOnOff(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
+func (m *OnOffMwordGroup) handleMwgOnOff(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
 	matches := m.re.FindStringSubmatch(text.Text()) // !am mwg on/off <название_группы>
 	if len(matches) != 3 {
 		return nonParametr
@@ -518,12 +518,12 @@ func (m *OnOffMwordGroup) handleMwgOnOff(cfg *config.Config, text *domain.Messag
 	groupName := strings.TrimSpace(matches[2])
 	state := strings.ToLower(strings.TrimSpace(matches[1]))
 
-	if _, ok := cfg.MwordGroup[groupName]; !ok {
+	if _, ok := cfg.Channels[channel].MwordGroup[groupName]; !ok {
 		return notFoundMwordGroup
 	}
 
-	cfg.MwordGroup[groupName].Enabled = state == "on"
-	m.template.Mword().Update(cfg.Mword, cfg.MwordGroup)
+	cfg.Channels[channel].MwordGroup[groupName].Enabled = state == "on"
+	m.template.Mword().Update(cfg.Channels[channel].Mword, cfg.Channels[channel].MwordGroup)
 	return success
 }
 
@@ -532,12 +532,12 @@ type ListMwordGroup struct {
 	fs       ports.FileServerPort
 }
 
-func (m *ListMwordGroup) Execute(cfg *config.Config, _ *domain.MessageText) *ports.AnswerType {
-	return m.handleMwgList(cfg)
+func (m *ListMwordGroup) Execute(cfg *config.Config, channel string, _ *domain.MessageText) *ports.AnswerType {
+	return m.handleMwgList(cfg, channel)
 }
 
-func (m *ListMwordGroup) handleMwgList(cfg *config.Config) *ports.AnswerType {
-	return buildList(cfg.MwordGroup, "мворд группы", "мворд группы не найдены!",
+func (m *ListMwordGroup) handleMwgList(cfg *config.Config, channel string) *ports.AnswerType {
+	return buildList(cfg.Channels[channel].MwordGroup, "мворд группы", "мворд группы не найдены!",
 		func(name string, mwg *config.MwordGroup) string {
 			var sb strings.Builder
 			sb.WriteString(name + ":\n")

@@ -73,7 +73,7 @@ func (c *Checker) Check(msg *domain.ChatMessage, checkSpam bool) *ports.CheckerA
 	endProcessing := time.Since(startProcessing).Seconds()
 	metrics.ModulesProcessingTime.With(prometheus.Labels{"module": "nuke"}).Observe(endProcessing)
 
-	if !c.cfg.Enabled {
+	if !c.cfg.Channels[msg.Broadcaster.Login].Enabled {
 		c.log.Debug("Bot disabled, skipping message",
 			slog.String("username", msg.Chatter.Username),
 			slog.String("message", msg.Message.Text.Text()),
@@ -145,7 +145,7 @@ func (c *Checker) checkBypass(msg *domain.ChatMessage) *ports.CheckerAction {
 		return &ports.CheckerAction{Type: None}
 	}
 
-	if _, ok := c.cfg.Spam.WhitelistUsers[msg.Chatter.Username]; ok {
+	if _, ok := c.cfg.Channels[msg.Broadcaster.Login].Spam.WhitelistUsers[msg.Chatter.Username]; ok {
 		c.log.Debug("Bypass: user in whitelist", slog.String("user", msg.Chatter.Username))
 		return &ports.CheckerAction{Type: None}
 	}
@@ -202,7 +202,7 @@ func (c *Checker) checkMwords(msg *domain.ChatMessage) *ports.CheckerAction {
 	if !ok {
 		c.log.Debug("Initializing muteword punishment counter", slog.String("user", msg.Chatter.Username), slog.String("message", msg.Message.Text.Text()))
 		c.timeouts.Push(msg.Chatter.Username, "mword", 0, storage.WithTTL(
-			time.Duration(c.cfg.Spam.SettingsDefault.DurationResetPunishments)*time.Second),
+			time.Duration(c.cfg.Channels[msg.Broadcaster.Login].Spam.SettingsDefault.DurationResetPunishments)*time.Second),
 		)
 	}
 
@@ -231,10 +231,10 @@ func (c *Checker) checkMwords(msg *domain.ChatMessage) *ports.CheckerAction {
 }
 
 func (c *Checker) checkSpam(msg *domain.ChatMessage) *ports.CheckerAction {
-	settings := c.cfg.Spam.SettingsDefault
+	settings := c.cfg.Channels[msg.Broadcaster.Login].Spam.SettingsDefault
 	if msg.Chatter.IsVip {
 		c.log.Trace("Applied VIP spam settings", slog.String("user", msg.Chatter.Username))
-		settings = c.cfg.Spam.SettingsVIP
+		settings = c.cfg.Channels[msg.Broadcaster.Login].Spam.SettingsVIP
 	}
 
 	if !settings.Enabled || !c.template.SpamPause().CanProcess() {
@@ -246,11 +246,11 @@ func (c *Checker) checkSpam(msg *domain.ChatMessage) *ports.CheckerAction {
 		return nil
 	}
 
-	if ((c.cfg.Spam.Mode == config.OnlineMode || c.cfg.Spam.Mode == 0) && !c.stream.IsLive()) ||
-		(c.cfg.Spam.Mode == config.OfflineMode && c.stream.IsLive()) {
+	if ((c.cfg.Channels[msg.Broadcaster.Login].Spam.Mode == config.OnlineMode || c.cfg.Channels[msg.Broadcaster.Login].Spam.Mode == 0) && !c.stream.IsLive()) ||
+		(c.cfg.Channels[msg.Broadcaster.Login].Spam.Mode == config.OfflineMode && c.stream.IsLive()) {
 		c.log.Debug("Spam check skipped due to mode mismatch",
 			slog.String("user", msg.Chatter.Username),
-			slog.Int("spam_mode", c.cfg.Spam.Mode),
+			slog.Int("spam_mode", c.cfg.Channels[msg.Broadcaster.Login].Spam.Mode),
 			slog.Bool("is_live", c.stream.IsLive()),
 		)
 		return nil
@@ -312,10 +312,10 @@ func (c *Checker) checkSpam(msg *domain.ChatMessage) *ports.CheckerAction {
 	}
 
 	cacheKey := "spam_default"
-	cacheTTL := time.Duration(c.cfg.Spam.SettingsDefault.DurationResetPunishments) * time.Second
+	cacheTTL := time.Duration(c.cfg.Channels[msg.Broadcaster.Login].Spam.SettingsDefault.DurationResetPunishments) * time.Second
 	if msg.Chatter.IsVip {
 		cacheKey = "spam_vip"
-		cacheTTL = time.Duration(c.cfg.Spam.SettingsVIP.DurationResetPunishments) * time.Second
+		cacheTTL = time.Duration(c.cfg.Channels[msg.Broadcaster.Login].Spam.SettingsVIP.DurationResetPunishments) * time.Second
 	}
 
 	countTimeouts, ok := c.timeouts.Get(msg.Chatter.Username, cacheKey)
@@ -381,7 +381,7 @@ func (c *Checker) calculateSpamMessages(msg *domain.ChatMessage, settings config
 				slog.Float64("similarity", similarity),
 			)
 
-			if !c.cfg.Spam.SettingsEmotes.Enabled {
+			if !c.cfg.Channels[msg.Broadcaster.Login].Spam.SettingsEmotes.Enabled {
 				_, isOnlyEmotes := c.sevenTV.EmoteStats(item.Data.Message.Text.Words(domain.RemovePunctuationOption))
 				if isOnlyEmotes || item.Data.Message.EmoteOnly {
 					c.log.Trace("Skipping message because it contains only emotes",
@@ -482,7 +482,7 @@ func (c *Checker) handleEmotes(msg *domain.ChatMessage, countSpam int) *ports.Ch
 		return nil
 	}
 
-	if !c.cfg.Spam.SettingsEmotes.Enabled {
+	if !c.cfg.Channels[msg.Broadcaster.Login].Spam.SettingsEmotes.Enabled {
 		c.log.Debug("Emote spam checking disabled in config")
 		return &ports.CheckerAction{Type: None}
 	}
@@ -497,27 +497,27 @@ func (c *Checker) handleEmotes(msg *domain.ChatMessage, countSpam int) *ports.Ch
 		return action
 	}
 
-	if c.cfg.Spam.SettingsEmotes.MaxEmotesLength > 0 {
+	if c.cfg.Channels[msg.Broadcaster.Login].Spam.SettingsEmotes.MaxEmotesLength > 0 {
 		emoteCount := max(len(msg.Message.Emotes), count)
-		if emoteCount >= c.cfg.Spam.SettingsEmotes.MaxEmotesLength {
+		if emoteCount >= c.cfg.Channels[msg.Broadcaster.Login].Spam.SettingsEmotes.MaxEmotesLength {
 			c.log.Debug("Message exceeds maximum emote count",
 				slog.String("message", msg.Message.Text.Text()),
 				slog.Int("emote_count", emoteCount),
-				slog.Int("max_allowed", c.cfg.Spam.SettingsEmotes.MaxEmotesLength),
+				slog.Int("max_allowed", c.cfg.Channels[msg.Broadcaster.Login].Spam.SettingsEmotes.MaxEmotesLength),
 			)
 			return &ports.CheckerAction{
-				Type:     c.cfg.Spam.SettingsEmotes.MaxEmotesPunishment.Action,
+				Type:     c.cfg.Channels[msg.Broadcaster.Login].Spam.SettingsEmotes.MaxEmotesPunishment.Action,
 				Reason:   "превышено максимальное кол-во эмоутов в сообщении",
-				Duration: time.Duration(c.cfg.Spam.SettingsEmotes.MaxEmotesPunishment.Duration) * time.Second,
+				Duration: time.Duration(c.cfg.Channels[msg.Broadcaster.Login].Spam.SettingsEmotes.MaxEmotesPunishment.Duration) * time.Second,
 			}
 		}
 	}
 
-	if countSpam < c.cfg.Spam.SettingsEmotes.MessageLimit {
+	if countSpam < c.cfg.Channels[msg.Broadcaster.Login].Spam.SettingsEmotes.MessageLimit {
 		c.log.Debug("Spam emote message limit not reached yet",
 			slog.String("message", msg.Message.Text.Text()),
 			slog.Int("countSpam", countSpam),
-			slog.Int("message_limit", c.cfg.Spam.SettingsEmotes.MessageLimit),
+			slog.Int("message_limit", c.cfg.Channels[msg.Broadcaster.Login].Spam.SettingsEmotes.MessageLimit),
 		)
 		return &ports.CheckerAction{Type: None}
 	}
@@ -525,11 +525,11 @@ func (c *Checker) handleEmotes(msg *domain.ChatMessage, countSpam int) *ports.Ch
 	countTimeouts, ok := c.timeouts.Get(msg.Chatter.Username, "spam_emote")
 	if !ok {
 		c.timeouts.Push(msg.Chatter.Username, "spam_emote", 0, storage.WithTTL(
-			time.Duration(c.cfg.Spam.SettingsDefault.DurationResetPunishments)*time.Second),
+			time.Duration(c.cfg.Channels[msg.Broadcaster.Login].Spam.SettingsDefault.DurationResetPunishments)*time.Second),
 		)
 	}
 
-	action, dur := c.template.Punishment().Get(c.cfg.Spam.SettingsEmotes.Punishments, countTimeouts)
+	action, dur := c.template.Punishment().Get(c.cfg.Channels[msg.Broadcaster.Login].Spam.SettingsEmotes.Punishments, countTimeouts)
 	c.timeouts.Update(msg.Chatter.Username, "spam_emote", func(cur int, exists bool) int {
 		if !exists {
 			return 1
@@ -553,9 +553,9 @@ func (c *Checker) handleEmotes(msg *domain.ChatMessage, countSpam int) *ports.Ch
 }
 
 func (c *Checker) handleExceptions(msg *domain.ChatMessage, countSpam int, typeSpam string) *ports.CheckerAction {
-	exceptions, subKey := c.cfg.Spam.Exceptions, "except_spam"
+	exceptions, subKey := c.cfg.Channels[msg.Broadcaster.Login].Spam.Exceptions, "except_spam"
 	if typeSpam == "emote" {
-		exceptions, subKey = c.cfg.Spam.SettingsEmotes.Exceptions, "except_emote"
+		exceptions, subKey = c.cfg.Channels[msg.Broadcaster.Login].Spam.SettingsEmotes.Exceptions, "except_emote"
 	}
 
 	for word, ex := range exceptions {
@@ -570,7 +570,7 @@ func (c *Checker) handleExceptions(msg *domain.ChatMessage, countSpam int, typeS
 		countTimeouts, ok := c.timeouts.Get(msg.Chatter.Username, subKey)
 		if !ok {
 			c.timeouts.Push(msg.Chatter.Username, subKey, 0, storage.WithTTL(
-				time.Duration(c.cfg.Spam.SettingsDefault.DurationResetPunishments)*time.Second),
+				time.Duration(c.cfg.Channels[msg.Broadcaster.Login].Spam.SettingsDefault.DurationResetPunishments)*time.Second),
 			)
 		}
 		action, dur := c.template.Punishment().Get(ex.Punishments, countTimeouts)

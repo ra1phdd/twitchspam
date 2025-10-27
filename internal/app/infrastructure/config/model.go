@@ -7,35 +7,25 @@ import (
 )
 
 type Config struct {
-	App           App                              `json:"app"`
-	Proxy         *Proxy                           `json:"proxy"`
-	UserAccess    UserAccess                       `json:"user_access"`
-	UsersTokens   map[string]*UserTokens           `json:"user_tokens"`
-	CertDomains   []string                         `json:"cert_domains"`
-	Enabled       bool                             `json:"enabled"`
-	Limiter       Limiter                          `json:"limiter"`
-	WindowSecs    int                              `json:"-"`
-	Spam          Spam                             `json:"spam"`
-	Automod       Automod                          `json:"automod"`
-	Mword         []Mword                          `json:"mword"`
-	MwordGroup    map[string]*MwordGroup           `json:"mword_group"`
-	Markers       map[string]map[string][]*Markers `json:"markers"` // первый ключ - юзернейм, второй ключ - название маркера
-	Commands      map[string]*Commands             `json:"commands"`
-	Aliases       map[string]string                `json:"aliases"` // ключ - алиас, значение - оригинальная команда
-	AliasGroups   map[string]*AliasGroups          `json:"aliases_group"`
-	GlobalAliases map[string]string                `json:"global_aliases"`
-	Banwords      Banwords                         `json:"banwords"`
+	App           App                    `json:"app"`
+	Proxy         *Proxy                 `json:"proxy"`
+	UserAccess    UserAccess             `json:"user_access"`
+	UsersTokens   map[string]*UserTokens `json:"user_tokens"`
+	CertDomains   []string               `json:"cert_domains"`
+	Limiter       Limiter                `json:"limiter"`
+	Channels      map[string]*Channel    `json:"channels"`
+	GlobalAliases map[string]string      `json:"global_aliases"`
+	Banwords      Banwords               `json:"banwords"`
 }
 
 type App struct {
-	LogLevel    string   `json:"log_level"`
-	GinMode     string   `json:"gin_mode"`
-	OAuth       string   `json:"oauth"`
-	ClientID    string   `json:"client_id"`
-	Username    string   `json:"username"`
-	UserID      string   `json:"user_id"`
-	AuthToken   string   `json:"auth_token"`
-	ModChannels []string `json:"mod_channels"`
+	LogLevel  string `json:"log_level"`
+	GinMode   string `json:"gin_mode"`
+	OAuth     string `json:"oauth"`
+	ClientID  string `json:"client_id"`
+	Username  string `json:"username"`
+	UserID    string `json:"user_id"`
+	AuthToken string `json:"auth_token"`
 }
 
 type Proxy struct {
@@ -54,6 +44,21 @@ type UserTokens struct {
 	RefreshToken string    `json:"refresh_token"`
 	ExpiresIn    int       `json:"expires_in"`
 	ObtainedAt   time.Time `json:"obtained_at"`
+}
+
+type Channel struct {
+	ID          string                           `json:"id"`
+	Name        string                           `json:"name"`
+	Enabled     bool                             `json:"enabled"`
+	WindowSecs  int                              `json:"-"`
+	Spam        Spam                             `json:"spam"`
+	Automod     Automod                          `json:"automod"`
+	Mword       []Mword                          `json:"mword"`
+	MwordGroup  map[string]*MwordGroup           `json:"mword_group"`
+	Markers     map[string]map[string][]*Markers `json:"markers"` // первый ключ - юзернейм, второй ключ - название маркера
+	Commands    map[string]*Commands             `json:"commands"`
+	Aliases     map[string]string                `json:"aliases"` // ключ - алиас, значение - оригинальная команда
+	AliasGroups map[string]*AliasGroups          `json:"aliases_group"`
 }
 
 type Spam struct {

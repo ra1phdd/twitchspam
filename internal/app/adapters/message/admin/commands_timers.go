@@ -17,11 +17,11 @@ type AddCommandTimer struct {
 	t        *AddTimer
 }
 
-func (c *AddCommandTimer) Execute(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
-	return c.handleCommandTimersAdd(cfg, text)
+func (c *AddCommandTimer) Execute(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
+	return c.handleCommandTimersAdd(cfg, channel, text)
 }
 
-func (c *AddCommandTimer) handleCommandTimersAdd(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
+func (c *AddCommandTimer) handleCommandTimersAdd(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
 	textWithoutOpts, opts := c.template.Options().ParseAll(text.Text(), template.TimersOptions)
 
 	// !am cmd timer <кол-во сообщений> <интервал в секундах> <команда>
@@ -53,13 +53,13 @@ func (c *AddCommandTimer) handleCommandTimersAdd(cfg *config.Config, text *domai
 		name = "!" + name
 	}
 
-	cfg.Commands[name].Timer = &config.Timers{
+	cfg.Channels[channel].Commands[name].Timer = &config.Timers{
 		Enabled:  true,
 		Interval: time.Duration(interval) * time.Second,
 		Count:    count,
 		Options:  c.template.Options().MergeTimer(nil, opts),
 	}
-	c.t.AddTimer(name, cfg.Commands[name])
+	c.t.AddTimer(name, cfg.Channels[channel].Commands[name])
 
 	return success
 }
@@ -70,11 +70,11 @@ type DelCommandTimer struct {
 	timers   ports.TimersPort
 }
 
-func (c *DelCommandTimer) Execute(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
-	return c.handleCommandTimersDel(cfg, text)
+func (c *DelCommandTimer) Execute(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
+	return c.handleCommandTimersDel(cfg, channel, text)
 }
 
-func (c *DelCommandTimer) handleCommandTimersDel(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
+func (c *DelCommandTimer) handleCommandTimersDel(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
 	matches := c.re.FindStringSubmatch(text.Text()) // !am cmd timer del <команды через запятую>
 	if len(matches) != 2 {
 		return nonParametr
@@ -92,13 +92,13 @@ func (c *DelCommandTimer) handleCommandTimersDel(cfg *config.Config, text *domai
 			word = "!" + word
 		}
 
-		if _, ok := cfg.Commands[word]; !ok {
+		if _, ok := cfg.Channels[channel].Commands[word]; !ok {
 			notFound = append(notFound, word)
 			continue
 		}
 
 		c.timers.RemoveTimer(word)
-		cfg.Commands[word].Timer = nil
+		cfg.Channels[channel].Commands[word].Timer = nil
 		removed = append(removed, word)
 	}
 
@@ -112,11 +112,11 @@ type OnOffCommandTimer struct {
 	t        *AddTimer
 }
 
-func (c *OnOffCommandTimer) Execute(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
-	return c.handleCommandTimersOnOff(cfg, text)
+func (c *OnOffCommandTimer) Execute(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
+	return c.handleCommandTimersOnOff(cfg, channel, text)
 }
 
-func (c *OnOffCommandTimer) handleCommandTimersOnOff(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
+func (c *OnOffCommandTimer) handleCommandTimersOnOff(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
 	matches := c.re.FindStringSubmatch(text.Text()) // !am cmd timer on/off <команды через запятую>
 	if len(matches) != 3 {
 		return nonParametr
@@ -136,19 +136,19 @@ func (c *OnOffCommandTimer) handleCommandTimersOnOff(cfg *config.Config, text *d
 			word = "!" + word
 		}
 
-		if _, ok := cfg.Commands[word]; !ok {
+		if _, ok := cfg.Channels[channel].Commands[word]; !ok {
 			notFound = append(notFound, word)
 			continue
 		}
 
 		if state != "on" {
 			c.timers.RemoveTimer(word)
-			cfg.Commands[word].Timer.Enabled = false
+			cfg.Channels[channel].Commands[word].Timer.Enabled = false
 			edited = append(edited, word)
 			continue
 		}
 
-		cmd := cfg.Commands[word]
+		cmd := cfg.Channels[channel].Commands[word]
 		cmd.Timer.Enabled = true
 		edited = append(edited, word)
 		c.t.AddTimer(word, cmd)
@@ -164,11 +164,11 @@ type SetCommandTimer struct {
 	t        *AddTimer
 }
 
-func (c *SetCommandTimer) Execute(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
-	return c.handleCommandTimersSet(cfg, text)
+func (c *SetCommandTimer) Execute(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
+	return c.handleCommandTimersSet(cfg, channel, text)
 }
 
-func (c *SetCommandTimer) handleCommandTimersSet(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
+func (c *SetCommandTimer) handleCommandTimersSet(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
 	textWithoutOpts, opts := c.template.Options().ParseAll(text.Text(), template.TimersOptions)
 
 	// !am cmd timer set <кол-во сообщений> <интервал в секундах> <команды через запятую>
@@ -213,7 +213,7 @@ func (c *SetCommandTimer) handleCommandTimersSet(cfg *config.Config, text *domai
 			word = "!" + word
 		}
 
-		cmd, ok := cfg.Commands[word]
+		cmd, ok := cfg.Channels[channel].Commands[word]
 		if !ok || cmd.Timer == nil {
 			notFound = append(notFound, word)
 			continue
@@ -228,8 +228,8 @@ func (c *SetCommandTimer) handleCommandTimersSet(cfg *config.Config, text *domai
 		}
 
 		c.timers.RemoveTimer(word)
-		cfg.Commands[word].Timer.Options = c.template.Options().MergeTimer(cmd.Timer.Options, opts)
-		c.t.AddTimer(word, cfg.Commands[word])
+		cfg.Channels[channel].Commands[word].Timer.Options = c.template.Options().MergeTimer(cmd.Timer.Options, opts)
+		c.t.AddTimer(word, cfg.Channels[channel].Commands[word])
 		edited = append(edited, word)
 	}
 

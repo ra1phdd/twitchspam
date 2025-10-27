@@ -3,6 +3,7 @@ package admin
 import (
 	"errors"
 	"fmt"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/shirou/gopsutil/cpu"
 	"log/slog"
 	"regexp"
@@ -21,7 +22,7 @@ import (
 
 type Ping struct{}
 
-func (p *Ping) Execute(_ *config.Config, _ *domain.MessageText) *ports.AnswerType {
+func (p *Ping) Execute(_ *config.Config, _ string, _ *domain.MessageText) *ports.AnswerType {
 	return p.handlePing()
 }
 
@@ -47,14 +48,14 @@ type OnOff struct {
 	template ports.TemplatePort
 }
 
-func (o *OnOff) Execute(cfg *config.Config, _ *domain.MessageText) *ports.AnswerType {
-	return o.handleOnOff(cfg, o.enabled)
+func (o *OnOff) Execute(cfg *config.Config, channel string, _ *domain.MessageText) *ports.AnswerType {
+	return o.handleOnOff(cfg, channel)
 }
 
-func (o *OnOff) handleOnOff(cfg *config.Config, enabled bool) *ports.AnswerType {
-	cfg.Enabled = enabled
+func (o *OnOff) handleOnOff(cfg *config.Config, channel string) *ports.AnswerType {
+	cfg.Channels[channel].Enabled = o.enabled
 
-	metrics.BotEnabled.Set(map[bool]float64{true: 1, false: 0}[enabled])
+	metrics.BotEnabled.With(prometheus.Labels{"channel": channel}).Set(map[bool]float64{true: 1, false: 0}[o.enabled])
 	o.template.SpamPause().Pause(0)
 	return success
 }
@@ -64,7 +65,7 @@ type Game struct {
 	stream ports.StreamPort
 }
 
-func (g *Game) Execute(_ *config.Config, text *domain.MessageText) *ports.AnswerType {
+func (g *Game) Execute(_ *config.Config, _ string, text *domain.MessageText) *ports.AnswerType {
 	return g.handleGame(text)
 }
 
@@ -94,12 +95,12 @@ type Status struct {
 	template ports.TemplatePort
 }
 
-func (s *Status) Execute(cfg *config.Config, _ *domain.MessageText) *ports.AnswerType {
-	return s.handleStatus(cfg)
+func (s *Status) Execute(cfg *config.Config, channel string, _ *domain.MessageText) *ports.AnswerType {
+	return s.handleStatus(cfg, channel)
 }
 
-func (s *Status) handleStatus(cfg *config.Config) *ports.AnswerType {
-	if !cfg.Enabled {
+func (s *Status) handleStatus(cfg *config.Config, channel string) *ports.AnswerType {
+	if !cfg.Channels[channel].Enabled {
 		return &ports.AnswerType{Text: []string{"бот выключен!"}, IsReply: true}
 	}
 
@@ -108,7 +109,7 @@ func (s *Status) handleStatus(cfg *config.Config) *ports.AnswerType {
 		msg = append(msg, fmt.Sprintf("антиспам на паузе (%s)", domain.FormatDuration(r)))
 	} else {
 		state := "выключен"
-		if cfg.Spam.SettingsDefault.Enabled {
+		if cfg.Channels[channel].Spam.SettingsDefault.Enabled {
 			state = "включен"
 		}
 		msg = append(msg, "антиспам "+state)
@@ -124,12 +125,12 @@ type Reset struct {
 	manager *config.Manager
 }
 
-func (r *Reset) Execute(cfg *config.Config, _ *domain.MessageText) *ports.AnswerType {
-	return r.handleReset(cfg)
+func (r *Reset) Execute(cfg *config.Config, channel string, _ *domain.MessageText) *ports.AnswerType {
+	return r.handleReset(cfg, channel)
 }
 
-func (r *Reset) handleReset(cfg *config.Config) *ports.AnswerType {
-	cfg.Spam = r.manager.GetDefault().Spam // !am reset
+func (r *Reset) handleReset(cfg *config.Config, channel string) *ports.AnswerType {
+	cfg.Channels[channel].Spam = r.manager.GetChannel().Spam // !am reset
 	return success
 }
 
@@ -137,7 +138,7 @@ type Say struct {
 	re *regexp.Regexp
 }
 
-func (s *Say) Execute(_ *config.Config, text *domain.MessageText) *ports.AnswerType {
+func (s *Say) Execute(_ *config.Config, _ string, text *domain.MessageText) *ports.AnswerType {
 	return s.handleSay(text)
 }
 
@@ -157,7 +158,7 @@ type Spam struct {
 	re *regexp.Regexp
 }
 
-func (s *Spam) Execute(_ *config.Config, text *domain.MessageText) *ports.AnswerType {
+func (s *Spam) Execute(_ *config.Config, _ string, text *domain.MessageText) *ports.AnswerType {
 	return s.handleSpam(text)
 }
 
@@ -201,7 +202,7 @@ type Category struct {
 	Name string `json:"name"`
 }
 
-func (c *SetCategory) Execute(_ *config.Config, text *domain.MessageText) *ports.AnswerType {
+func (c *SetCategory) Execute(_ *config.Config, _ string, text *domain.MessageText) *ports.AnswerType {
 	return c.handleSetCategory(text)
 }
 
@@ -286,7 +287,7 @@ type SetTitle struct {
 	api    ports.APIPort
 }
 
-func (t *SetTitle) Execute(_ *config.Config, text *domain.MessageText) *ports.AnswerType {
+func (t *SetTitle) Execute(_ *config.Config, _ string, text *domain.MessageText) *ports.AnswerType {
 	return t.handleSetTitle(text)
 }
 

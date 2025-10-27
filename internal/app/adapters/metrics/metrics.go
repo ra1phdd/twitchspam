@@ -7,17 +7,17 @@ import (
 
 var (
 	// BotEnabled - включен ли бот.
-	BotEnabled = promauto.NewGauge(prometheus.GaugeOpts{
+	BotEnabled = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "bot_enabled",
 		Help: "Whether the bot is enabled (1) or disabled (0)",
-	})
+	}, []string{"channel"})
 
 	// AntiSpamEnabled - включен ли антиспам.
 	AntiSpamEnabled = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "anti_spam_enabled",
 			Help: "Whether the anti-spam is enabled (1) or disabled (0)",
-		}, []string{"type"},
+		}, []string{"channel", "type"},
 	)
 
 	// StreamActive - включен ли стрим по каналам.

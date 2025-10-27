@@ -15,11 +15,17 @@ func (m *Manager) GetDefault() *Config {
 			LogLevel: "info",
 			GinMode:  "release",
 		},
-		WindowSecs: 180,
 		Limiter: Limiter{
 			Requests: 3,
 			Per:      30 * time.Second,
 		},
+		GlobalAliases: make(map[string]string),
+	}
+}
+
+func (m *Manager) GetChannel() *Channel {
+	return &Channel{
+		WindowSecs: 180,
 		Spam: Spam{
 			Mode:           OnlineMode,
 			WhitelistUsers: make(map[string]struct{}),
@@ -80,11 +86,10 @@ func (m *Manager) GetDefault() *Config {
 			Enabled: true,
 			Delay:   0,
 		},
-		MwordGroup:    make(map[string]*MwordGroup),
-		Aliases:       make(map[string]string),
-		AliasGroups:   make(map[string]*AliasGroups),
-		GlobalAliases: make(map[string]string),
-		Markers:       make(map[string]map[string][]*Markers),
-		Commands:      make(map[string]*Commands),
+		MwordGroup:  make(map[string]*MwordGroup),
+		Aliases:     make(map[string]string),
+		AliasGroups: make(map[string]*AliasGroups),
+		Markers:     make(map[string]map[string][]*Markers),
+		Commands:    make(map[string]*Commands),
 	}
 }

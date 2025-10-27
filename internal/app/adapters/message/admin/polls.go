@@ -19,7 +19,7 @@ type CreatePoll struct {
 	poll     *ports.Poll
 }
 
-func (p *CreatePoll) Execute(_ *config.Config, text *domain.MessageText) *ports.AnswerType {
+func (p *CreatePoll) Execute(_ *config.Config, _ string, text *domain.MessageText) *ports.AnswerType {
 	return p.handleCreatePoll(text)
 }
 
@@ -107,7 +107,7 @@ type EndPoll struct {
 	poll     *ports.Poll
 }
 
-func (p *EndPoll) Execute(_ *config.Config, text *domain.MessageText) *ports.AnswerType {
+func (p *EndPoll) Execute(_ *config.Config, _ string, text *domain.MessageText) *ports.AnswerType {
 	return p.handleEndPoll(text)
 }
 
@@ -157,7 +157,7 @@ type RePoll struct {
 	poll     *ports.Poll
 }
 
-func (p *RePoll) Execute(_ *config.Config, _ *domain.MessageText) *ports.AnswerType {
+func (p *RePoll) Execute(_ *config.Config, _ string, _ *domain.MessageText) *ports.AnswerType {
 	return p.handleRePoll()
 }
 

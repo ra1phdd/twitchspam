@@ -169,7 +169,7 @@ func (a *Admin) FindMessages(msg *domain.ChatMessage) *ports.AnswerType {
 			slog.String("user", msg.Chatter.Username),
 			slog.String("message", msg.Message.Text.Text()),
 		)
-		result = a.root.Execute(cfg, &msg.Message.Text)
+		result = a.root.Execute(cfg, msg.Broadcaster.Login, &msg.Message.Text)
 	}); err != nil {
 		a.log.Error("Failed to update config", err, slog.String("user", msg.Chatter.Username), slog.String("message", msg.Message.Text.Text()))
 		return unknownError
@@ -181,22 +181,22 @@ func (a *Admin) FindMessages(msg *domain.ChatMessage) *ports.AnswerType {
 	return success
 }
 
-func (c *CompositeCommand) Execute(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
+func (c *CompositeCommand) Execute(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
 	words := text.Words(domain.LowerOption)
 	if c.cursor >= len(words) {
 		if c.defaultCmd != nil {
-			return c.defaultCmd.Execute(cfg, text)
+			return c.defaultCmd.Execute(cfg, channel, text)
 		}
 		return notFoundCmd
 	}
 
 	cmdName := words[c.cursor]
 	if cmd, ok := c.subcommands[cmdName]; ok {
-		return cmd.Execute(cfg, text)
+		return cmd.Execute(cfg, channel, text)
 	}
 
 	if c.defaultCmd != nil {
-		return c.defaultCmd.Execute(cfg, text)
+		return c.defaultCmd.Execute(cfg, channel, text)
 	}
 	return notFoundCmd
 }

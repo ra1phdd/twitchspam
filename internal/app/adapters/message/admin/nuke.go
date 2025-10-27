@@ -24,7 +24,7 @@ type Nuke struct {
 	messages ports.StorePort[storage.Message]
 }
 
-func (n *Nuke) Execute(_ *config.Config, text *domain.MessageText) *ports.AnswerType {
+func (n *Nuke) Execute(_ *config.Config, _ string, text *domain.MessageText) *ports.AnswerType {
 	return n.handleNuke(text)
 }
 
@@ -190,7 +190,7 @@ type NukeStop struct {
 	template ports.TemplatePort
 }
 
-func (n *NukeStop) Execute(_ *config.Config, _ *domain.MessageText) *ports.AnswerType {
+func (n *NukeStop) Execute(_ *config.Config, _ string, _ *domain.MessageText) *ports.AnswerType {
 	return n.handleNukeStop()
 }
 
@@ -205,7 +205,7 @@ type ReNuke struct {
 	template ports.TemplatePort
 }
 
-func (n *ReNuke) Execute(_ *config.Config, _ *domain.MessageText) *ports.AnswerType {
+func (n *ReNuke) Execute(_ *config.Config, _ string, _ *domain.MessageText) *ports.AnswerType {
 	return n.handleReNuke()
 }
 

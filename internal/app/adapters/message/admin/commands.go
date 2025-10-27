@@ -14,12 +14,12 @@ type ListCommand struct {
 	fs ports.FileServerPort
 }
 
-func (c *ListCommand) Execute(cfg *config.Config, _ *domain.MessageText) *ports.AnswerType {
-	return c.handleCommandList(cfg)
+func (c *ListCommand) Execute(cfg *config.Config, channel string, _ *domain.MessageText) *ports.AnswerType {
+	return c.handleCommandList(cfg, channel)
 }
 
-func (c *ListCommand) handleCommandList(cfg *config.Config) *ports.AnswerType {
-	return buildList(cfg.Commands, "команды", "команды не найдены!",
+func (c *ListCommand) handleCommandList(cfg *config.Config, channel string) *ports.AnswerType {
+	return buildList(cfg.Channels[channel].Commands, "команды", "команды не найдены!",
 		func(key string, cmd *config.Commands) string {
 			return fmt.Sprintf("- %s -> %s", key, cmd.Text)
 		}, c.fs)
@@ -30,11 +30,11 @@ type AddCommand struct {
 	template ports.TemplatePort
 }
 
-func (c *AddCommand) Execute(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
-	return c.handleCommandAdd(cfg, text)
+func (c *AddCommand) Execute(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
+	return c.handleCommandAdd(cfg, channel, text)
 }
 
-func (c *AddCommand) handleCommandAdd(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
+func (c *AddCommand) handleCommandAdd(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
 	textWithoutOpts, opts := c.template.Options().ParseAll(text.Text(), template.CommandOptions)
 
 	matches := c.re.FindStringSubmatch(textWithoutOpts) // !am cmd add <команда> <текст>
@@ -47,7 +47,7 @@ func (c *AddCommand) handleCommandAdd(cfg *config.Config, text *domain.MessageTe
 		cmd = "!" + cmd
 	}
 
-	cfg.Commands[cmd] = &config.Commands{
+	cfg.Channels[channel].Commands[cmd] = &config.Commands{
 		Text:    strings.TrimSpace(matches[2]),
 		Options: c.template.Options().MergeCommand(nil, opts),
 	}
@@ -60,11 +60,11 @@ type SetCommand struct {
 	template ports.TemplatePort
 }
 
-func (c *SetCommand) Execute(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
-	return c.handleCommandSet(cfg, text)
+func (c *SetCommand) Execute(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
+	return c.handleCommandSet(cfg, channel, text)
 }
 
-func (c *SetCommand) handleCommandSet(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
+func (c *SetCommand) handleCommandSet(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
 	textWithoutOpts, opts := c.template.Options().ParseAll(text.Text(), template.CommandOptions)
 
 	matches := c.re.FindStringSubmatch(textWithoutOpts) // !am cmd set <команда> <*текст>
@@ -77,7 +77,7 @@ func (c *SetCommand) handleCommandSet(cfg *config.Config, text *domain.MessageTe
 		cmd = "!" + cmd
 	}
 
-	if _, ok := cfg.Commands[cmd]; !ok {
+	if _, ok := cfg.Channels[channel].Commands[cmd]; !ok {
 		return &ports.AnswerType{
 			Text:    []string{"команда не найдена!"},
 			IsReply: true,
@@ -86,9 +86,9 @@ func (c *SetCommand) handleCommandSet(cfg *config.Config, text *domain.MessageTe
 
 	cmdText := strings.TrimSpace(matches[2])
 	if cmdText != "" {
-		cfg.Commands[cmd].Text = cmdText
+		cfg.Channels[channel].Commands[cmd].Text = cmdText
 	}
-	cfg.Commands[cmd].Options = c.template.Options().MergeCommand(cfg.Commands[cmd].Options, opts)
+	cfg.Channels[channel].Commands[cmd].Options = c.template.Options().MergeCommand(cfg.Channels[channel].Commands[cmd].Options, opts)
 
 	return success
 }
@@ -97,11 +97,11 @@ type DelCommand struct {
 	re *regexp.Regexp
 }
 
-func (c *DelCommand) Execute(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
-	return c.handleCommandDel(cfg, text)
+func (c *DelCommand) Execute(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
+	return c.handleCommandDel(cfg, channel, text)
 }
 
-func (c *DelCommand) handleCommandDel(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
+func (c *DelCommand) handleCommandDel(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
 	matches := c.re.FindStringSubmatch(text.Text()) // !am word del <команды через запятую>
 	if len(matches) != 2 {
 		return nonParametr
@@ -119,15 +119,15 @@ func (c *DelCommand) handleCommandDel(cfg *config.Config, text *domain.MessageTe
 			word = "!" + word
 		}
 
-		if _, ok := cfg.Commands[word]; !ok {
+		if _, ok := cfg.Channels[channel].Commands[word]; !ok {
 			notFound = append(notFound, word)
 			continue
 		}
 
-		delete(cfg.Commands, word)
-		for alias, original := range cfg.Aliases {
+		delete(cfg.Channels[channel].Commands, word)
+		for alias, original := range cfg.Channels[channel].Aliases {
 			if original == word {
-				delete(cfg.Aliases, alias)
+				delete(cfg.Channels[channel].Aliases, alias)
 			}
 		}
 		removed = append(removed, word)
@@ -140,11 +140,11 @@ type AliasesCommand struct {
 	re *regexp.Regexp
 }
 
-func (c *AliasesCommand) Execute(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
-	return c.handleCommandAliases(cfg, text)
+func (c *AliasesCommand) Execute(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
+	return c.handleCommandAliases(cfg, channel, text)
 }
 
-func (c *AliasesCommand) handleCommandAliases(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
+func (c *AliasesCommand) handleCommandAliases(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
 	matches := c.re.FindStringSubmatch(text.Text()) // !am cmd aliases <команда>
 	if len(matches) != 2 {
 		return nonParametr
@@ -155,25 +155,25 @@ func (c *AliasesCommand) handleCommandAliases(cfg *config.Config, text *domain.M
 		cmd = "!" + cmd
 	}
 
-	if orig, ok := cfg.Aliases[cmd]; ok {
+	if orig, ok := cfg.Channels[channel].Aliases[cmd]; ok {
 		cmd = orig
 	}
 
-	for _, alg := range cfg.AliasGroups {
+	for _, alg := range cfg.Channels[channel].AliasGroups {
 		if _, ok := alg.Aliases[cmd]; ok {
 			cmd = alg.Original
 			break
 		}
 	}
 
-	aliases := make([]string, 0, len(cfg.Aliases))
-	for alias, orig := range cfg.Aliases {
+	aliases := make([]string, 0, len(cfg.Channels[channel].Aliases))
+	for alias, orig := range cfg.Channels[channel].Aliases {
 		if strings.Contains(cmd, orig) {
 			aliases = append(aliases, alias)
 		}
 	}
 
-	for _, alg := range cfg.AliasGroups {
+	for _, alg := range cfg.Channels[channel].AliasGroups {
 		if !strings.Contains(cmd, alg.Original) {
 			continue
 		}

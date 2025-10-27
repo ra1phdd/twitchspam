@@ -148,15 +148,15 @@ func (sv *SevenTV) EmoteStats(words []string) (count int, onlyEmotes bool) {
 		slog.Int("emote_chars", emoteChars),
 		slog.Int("text_chars", textChars),
 		slog.Float64("ratio", ratio),
-		slog.Float64("threshold", sv.cfg.Spam.SettingsEmotes.EmoteThreshold),
+		slog.Float64("threshold", sv.cfg.Channels[sv.stream.ChannelName()].Spam.SettingsEmotes.EmoteThreshold),
 	)
 
-	if ratio >= sv.cfg.Spam.SettingsEmotes.EmoteThreshold {
+	if ratio >= sv.cfg.Channels[sv.stream.ChannelName()].Spam.SettingsEmotes.EmoteThreshold {
 		onlyEmotes = true
 		sv.log.Debug("Message detected as emote-only",
 			slog.Float64("ratio", ratio),
 			slog.Int("emote_count", count),
-			slog.Float64("threshold", sv.cfg.Spam.SettingsEmotes.EmoteThreshold),
+			slog.Float64("threshold", sv.cfg.Channels[sv.stream.ChannelName()].Spam.SettingsEmotes.EmoteThreshold),
 		)
 	} else {
 		sv.log.Trace("Message contains mixed content",

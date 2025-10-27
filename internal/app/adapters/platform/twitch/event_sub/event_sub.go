@@ -251,7 +251,7 @@ func (es *EventSub) handleMessage(ctx context.Context, msgBytes []byte) {
 				c.stream.SetIslive(false)
 				c.stream.Stats().SetEndTime(time.Now())
 
-				if es.cfg.Enabled {
+				if es.cfg.Channels[sm.BroadcasterUserLogin].Enabled {
 					es.api.SendChatMessages(c.stream.ChannelID(), c.stream.Stats().GetStats())
 				}
 			}
@@ -369,7 +369,7 @@ func (es *EventSub) convertMap(msgEvent ChatMessageEvent) *domain.ChatMessage {
 	}
 
 	total := emoteChars + textChars
-	emoteOnly := total > 0 && float64(emoteChars)/float64(total) >= es.cfg.Spam.SettingsEmotes.EmoteThreshold
+	emoteOnly := total > 0 && float64(emoteChars)/float64(total) >= es.cfg.Channels[msgEvent.BroadcasterUserLogin].Spam.SettingsEmotes.EmoteThreshold
 
 	msg := &domain.ChatMessage{
 		Broadcaster: domain.Broadcaster{

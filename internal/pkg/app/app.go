@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
 	"time"
 	"twitchspam/internal/app/adapters/file_server"
@@ -23,8 +24,6 @@ import (
 	"twitchspam/pkg/logger"
 )
 
-const configPath = "config.json"
-
 func New() error {
 	client := &http.Client{
 		Timeout:   10 * time.Second,
@@ -32,7 +31,7 @@ func New() error {
 	}
 	log := logger.New()
 
-	manager, err := config.New(configPath)
+	manager, err := config.New()
 	if err != nil {
 		log.Fatal("Error loading config", err)
 	}
@@ -57,60 +56,64 @@ func New() error {
 
 	prometheus.MustRegister(metrics.MessageProcessingTime, metrics.ModulesProcessingTime)
 
-	metrics.BotEnabled.Set(map[bool]float64{true: 1, false: 0}[cfg.Enabled])
-	metrics.AntiSpamEnabled.With(prometheus.Labels{"type": "default"}).Set(map[bool]float64{true: 1, false: 0}[cfg.Spam.SettingsDefault.Enabled])
-	metrics.AntiSpamEnabled.With(prometheus.Labels{"type": "vip"}).Set(map[bool]float64{true: 1, false: 0}[cfg.Spam.SettingsVIP.Enabled])
-	metrics.AntiSpamEnabled.With(prometheus.Labels{"type": "emote"}).Set(map[bool]float64{true: 1, false: 0}[cfg.Spam.SettingsEmotes.Enabled])
-
-	if _, err := os.Stat("cache"); os.IsNotExist(err) {
-		if err := os.Mkdir("cache", 0700); err != nil {
-			log.Error("Error creating cache directory", err)
-			return err
-		}
-	} else if err != nil {
-		log.Error("Error stat cache directory", err)
+	if err := os.MkdirAll("cache", 0700); err != nil {
+		log.Error("Error creating cache directory", err)
 		return err
 	}
 
 	t := twitch.New(log, manager, client)
 	cacheStats := storage.NewCache[stream.SessionStats](0, 0, true, true, "cache/stats.json", 0)
 
-	streams := make(map[string]ports.StreamPort, len(cfg.App.ModChannels))
-	channelIDs := make([]string, 0, len(cfg.App.ModChannels))
+	streams := make(map[string]ports.StreamPort, len(cfg.Channels))
+	channelIDs := make([]string, 0, len(cfg.Channels))
 
 	var wg sync.WaitGroup
 	var mu sync.Mutex
-	for _, channel := range cfg.App.ModChannels {
+	for _, channel := range cfg.Channels {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 
-			prefixedLog := logger.NewPrefixedLogger(log, channel)
-			st := stream.NewStream(channel, fs, cacheStats)
+			prefixedLog := logger.NewPrefixedLogger(log, channel.Name)
+			st := stream.NewStream(channel.Name, fs, cacheStats)
 
-			id, err := t.API().GetChannelID(channel)
-			if err != nil {
-				log.Error("Error getting live stream", err)
-				return
+			if channel.ID == "" {
+				channel.ID, err = t.API().GetChannelID(channel.Name)
+				if err != nil {
+					log.Error("Error getting live stream", err)
+					return
+				}
+
+				if err := manager.Update(func(cfg *config.Config) {
+					cfg.Channels[strings.ToLower(channel.Name)].ID = channel.ID
+				}); err != nil {
+					log.Error("Error updating live stream", err)
+					return
+				}
 			}
-			st.SetChannelID(id)
-			channelIDs = append(channelIDs, id)
+
+			st.SetChannelID(channel.ID)
+			channelIDs = append(channelIDs, channel.ID)
 
 			msg := message.New(prefixedLog, manager, st, t.API(), client)
-			if err := t.AddChannel(channel, st, msg); err != nil {
-				log.Info(fmt.Sprintf("[%s] Failed add channel", channel))
+			if err := t.AddChannel(channel.Name, st, msg); err != nil {
+				log.Info(fmt.Sprintf("[%s] Failed add channel", channel.Name))
 				return
 			}
 
 			mu.Lock()
-			streams[channel] = st
+			streams[channel.Name] = st
 			mu.Unlock()
 
-			metrics.MessagesPerStream.With(prometheus.Labels{"channel": channel}).Add(0)
-			metrics.ModerationActions.With(prometheus.Labels{"channel": channel, "action": "delete"}).Set(0)
-			metrics.ModerationActions.With(prometheus.Labels{"channel": channel, "action": "timeout"}).Set(0)
-			metrics.ModerationActions.With(prometheus.Labels{"channel": channel, "action": "ban"}).Set(0)
-			log.Info(fmt.Sprintf("[%s] Chatbot started", channel))
+			metrics.BotEnabled.With(prometheus.Labels{"channel": channel.Name}).Set(map[bool]float64{true: 1, false: 0}[channel.Enabled])
+			metrics.AntiSpamEnabled.With(prometheus.Labels{"channel": channel.Name, "type": "default"}).Set(map[bool]float64{true: 1, false: 0}[channel.Spam.SettingsDefault.Enabled])
+			metrics.AntiSpamEnabled.With(prometheus.Labels{"channel": channel.Name, "type": "vip"}).Set(map[bool]float64{true: 1, false: 0}[channel.Spam.SettingsVIP.Enabled])
+			metrics.AntiSpamEnabled.With(prometheus.Labels{"channel": channel.Name, "type": "emote"}).Set(map[bool]float64{true: 1, false: 0}[channel.Spam.SettingsEmotes.Enabled])
+			metrics.MessagesPerStream.With(prometheus.Labels{"channel": channel.Name}).Add(0)
+			metrics.ModerationActions.With(prometheus.Labels{"channel": channel.Name, "action": "delete"}).Set(0)
+			metrics.ModerationActions.With(prometheus.Labels{"channel": channel.Name, "action": "timeout"}).Set(0)
+			metrics.ModerationActions.With(prometheus.Labels{"channel": channel.Name, "action": "ban"}).Set(0)
+			log.Info(fmt.Sprintf("[%s] Chatbot started", channel.Name))
 		}()
 	}
 
@@ -141,7 +144,7 @@ func New() error {
 				})
 			}
 
-			for _, channel := range cfg.App.ModChannels {
+			for channel := range cfg.Channels {
 				if _, ok := livedStreams[channel]; ok {
 					continue
 				}

@@ -19,7 +19,7 @@ type CreatePrediction struct {
 	pred     *ports.Predictions
 }
 
-func (p *CreatePrediction) Execute(_ *config.Config, text *domain.MessageText) *ports.AnswerType {
+func (p *CreatePrediction) Execute(_ *config.Config, _ string, text *domain.MessageText) *ports.AnswerType {
 	return p.handleCreatePrediction(text)
 }
 
@@ -99,7 +99,7 @@ type EndPrediction struct {
 	pred     *ports.Predictions
 }
 
-func (p *EndPrediction) Execute(_ *config.Config, text *domain.MessageText) *ports.AnswerType {
+func (p *EndPrediction) Execute(_ *config.Config, _ string, text *domain.MessageText) *ports.AnswerType {
 	return p.handleEndPrediction(text)
 }
 
@@ -178,7 +178,7 @@ type RePrediction struct {
 	pred     *ports.Predictions
 }
 
-func (p *RePrediction) Execute(_ *config.Config, _ *domain.MessageText) *ports.AnswerType {
+func (p *RePrediction) Execute(_ *config.Config, _ string, _ *domain.MessageText) *ports.AnswerType {
 	return p.handleRePrediction()
 }
 

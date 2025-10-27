@@ -20,7 +20,7 @@ type CommandPort interface {
 }
 
 type Command interface {
-	Execute(cfg *config.Config, text *domain.MessageText) *AnswerType
+	Execute(cfg *config.Config, channel string, text *domain.MessageText) *AnswerType
 }
 
 type AnswerType struct {

@@ -17,11 +17,11 @@ type AddExcept struct {
 	typeExcept string
 }
 
-func (e *AddExcept) Execute(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
-	return e.handleExceptAdd(cfg, text)
+func (e *AddExcept) Execute(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
+	return e.handleExceptAdd(cfg, channel, text)
 }
 
-func (e *AddExcept) handleExceptAdd(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
+func (e *AddExcept) handleExceptAdd(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
 	textWithoutOpts, opts := e.template.Options().ParseAll(text.Text(), template.ExceptOptions)
 
 	// !am ex (add) <кол-во сообщений> <наказания через запятую> <слова/фразы через запятую>
@@ -56,9 +56,9 @@ func (e *AddExcept) handleExceptAdd(cfg *config.Config, text *domain.MessageText
 
 		if p.Action == "inherit" {
 			if e.typeExcept == "emote" {
-				punishments = cfg.Spam.SettingsEmotes.Punishments
+				punishments = cfg.Channels[channel].Spam.SettingsEmotes.Punishments
 			} else {
-				punishments = cfg.Spam.SettingsDefault.Punishments
+				punishments = cfg.Channels[channel].Spam.SettingsDefault.Punishments
 			}
 			break
 		}
@@ -69,10 +69,10 @@ func (e *AddExcept) handleExceptAdd(cfg *config.Config, text *domain.MessageText
 		return invalidPunishmentFormat
 	}
 
-	exSettings := cfg.Spam.Exceptions
+	exSettings := cfg.Channels[channel].Spam.Exceptions
 	fn := e.template.Options().MergeExcept
 	if e.typeExcept == "emote" {
-		exSettings = cfg.Spam.SettingsEmotes.Exceptions
+		exSettings = cfg.Channels[channel].Spam.SettingsEmotes.Exceptions
 		fn = e.template.Options().MergeEmoteExcept
 	}
 
@@ -125,11 +125,11 @@ type SetExcept struct {
 	typeExcept string
 }
 
-func (e *SetExcept) Execute(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
-	return e.handleExceptSet(cfg, text)
+func (e *SetExcept) Execute(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
+	return e.handleExceptSet(cfg, channel, text)
 }
 
-func (e *SetExcept) handleExceptSet(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
+func (e *SetExcept) handleExceptSet(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
 	textWithoutOpts, opts := e.template.Options().ParseAll(text.Text(), template.ExceptOptions)
 
 	// !am ex set ml <значение> <слова или фразы через запятую>
@@ -176,7 +176,7 @@ func (e *SetExcept) handleExceptSet(cfg *config.Config, text *domain.MessageText
 				}
 
 				if p.Action == "inherit" {
-					punishments = cfg.Spam.SettingsDefault.Punishments
+					punishments = cfg.Channels[channel].Spam.SettingsDefault.Punishments
 					break
 				}
 
@@ -192,10 +192,10 @@ func (e *SetExcept) handleExceptSet(cfg *config.Config, text *domain.MessageText
 		},
 	}
 
-	exSettings := cfg.Spam.Exceptions
+	exSettings := cfg.Channels[channel].Spam.Exceptions
 	fn := e.template.Options().MergeExcept
 	if e.typeExcept == "emote" {
-		exSettings = cfg.Spam.SettingsEmotes.Exceptions
+		exSettings = cfg.Channels[channel].Spam.SettingsEmotes.Exceptions
 		fn = e.template.Options().MergeEmoteExcept
 	}
 
@@ -231,19 +231,19 @@ type DelExcept struct {
 	typeExcept string
 }
 
-func (e *DelExcept) Execute(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
-	return e.handleExceptDel(cfg, text)
+func (e *DelExcept) Execute(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
+	return e.handleExceptDel(cfg, channel, text)
 }
 
-func (e *DelExcept) handleExceptDel(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
+func (e *DelExcept) handleExceptDel(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
 	matches := e.re.FindStringSubmatch(text.Text()) // !am ex del <слова/фразы через запятую или regex>
 	if len(matches) != 2 {
 		return nonParametr
 	}
 
-	exSettings := cfg.Spam.Exceptions
+	exSettings := cfg.Channels[channel].Spam.Exceptions
 	if e.typeExcept == "emote" {
-		exSettings = cfg.Spam.SettingsEmotes.Exceptions
+		exSettings = cfg.Channels[channel].Spam.SettingsEmotes.Exceptions
 	}
 
 	words := strings.Split(strings.TrimSpace(matches[1]), ",")
@@ -271,14 +271,14 @@ type ListExcept struct {
 	typeExcept string
 }
 
-func (e *ListExcept) Execute(cfg *config.Config, _ *domain.MessageText) *ports.AnswerType {
-	return e.handleExceptList(cfg)
+func (e *ListExcept) Execute(cfg *config.Config, channel string, _ *domain.MessageText) *ports.AnswerType {
+	return e.handleExceptList(cfg, channel)
 }
 
-func (e *ListExcept) handleExceptList(cfg *config.Config) *ports.AnswerType {
-	exSettings := cfg.Spam.Exceptions
+func (e *ListExcept) handleExceptList(cfg *config.Config, channel string) *ports.AnswerType {
+	exSettings := cfg.Channels[channel].Spam.Exceptions
 	if e.typeExcept == "emote" {
-		exSettings = cfg.Spam.SettingsEmotes.Exceptions
+		exSettings = cfg.Channels[channel].Spam.SettingsEmotes.Exceptions
 	}
 
 	return buildList(exSettings, "исключения", "исключений не найдено!",
@@ -294,19 +294,19 @@ type OnOffExcept struct {
 	typeExcept string
 }
 
-func (e *OnOffExcept) Execute(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
-	return e.handleExceptOnOff(cfg, text)
+func (e *OnOffExcept) Execute(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
+	return e.handleExceptOnOff(cfg, channel, text)
 }
 
-func (e *OnOffExcept) handleExceptOnOff(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
+func (e *OnOffExcept) handleExceptOnOff(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
 	matches := e.re.FindStringSubmatch(text.Text()) // !am ex on/off <слова/фразы через запятую>
 	if len(matches) != 3 {
 		return nonParametr
 	}
 
-	exSettings := cfg.Spam.Exceptions
+	exSettings := cfg.Channels[channel].Spam.Exceptions
 	if e.typeExcept == "emote" {
-		exSettings = cfg.Spam.SettingsEmotes.Exceptions
+		exSettings = cfg.Channels[channel].Spam.SettingsEmotes.Exceptions
 	}
 
 	state := strings.ToLower(strings.TrimSpace(matches[1]))

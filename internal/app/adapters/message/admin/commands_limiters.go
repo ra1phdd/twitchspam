@@ -15,11 +15,11 @@ type AddCommandLimiter struct {
 	re *regexp.Regexp
 }
 
-func (c *AddCommandLimiter) Execute(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
-	return c.handleCommandLimiterAdd(cfg, text)
+func (c *AddCommandLimiter) Execute(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
+	return c.handleCommandLimiterAdd(cfg, channel, text)
 }
 
-func (c *AddCommandLimiter) handleCommandLimiterAdd(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
+func (c *AddCommandLimiter) handleCommandLimiterAdd(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
 	// !am cmd lim <кол-во запросов> <интервал в секундах> <команды через запятую>
 	// или !am cmd lim add <кол-во запросов> <интервал в секундах> <команды через запятую>
 	matches := c.re.FindStringSubmatch(text.Text())
@@ -49,7 +49,7 @@ func (c *AddCommandLimiter) handleCommandLimiterAdd(cfg *config.Config, text *do
 			key = "!" + key
 		}
 
-		cmd, ok := cfg.Commands[key]
+		cmd, ok := cfg.Channels[channel].Commands[key]
 		if !ok {
 			notFound = append(notFound, key)
 			continue
@@ -70,11 +70,11 @@ type SetCommandLimiter struct {
 	re *regexp.Regexp
 }
 
-func (c *SetCommandLimiter) Execute(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
-	return c.handleCommandLimiterSet(cfg, text)
+func (c *SetCommandLimiter) Execute(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
+	return c.handleCommandLimiterSet(cfg, channel, text)
 }
 
-func (c *SetCommandLimiter) handleCommandLimiterSet(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
+func (c *SetCommandLimiter) handleCommandLimiterSet(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
 	matches := c.re.FindStringSubmatch(text.Text()) // !am cmd lim set <кол-во запросов> <интервал в секундах> <команды через запятую>
 	if len(matches) != 4 {
 		return nonParametr
@@ -101,7 +101,7 @@ func (c *SetCommandLimiter) handleCommandLimiterSet(cfg *config.Config, text *do
 			key = "!" + key
 		}
 
-		cmd, ok := cfg.Commands[key]
+		cmd, ok := cfg.Channels[channel].Commands[key]
 		if !ok {
 			notFound = append(notFound, key)
 			continue
@@ -122,11 +122,11 @@ type DelCommandLimiter struct {
 	re *regexp.Regexp
 }
 
-func (c *DelCommandLimiter) Execute(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
-	return c.handleCommandLimiterDel(cfg, text)
+func (c *DelCommandLimiter) Execute(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
+	return c.handleCommandLimiterDel(cfg, channel, text)
 }
 
-func (c *DelCommandLimiter) handleCommandLimiterDel(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
+func (c *DelCommandLimiter) handleCommandLimiterDel(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
 	matches := c.re.FindStringSubmatch(text.Text()) // !am cmd lim del <команды через запятую>
 	if len(matches) != 2 {
 		return nonParametr
@@ -143,7 +143,7 @@ func (c *DelCommandLimiter) handleCommandLimiterDel(cfg *config.Config, text *do
 			key = "!" + key
 		}
 
-		cmd, ok := cfg.Commands[key]
+		cmd, ok := cfg.Channels[channel].Commands[key]
 		if !ok {
 			notFound = append(notFound, key)
 			continue

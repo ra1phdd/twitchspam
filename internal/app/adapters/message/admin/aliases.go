@@ -15,17 +15,17 @@ type ListAlias struct {
 	fs ports.FileServerPort
 }
 
-func (a *ListAlias) Execute(cfg *config.Config, _ *domain.MessageText) *ports.AnswerType {
-	return a.handleAliasesList(cfg)
+func (a *ListAlias) Execute(cfg *config.Config, channel string, _ *domain.MessageText) *ports.AnswerType {
+	return a.handleAliasesList(cfg, channel)
 }
 
-func (a *ListAlias) handleAliasesList(cfg *config.Config) *ports.AnswerType {
+func (a *ListAlias) handleAliasesList(cfg *config.Config, channel string) *ports.AnswerType {
 	aliases := make(map[string]string) // !am al list
-	for k, v := range cfg.Aliases {
+	for k, v := range cfg.Channels[channel].Aliases {
 		aliases[k] = v
 	}
 
-	for _, als := range cfg.AliasGroups {
+	for _, als := range cfg.Channels[channel].AliasGroups {
 		if len(als.Aliases) == 0 {
 			continue
 		}
@@ -55,11 +55,11 @@ type AddAlias struct {
 	template ports.TemplatePort
 }
 
-func (a *AddAlias) Execute(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
-	return a.handleAliasesAdd(cfg, text)
+func (a *AddAlias) Execute(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
+	return a.handleAliasesAdd(cfg, channel, text)
 }
 
-func (a *AddAlias) handleAliasesAdd(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
+func (a *AddAlias) handleAliasesAdd(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
 	matches := a.re.FindStringSubmatch(text.Text()) // !am al add <алиасы через запятую> from <оригинальная команда>
 	if len(matches) != 3 {
 		return incorrectSyntax
@@ -78,8 +78,8 @@ func (a *AddAlias) handleAliasesAdd(cfg *config.Config, text *domain.MessageText
 		original = "!" + original
 	}
 
-	if cfg.Aliases[original] != "" {
-		original = cfg.Aliases[original]
+	if cfg.Channels[channel].Aliases[original] != "" {
+		original = cfg.Channels[channel].Aliases[original]
 	}
 
 	for _, alias := range strings.Split(aliases, ",") {
@@ -92,10 +92,10 @@ func (a *AddAlias) handleAliasesAdd(cfg *config.Config, text *domain.MessageText
 			return aliasDenied
 		}
 
-		cfg.Aliases[alias] = original
+		cfg.Channels[channel].Aliases[alias] = original
 	}
 
-	a.template.Aliases().Update(cfg.Aliases, cfg.AliasGroups, cfg.GlobalAliases)
+	a.template.Aliases().Update(cfg.Channels[channel].Aliases, cfg.Channels[channel].AliasGroups, cfg.GlobalAliases)
 	return &ports.AnswerType{
 		Text:    []string{fmt.Sprintf("алиасы `%s` добавлены для команды `%s`!", aliases, original)},
 		IsReply: true,
@@ -107,11 +107,11 @@ type DelAlias struct {
 	template ports.TemplatePort
 }
 
-func (a *DelAlias) Execute(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
-	return a.handleAliasesDel(cfg, text)
+func (a *DelAlias) Execute(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
+	return a.handleAliasesDel(cfg, channel, text)
 }
 
-func (a *DelAlias) handleAliasesDel(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
+func (a *DelAlias) handleAliasesDel(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
 	matches := a.re.FindStringSubmatch(text.Text()) // !am al del <алиасы через запятую>
 	if len(matches) != 2 {
 		return nonParametr
@@ -125,15 +125,15 @@ func (a *DelAlias) handleAliasesDel(cfg *config.Config, text *domain.MessageText
 			continue
 		}
 
-		if _, ok := cfg.Aliases[word]; ok {
-			delete(cfg.Aliases, word)
+		if _, ok := cfg.Channels[channel].Aliases[word]; ok {
+			delete(cfg.Channels[channel].Aliases, word)
 			removed = append(removed, word)
 		} else {
 			notFound = append(notFound, word)
 		}
 	}
 
-	a.template.Aliases().Update(cfg.Aliases, cfg.AliasGroups, cfg.GlobalAliases)
+	a.template.Aliases().Update(cfg.Channels[channel].Aliases, cfg.Channels[channel].AliasGroups, cfg.GlobalAliases)
 	return buildResponse("алиасы не указаны", RespArg{Items: removed, Name: "удалены"}, RespArg{Items: notFound, Name: "не найдены"})
 }
 
@@ -144,18 +144,18 @@ type CreateAliasGroup struct {
 	template ports.TemplatePort
 }
 
-func (a *CreateAliasGroup) Execute(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
-	return a.handleAlgCreate(cfg, text)
+func (a *CreateAliasGroup) Execute(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
+	return a.handleAlgCreate(cfg, channel, text)
 }
 
-func (a *CreateAliasGroup) handleAlgCreate(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
+func (a *CreateAliasGroup) handleAlgCreate(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
 	matches := a.re.FindStringSubmatch(text.Text()) // !am alg create <название_группы> <оригинальная команда>
 	if len(matches) != 3 {
 		return incorrectSyntax
 	}
 
 	groupName := strings.TrimSpace(matches[1])
-	if _, exists := cfg.AliasGroups[groupName]; exists {
+	if _, exists := cfg.Channels[channel].AliasGroups[groupName]; exists {
 		return existsAliasGroup
 	}
 
@@ -164,12 +164,12 @@ func (a *CreateAliasGroup) handleAlgCreate(cfg *config.Config, text *domain.Mess
 		original = "!" + original
 	}
 
-	cfg.AliasGroups[groupName] = &config.AliasGroups{
+	cfg.Channels[channel].AliasGroups[groupName] = &config.AliasGroups{
 		Enabled:  true,
 		Aliases:  make(map[string]struct{}),
 		Original: original,
 	}
-	a.template.Aliases().Update(cfg.Aliases, cfg.AliasGroups, cfg.GlobalAliases)
+	a.template.Aliases().Update(cfg.Channels[channel].Aliases, cfg.Channels[channel].AliasGroups, cfg.GlobalAliases)
 
 	return &ports.AnswerType{
 		Text:    []string{fmt.Sprintf("группа алиасов `%s` создана!", groupName)},
@@ -182,18 +182,18 @@ type AddAliasGroup struct {
 	template ports.TemplatePort
 }
 
-func (a *AddAliasGroup) Execute(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
-	return a.handleAlgAdd(cfg, text)
+func (a *AddAliasGroup) Execute(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
+	return a.handleAlgAdd(cfg, channel, text)
 }
 
-func (a *AddAliasGroup) handleAlgAdd(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
+func (a *AddAliasGroup) handleAlgAdd(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
 	matches := a.re.FindStringSubmatch(text.Text()) // !am alg add <название_группы> <алиасы через запятую>
 	if len(matches) != 3 {
 		return incorrectSyntax
 	}
 
 	groupName := strings.TrimSpace(matches[1])
-	group, exists := cfg.AliasGroups[groupName]
+	group, exists := cfg.Channels[channel].AliasGroups[groupName]
 	if !exists {
 		return notFoundAliasGroup
 	}
@@ -209,10 +209,10 @@ func (a *AddAliasGroup) handleAlgAdd(cfg *config.Config, text *domain.MessageTex
 			return aliasDenied
 		}
 
-		cfg.AliasGroups[groupName].Aliases[alias] = struct{}{}
+		cfg.Channels[channel].AliasGroups[groupName].Aliases[alias] = struct{}{}
 	}
 
-	a.template.Aliases().Update(cfg.Aliases, cfg.AliasGroups, cfg.GlobalAliases)
+	a.template.Aliases().Update(cfg.Channels[channel].Aliases, cfg.Channels[channel].AliasGroups, cfg.GlobalAliases)
 	return success
 }
 
@@ -221,18 +221,18 @@ type SetAliasGroup struct {
 	template ports.TemplatePort
 }
 
-func (a *SetAliasGroup) Execute(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
-	return a.handleAlgSet(cfg, text)
+func (a *SetAliasGroup) Execute(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
+	return a.handleAlgSet(cfg, channel, text)
 }
 
-func (a *SetAliasGroup) handleAlgSet(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
+func (a *SetAliasGroup) handleAlgSet(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
 	matches := a.re.FindStringSubmatch(text.Text()) // !am alg set <название_группы> <оригинальная команда>
 	if len(matches) != 3 {
 		return incorrectSyntax
 	}
 
 	groupName := strings.TrimSpace(matches[1])
-	if _, exists := cfg.AliasGroups[groupName]; !exists {
+	if _, exists := cfg.Channels[channel].AliasGroups[groupName]; !exists {
 		return notFoundAliasGroup
 	}
 
@@ -241,8 +241,8 @@ func (a *SetAliasGroup) handleAlgSet(cfg *config.Config, text *domain.MessageTex
 		original = "!" + original
 	}
 
-	cfg.AliasGroups[groupName].Original = original
-	a.template.Aliases().Update(cfg.Aliases, cfg.AliasGroups, cfg.GlobalAliases)
+	cfg.Channels[channel].AliasGroups[groupName].Original = original
+	a.template.Aliases().Update(cfg.Channels[channel].Aliases, cfg.Channels[channel].AliasGroups, cfg.GlobalAliases)
 	return success
 }
 
@@ -251,25 +251,25 @@ type DelAliasGroup struct {
 	template ports.TemplatePort
 }
 
-func (a *DelAliasGroup) Execute(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
-	return a.handleAlgDel(cfg, text)
+func (a *DelAliasGroup) Execute(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
+	return a.handleAlgDel(cfg, channel, text)
 }
 
-func (a *DelAliasGroup) handleAlgDel(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
+func (a *DelAliasGroup) handleAlgDel(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
 	matches := a.re.FindStringSubmatch(text.Text()) // !am alg del <название_группы> <алиасы через запятую или ничего для удаления группы>
 	if len(matches) < 2 {
 		return incorrectSyntax
 	}
 
 	groupName := strings.TrimSpace(matches[1])
-	group, exists := cfg.AliasGroups[groupName]
+	group, exists := cfg.Channels[channel].AliasGroups[groupName]
 	if !exists {
 		return notFoundAliasGroup
 	}
-	defer a.template.Aliases().Update(cfg.Aliases, cfg.AliasGroups, cfg.GlobalAliases)
+	defer a.template.Aliases().Update(cfg.Channels[channel].Aliases, cfg.Channels[channel].AliasGroups, cfg.GlobalAliases)
 
 	if len(matches) < 3 || strings.TrimSpace(matches[2]) == "" {
-		delete(cfg.AliasGroups, groupName)
+		delete(cfg.Channels[channel].AliasGroups, groupName)
 		return success
 	}
 
@@ -277,7 +277,7 @@ func (a *DelAliasGroup) handleAlgDel(cfg *config.Config, text *domain.MessageTex
 	removed, notFound := make([]string, 0, len(words)), make([]string, 0, len(words))
 	for _, word := range words {
 		if _, ok := group.Aliases[word]; ok {
-			delete(cfg.AliasGroups[groupName].Aliases, word)
+			delete(cfg.Channels[channel].AliasGroups[groupName].Aliases, word)
 			removed = append(removed, word)
 		} else {
 			notFound = append(notFound, word)
@@ -292,11 +292,11 @@ type OnOffAliasGroup struct {
 	template ports.TemplatePort
 }
 
-func (a *OnOffAliasGroup) Execute(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
-	return a.handleAlgOnOff(cfg, text)
+func (a *OnOffAliasGroup) Execute(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
+	return a.handleAlgOnOff(cfg, channel, text)
 }
 
-func (a *OnOffAliasGroup) handleAlgOnOff(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
+func (a *OnOffAliasGroup) handleAlgOnOff(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
 	matches := a.re.FindStringSubmatch(text.Text()) // !am alg on/off <название_группы>
 	if len(matches) != 3 {
 		return incorrectSyntax
@@ -305,11 +305,11 @@ func (a *OnOffAliasGroup) handleAlgOnOff(cfg *config.Config, text *domain.Messag
 	state := strings.ToLower(strings.TrimSpace(matches[1]))
 	groupName := strings.TrimSpace(matches[2])
 
-	if _, exists := cfg.AliasGroups[groupName]; !exists {
+	if _, exists := cfg.Channels[channel].AliasGroups[groupName]; !exists {
 		return notFoundAliasGroup
 	}
 
-	cfg.AliasGroups[groupName].Enabled = state == "on"
-	a.template.Aliases().Update(cfg.Aliases, cfg.AliasGroups, cfg.GlobalAliases)
+	cfg.Channels[channel].AliasGroups[groupName].Enabled = state == "on"
+	a.template.Aliases().Update(cfg.Channels[channel].Aliases, cfg.Channels[channel].AliasGroups, cfg.GlobalAliases)
 	return success
 }

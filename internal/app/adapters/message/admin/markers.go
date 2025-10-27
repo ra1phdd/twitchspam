@@ -20,15 +20,15 @@ type AddMarker struct {
 	username string
 }
 
-func (m *AddMarker) Execute(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
-	return m.handleMarkersAdd(cfg, text, m.username)
+func (m *AddMarker) Execute(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
+	return m.handleMarkersAdd(cfg, channel, text)
 }
 
 func (m *AddMarker) SetUsername(username string) {
 	m.username = username
 }
 
-func (m *AddMarker) handleMarkersAdd(cfg *config.Config, text *domain.MessageText, username string) *ports.AnswerType {
+func (m *AddMarker) handleMarkersAdd(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
 	if !m.stream.IsLive() {
 		return streamOff
 	}
@@ -39,9 +39,9 @@ func (m *AddMarker) handleMarkersAdd(cfg *config.Config, text *domain.MessageTex
 		return nonParametr
 	}
 
-	userKey := username + "_" + m.stream.ChannelID()
-	if _, ok := cfg.Markers[userKey]; !ok {
-		cfg.Markers[userKey] = make(map[string][]*config.Markers)
+	userKey := m.username + "_" + m.stream.ChannelID()
+	if _, ok := cfg.Channels[channel].Markers[userKey]; !ok {
+		cfg.Channels[channel].Markers[userKey] = make(map[string][]*config.Markers)
 	}
 
 	s, err := m.api.GetLiveStreams([]string{m.stream.ChannelID()})
@@ -61,7 +61,7 @@ func (m *AddMarker) handleMarkersAdd(cfg *config.Config, text *domain.MessageTex
 	}
 
 	markerName := strings.TrimSpace(matches[1])
-	cfg.Markers[userKey][markerName] = append(cfg.Markers[userKey][markerName], marker)
+	cfg.Channels[channel].Markers[userKey][markerName] = append(cfg.Channels[channel].Markers[userKey][markerName], marker)
 	return success
 }
 
@@ -71,27 +71,27 @@ type ClearMarker struct {
 	username string
 }
 
-func (m *ClearMarker) Execute(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
-	return m.handleMarkersClear(cfg, text, m.username)
+func (m *ClearMarker) Execute(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
+	return m.handleMarkersClear(cfg, channel, text)
 }
 
 func (m *ClearMarker) SetUsername(username string) {
 	m.username = username
 }
 
-func (m *ClearMarker) handleMarkersClear(cfg *config.Config, text *domain.MessageText, username string) *ports.AnswerType {
+func (m *ClearMarker) handleMarkersClear(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
 	matches := m.re.FindStringSubmatch(text.Text()) // !am mark clear <имя маркера> или !am mark clear
 	if len(matches) != 2 {
 		return nonParametr
 	}
 
-	userKey := username + "_" + m.stream.ChannelID()
+	userKey := m.username + "_" + m.stream.ChannelID()
 	if matches[1] == "" {
-		delete(cfg.Markers, userKey)
+		delete(cfg.Channels[channel].Markers, userKey)
 		return success
 	}
 
-	userMarkers, ok := cfg.Markers[userKey]
+	userMarkers, ok := cfg.Channels[channel].Markers[userKey]
 	if !ok {
 		return &ports.AnswerType{
 			Text:    []string{"маркер не найден!"},
@@ -111,16 +111,16 @@ type ListMarker struct {
 	username string
 }
 
-func (m *ListMarker) Execute(cfg *config.Config, text *domain.MessageText) *ports.AnswerType {
-	return m.handleMarkersList(cfg, text, m.username)
+func (m *ListMarker) Execute(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
+	return m.handleMarkersList(cfg, channel, text)
 }
 
 func (m *ListMarker) SetUsername(username string) {
 	m.username = username
 }
 
-func (m *ListMarker) handleMarkersList(cfg *config.Config, text *domain.MessageText, username string) *ports.AnswerType {
-	userMarkers, ok := cfg.Markers[username+"_"+m.stream.ChannelID()]
+func (m *ListMarker) handleMarkersList(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
+	userMarkers, ok := cfg.Channels[channel].Markers[m.username+"_"+m.stream.ChannelID()]
 	if !ok || len(userMarkers) == 0 {
 		return &ports.AnswerType{
 			Text:    []string{"маркеры не найдены!"},

@@ -15,7 +15,7 @@ import (
 func TestEmoteStats(t *testing.T) {
 	t.Parallel()
 
-	manager, err := config.New("../../../../config.json")
+	manager, err := config.New()
 	if err != nil {
 		t.Fatal(err)
 	}
