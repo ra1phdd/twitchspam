@@ -88,11 +88,18 @@ func (n *NukeTemplate) Cancel() {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 
+	if n.nuke == nil {
+		return
+	}
+
 	if n.timer != nil {
 		n.timer.Stop()
 		n.timer = nil
 	}
-	n.nuke.cancel()
+
+	if n.nuke.cancel != nil {
+		n.nuke.cancel()
+	}
 
 	n.oldNuke = n.nuke
 	n.nuke = nil

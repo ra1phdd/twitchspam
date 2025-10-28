@@ -1,4 +1,5 @@
 configs/
+configs/channels/
 logs/
 .idea/
 docs/public

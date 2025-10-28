@@ -121,6 +121,18 @@ func isInvisibleRune(r rune) bool {
 	}
 }
 
+func removeInvisibleRune(s string) string {
+	var b strings.Builder
+	b.Grow(len(s))
+
+	for _, r := range s {
+		if isInvisibleRune(r) {
+			continue
+		}
+	}
+	return b.String()
+}
+
 func removePunctuation(s string) string {
 	var b strings.Builder
 	b.Grow(len(s))
@@ -212,8 +224,16 @@ func (m *MessageText) Text(opts ...TextOptionFuncWithID) string {
 	}
 
 	result := m.Original
+	isRemovePunctuation := false
 	for _, opt := range opts {
+		if opt.ID == 2 {
+			isRemovePunctuation = true
+		}
 		result = opt.Fn(result)
+	}
+
+	if !isRemovePunctuation {
+		result = removeInvisibleRune(result)
 	}
 
 	m.cacheText[key] = result
@@ -237,4 +257,24 @@ func (m *MessageText) Words(opts ...TextOptionFuncWithID) []string {
 	result := strings.Fields(m.Text(opts...))
 	m.cacheWords[key] = result
 	return result
+}
+
+func HasDoubleLetters(s string) bool {
+	var prev rune
+	for _, r := range s {
+		if prev == r {
+			return true
+		}
+		prev = r
+	}
+	return false
+}
+
+func HasSpecialSymbols(s string) bool {
+	for _, r := range s {
+		if !unicode.IsLetter(r) && !unicode.IsDigit(r) && r != ' ' {
+			return true
+		}
+	}
+	return false
 }

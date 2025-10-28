@@ -166,8 +166,8 @@ func (t *MwordTemplate) matchMwordRule(msg *domain.ChatMessage, word string, re 
 		return false
 	}
 
-	var text string
-	var words []string
+	text := msg.Message.Text.Text(domain.LowerOption, domain.RemovePunctuationOption, domain.RemoveDuplicateLettersOption)
+	words := msg.Message.Text.Words(domain.LowerOption, domain.RemovePunctuationOption, domain.RemoveDuplicateLettersOption)
 	if opts != nil {
 		if opts.NoVip != nil && *opts.NoVip && msg.Chatter.IsVip {
 			return false
@@ -178,7 +178,7 @@ func (t *MwordTemplate) matchMwordRule(msg *domain.ChatMessage, word string, re 
 		if opts.IsFirst != nil && *opts.IsFirst && !msg.Message.IsFirst() {
 			return false
 		}
-		if opts.OneWord != nil && *opts.OneWord && !t.CheckOneWord(msg.Message.Text.Words(domain.LowerOption, domain.RemovePunctuationOption, domain.RemoveDuplicateLettersOption)) {
+		if opts.OneWord != nil && *opts.OneWord && !t.CheckOneWord(words) {
 			return false
 		}
 

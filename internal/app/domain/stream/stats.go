@@ -60,6 +60,33 @@ func newStats(channelName string, fs ports.FileServerPort, cache ports.CachePort
 
 	if stats, ok := cache.Get(channelName); ok {
 		s.stats = stats
+
+		var countBans, countTimeouts, countDeletes, countMessages int
+		for _, v := range s.stats.CountMessages {
+			countMessages += v
+		}
+		for _, v := range s.stats.CountDeletes {
+			countDeletes += v
+		}
+		for _, v := range s.stats.CountTimeouts {
+			countTimeouts += v
+		}
+		for _, v := range s.stats.CountBans {
+			countBans += v
+		}
+
+		var avgViewers float64
+		if s.stats.Online.Count > 0 {
+			avgViewers = math.Round(float64(s.stats.Online.SumViewers) / float64(s.stats.Online.Count))
+		}
+
+		metrics.StreamStartTime.With(prometheus.Labels{"channel": s.channelName}).Set(float64(stats.StartStreamTime.Unix()))
+		metrics.StreamEndTime.With(prometheus.Labels{"channel": s.channelName}).Set(float64(stats.EndStreamTime.Unix()))
+		metrics.OnlineViewers.With(prometheus.Labels{"channel": s.channelName}).Set(avgViewers)
+		metrics.MessagesPerStream.With(prometheus.Labels{"channel": s.channelName}).Add(float64(countMessages))
+		metrics.ModerationActions.With(prometheus.Labels{"channel": s.channelName, "action": "delete"}).Add(float64(countDeletes))
+		metrics.ModerationActions.With(prometheus.Labels{"channel": s.channelName, "action": "timeout"}).Add(float64(countTimeouts))
+		metrics.ModerationActions.With(prometheus.Labels{"channel": s.channelName, "action": "ban"}).Add(float64(countBans))
 	}
 
 	go func() {

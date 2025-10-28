@@ -57,7 +57,7 @@ func (c *Checker) Check(msg *domain.ChatMessage, checkSpam bool) *ports.CheckerA
 	)
 
 	if action := c.checkBypass(msg); action != nil {
-		c.log.Info("User bypassed check", slog.String("user", msg.Chatter.Username))
+		c.log.Debug("User bypassed check", slog.String("user", msg.Chatter.Username))
 		return action
 	}
 
@@ -120,11 +120,13 @@ func (c *Checker) Check(msg *domain.ChatMessage, checkSpam bool) *ports.CheckerA
 	if checkSpam {
 		startProcessing = time.Now()
 		if action := c.checkSpam(msg); action != nil {
-			c.log.Info("Message flagged as spam",
-				slog.String("user", msg.Chatter.Username),
-				slog.String("message", msg.Message.Text.Text()),
-				slog.Any("action", action),
-			)
+			if action.Type != None {
+				c.log.Info("Message flagged as spam",
+					slog.String("user", msg.Chatter.Username),
+					slog.String("message", msg.Message.Text.Text()),
+					slog.Any("action", action),
+				)
+			}
 			return action
 		}
 		endProcessing = time.Since(startProcessing).Seconds()
@@ -417,7 +419,7 @@ func (c *Checker) calculateSpamMessages(msg *domain.ChatMessage, settings config
 	})
 
 	if len(timestamps) < 2 {
-		c.log.Info("Finished calculating spam messages",
+		c.log.Debug("Finished calculating spam messages",
 			slog.String("user", msg.Chatter.Username),
 			slog.String("message", msg.Message.Text.Text()),
 			slog.Int("spam_count", countSpam),
@@ -428,6 +430,10 @@ func (c *Checker) calculateSpamMessages(msg *domain.ChatMessage, settings config
 	var total time.Duration
 	for i := 1; i < len(timestamps); i++ {
 		diff := timestamps[i].Sub(timestamps[i-1])
+		if diff < 0 {
+			diff = -diff
+		}
+
 		total += diff
 		c.log.Trace("Adding interval between spam messages",
 			slog.Time("prev_timestamp", timestamps[i-1]),
@@ -437,7 +443,7 @@ func (c *Checker) calculateSpamMessages(msg *domain.ChatMessage, settings config
 	}
 
 	avgGap := total / time.Duration(len(timestamps)-1)
-	c.log.Info("Finished calculating spam messages",
+	c.log.Debug("Finished calculating spam messages",
 		slog.String("user", msg.Chatter.Username),
 		slog.String("message", msg.Message.Text.Text()),
 		slog.Int("spam_count", countSpam),
@@ -599,8 +605,7 @@ func (c *Checker) matchExceptRule(msg *domain.ChatMessage, word string, re *rege
 	text := msg.Message.Text.Text(domain.LowerOption, domain.RemovePunctuationOption, domain.RemoveDuplicateLettersOption)
 	words := msg.Message.Text.Words(domain.LowerOption, domain.RemovePunctuationOption, domain.RemoveDuplicateLettersOption)
 
-	if (opts == nil || opts.OneWord == nil || *opts.OneWord) &&
-		c.template.Mword().CheckOneWord(msg.Message.Text.Words(domain.LowerOption, domain.RemovePunctuationOption, domain.RemoveDuplicateLettersOption)) {
+	if (opts == nil || opts.OneWord == nil || *opts.OneWord) && c.template.Mword().CheckOneWord(words) {
 		return false
 	}
 
@@ -612,27 +617,26 @@ func (c *Checker) matchExceptRule(msg *domain.ChatMessage, word string, re *rege
 			return false
 		}
 
-		switch {
-		case opts.CaseSensitive != nil && opts.NoRepeat != nil && *opts.CaseSensitive && *opts.NoRepeat:
-			text = msg.Message.Text.Text()
-			words = msg.Message.Text.Words()
-		case opts.NoRepeat != nil && *opts.NoRepeat:
-			text = msg.Message.Text.Text(domain.LowerOption)
-			words = msg.Message.Text.Words(domain.LowerOption)
-		case opts.CaseSensitive != nil && *opts.CaseSensitive:
-			text = msg.Message.Text.Text(domain.RemovePunctuationOption, domain.RemoveDuplicateLettersOption)
-			words = msg.Message.Text.Words(domain.RemovePunctuationOption, domain.RemoveDuplicateLettersOption)
-		case opts.Contains != nil && *opts.Contains:
-			text = msg.Message.Text.Text(domain.LowerOption)
-			return strings.Contains(text, word)
+		textOpts := make([]domain.TextOptionFuncWithID, 0, 3)
+		if opts.SavePunctuation != nil && !*opts.SavePunctuation {
+			textOpts = append(textOpts, domain.RemovePunctuationOption)
 		}
+		if opts.NoRepeat == nil || !*opts.NoRepeat {
+			textOpts = append(textOpts, domain.RemoveDuplicateLettersOption)
+		}
+		if opts.CaseSensitive == nil || !*opts.CaseSensitive {
+			textOpts = append(textOpts, domain.LowerOption)
+		}
+
+		text = msg.Message.Text.Text(textOpts...)
+		words = msg.Message.Text.Words(textOpts...)
 	}
 
 	if re != nil {
 		return re.MatchString(text)
 	}
 
-	if strings.Contains(word, " ") {
+	if (opts != nil && opts.Contains != nil && *opts.Contains) || strings.Contains(word, " ") {
 		return strings.Contains(text, word)
 	}
 	return slices.Contains(words, word)

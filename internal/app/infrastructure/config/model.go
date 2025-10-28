@@ -157,12 +157,13 @@ type Punishment struct {
 }
 
 type ExceptOptions struct {
-	NoSub         *bool `json:"no_sub"`
-	NoVip         *bool `json:"no_vip"`
-	NoRepeat      *bool `json:"norepeat"`
-	OneWord       *bool `json:"one_word"`
-	Contains      *bool `json:"contains"`
-	CaseSensitive *bool `json:"case_sensitive"`
+	NoSub           *bool `json:"no_sub"`
+	NoVip           *bool `json:"no_vip"`
+	NoRepeat        *bool `json:"norepeat"`
+	OneWord         *bool `json:"one_word"`
+	Contains        *bool `json:"contains"`
+	CaseSensitive   *bool `json:"case_sensitive"`
+	SavePunctuation *bool `json:"save_punctuation"`
 }
 
 type MwordOptions struct {

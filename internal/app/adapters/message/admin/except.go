@@ -107,11 +107,24 @@ func (e *AddExcept) handleExceptAdd(cfg *config.Config, channel string, text *do
 			continue
 		}
 
+		var options *config.ExceptOptions
+		if domain.HasDoubleLetters(word) || domain.HasSpecialSymbols(word) {
+			options = &config.ExceptOptions{}
+
+			trueVal := true
+			if domain.HasDoubleLetters(word) {
+				options.NoRepeat = &trueVal
+			}
+			if domain.HasSpecialSymbols(word) {
+				options.SavePunctuation = &trueVal
+			}
+		}
+
 		exSettings[word] = &config.ExceptionsSettings{
 			Enabled:      true,
 			MessageLimit: messageLimit,
 			Punishments:  punishments,
-			Options:      e.template.Options().MergeExcept(nil, opts),
+			Options:      e.template.Options().MergeExcept(options, opts),
 		}
 		added = append(added, word)
 	}

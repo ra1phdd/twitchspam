@@ -85,9 +85,22 @@ func (m *AddMword) handleMwAdd(cfg *config.Config, channel string, text *domain.
 			continue
 		}
 
+		var options *config.MwordOptions
+		if domain.HasDoubleLetters(word) || domain.HasSpecialSymbols(word) {
+			options = &config.MwordOptions{}
+
+			trueVal := true
+			if domain.HasDoubleLetters(word) {
+				options.NoRepeat = &trueVal
+			}
+			if domain.HasSpecialSymbols(word) {
+				options.SavePunctuation = &trueVal
+			}
+		}
+
 		cfg.Channels[channel].Mword = append(cfg.Channels[channel].Mword, config.Mword{
 			Punishments: punishments,
-			Options:     m.template.Options().MergeMword(nil, opts),
+			Options:     m.template.Options().MergeMword(options, opts),
 			Word:        word,
 		})
 		added = append(added, word)
@@ -327,8 +340,22 @@ func (m *AddMwordGroup) handleMwgAdd(cfg *config.Config, channel string, text *d
 			continue
 		}
 
+		var options *config.MwordOptions
+		if domain.HasDoubleLetters(word) || domain.HasSpecialSymbols(word) {
+			options = &config.MwordOptions{}
+
+			trueVal := true
+			if domain.HasDoubleLetters(word) {
+				options.NoRepeat = &trueVal
+			}
+			if domain.HasSpecialSymbols(word) {
+				options.SavePunctuation = &trueVal
+			}
+		}
+
 		cfg.Channels[channel].MwordGroup[groupName].Words = append(cfg.Channels[channel].MwordGroup[groupName].Words, config.Mword{
-			Word: word,
+			Word:    word,
+			Options: options,
 		})
 		added = append(added, word)
 	}
