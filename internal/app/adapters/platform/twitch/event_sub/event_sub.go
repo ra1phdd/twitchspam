@@ -13,7 +13,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-	"twitchspam/internal/app/adapters/metrics"
 	"twitchspam/internal/app/domain"
 	"twitchspam/internal/app/infrastructure/config"
 	"twitchspam/internal/app/ports"
@@ -190,10 +189,7 @@ func (es *EventSub) handleMessage(ctx context.Context, msgBytes []byte) {
 			es.log.Debug("NewTwitch message", slog.String("username", msgEvent.ChatterUserName), slog.String("text", msgEvent.Message.Text))
 
 			if c, ok := es.channels[msgEvent.BroadcasterUserID]; ok {
-				startProcessing := time.Now()
 				c.message.Check(es.convertMap(msgEvent))
-				endProcessing := time.Since(startProcessing).Seconds()
-				metrics.MessageProcessingTime.Observe(endProcessing)
 			}
 		case "automod.message.hold":
 			var am AutomodHoldEvent
@@ -220,12 +216,7 @@ func (es *EventSub) handleMessage(ctx context.Context, msgBytes []byte) {
 			}
 
 			if c, ok := es.channels[am.BroadcasterUserID]; ok {
-				go func() {
-					startProcessing := time.Now()
-					c.message.CheckAutomod(msg)
-					endProcessing := time.Since(startProcessing).Seconds()
-					metrics.MessageProcessingTime.Observe(endProcessing)
-				}()
+				go c.message.CheckAutomod(msg)
 			}
 		case "stream.online":
 			var sm StreamMessageEvent
