@@ -42,7 +42,7 @@ func (m *Manager) validate(cfg *Config) error {
 		return errors.New("limiter.requests and limiter.per must both be set or both be zero")
 	}
 
-	validPunishments := map[string]bool{"delete": true, "timeout": true, "warn": true, "ban": true}
+	validPunishments := map[string]bool{"none": true, "delete": true, "timeout": true, "warn": true, "ban": true}
 	for _, channel := range cfg.Channels {
 		channel.WindowSecs = 180
 

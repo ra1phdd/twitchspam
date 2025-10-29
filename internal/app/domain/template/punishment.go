@@ -22,6 +22,10 @@ func (p *PunishmentTemplate) Parse(punishment string, allowInherit bool) (config
 		return config.Punishment{Action: "delete"}, nil
 	}
 
+	if punishment == "none" {
+		return config.Punishment{Action: "none"}, nil
+	}
+
 	if allowInherit && punishment == "*" {
 		return config.Punishment{Action: "inherit"}, nil
 	}
@@ -64,6 +68,8 @@ func (p *PunishmentTemplate) FormatAll(punishments []config.Punishment) []string
 func (p *PunishmentTemplate) Format(punishment config.Punishment) string {
 	var result string
 	switch punishment.Action {
+	case "none":
+		result = "скип"
 	case "delete":
 		result = "удаление сообщения"
 	case "timeout":

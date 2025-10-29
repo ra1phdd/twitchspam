@@ -108,7 +108,7 @@ func (c *Checker) Check(msg *message.ChatMessage, checkSpam bool) *ports.Checker
 	metrics.ModulesProcessingTime.With(prometheus.Labels{"module": "ads"}).Observe(endProcessing)
 
 	startProcessing = time.Now()
-	if action := c.checkMwords(msg); action != nil {
+	if action := c.checkMwords(msg); action != nil && action.Type != None {
 		c.log.Info("Message contains muteword",
 			slog.String("user", msg.Chatter.Username),
 			slog.String("message", msg.Message.Text.Text()),

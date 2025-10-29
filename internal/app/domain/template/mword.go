@@ -103,10 +103,11 @@ func (t *MwordTemplate) Update(mwords []config.Mword, mwordGroups map[string]*co
 		}
 	}
 
-	hasEnabledOptions := func(o *config.MwordOptions) bool {
+	hasEnabledOptions := func(o *config.MwordOptions, ps []config.Punishment) bool {
 		if o == nil {
 			return false
 		}
+
 		return (o.IsFirst != nil && *o.IsFirst) ||
 			(o.NoSub != nil && *o.NoSub) ||
 			(o.NoVip != nil && *o.NoVip) ||
@@ -117,7 +118,24 @@ func (t *MwordTemplate) Update(mwords []config.Mword, mwordGroups map[string]*co
 	}
 
 	sort.Slice(mws, func(i, j int) bool {
-		return hasEnabledOptions(mws[i].Options) && !hasEnabledOptions(mws[j].Options)
+		hasNoneI, hasNoneJ := false, false
+		for _, p := range mws[i].Punishments {
+			if p.Action == "none" {
+				hasNoneI = true
+				break
+			}
+		}
+		for _, p := range mws[j].Punishments {
+			if p.Action == "none" {
+				hasNoneJ = true
+				break
+			}
+		}
+		if hasNoneI != hasNoneJ {
+			return hasNoneI
+		}
+
+		return hasEnabledOptions(mws[i].Options, mws[i].Punishments) && !hasEnabledOptions(mws[j].Options, mws[j].Punishments)
 	})
 
 	t.mwords = mws
