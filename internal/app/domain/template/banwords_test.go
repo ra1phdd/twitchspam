@@ -1,8 +1,8 @@
 package template_test
 
 import (
-	"strings"
 	"testing"
+	"twitchspam/internal/app/domain/message"
 	"twitchspam/internal/app/domain/template"
 	"twitchspam/internal/app/infrastructure/config"
 )
@@ -53,18 +53,23 @@ func TestBanwords_CheckMessage(t *testing.T) {
 		{"Английское совпадение (niga)", "you niga", true},
 		{"Transliterated совпадение", "pidor", true},
 		{"Пидарас совпадение", "Пидарас", true},
+		{"Check niggers", "Каша пидорас", true},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			wordsOriginal := strings.Fields(tt.input)
-			wordsLower := strings.Fields(strings.ToLower(tt.input))
+			msg := &message.Text{Original: tt.input}
 
-			got := bt.CheckMessage(wordsOriginal, wordsLower)
+			got := bt.CheckMessage(
+				msg.Words(message.RemovePunctuationOption, message.RemoveDuplicateLettersOption),
+				msg.Words(message.LowerOption, message.RemovePunctuationOption, message.RemoveDuplicateLettersOption),
+			)
 			if got != tt.wantBanned {
-				t.Errorf("CheckMessage(%q) = %v, want %v", tt.input, got, tt.wantBanned)
+				t.Errorf("CheckMessage(%q) = %v, want %v; wordsOrig = %s; wordsLower = %s", tt.input, got, tt.wantBanned,
+					msg.Words(message.RemovePunctuationOption, message.RemoveDuplicateLettersOption),
+					msg.Words(message.LowerOption, message.RemovePunctuationOption, message.RemoveDuplicateLettersOption))
 			}
 		})
 	}

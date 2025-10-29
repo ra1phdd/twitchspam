@@ -57,7 +57,7 @@ func (t *Text) ReplaceOriginal(text string) {
 type TextOption uint64
 
 const (
-	LowerOption TextOption = iota
+	LowerOption TextOption = iota + 1
 	RemovePunctuationOption
 	RemoveDuplicateLettersOption
 )
