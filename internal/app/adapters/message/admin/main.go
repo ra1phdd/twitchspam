@@ -14,6 +14,7 @@ import (
 	"twitchspam/internal/app/adapters/metrics"
 	"twitchspam/internal/app/adapters/platform/twitch/api"
 	"twitchspam/internal/app/domain"
+	"twitchspam/internal/app/domain/message"
 	"twitchspam/internal/app/infrastructure/config"
 	"twitchspam/internal/app/infrastructure/storage"
 	"twitchspam/internal/app/ports"
@@ -22,7 +23,7 @@ import (
 
 type Ping struct{}
 
-func (p *Ping) Execute(_ *config.Config, _ string, _ *domain.MessageText) *ports.AnswerType {
+func (p *Ping) Execute(_ *config.Config, _ string, _ *message.Text) *ports.AnswerType {
 	return p.handlePing()
 }
 
@@ -48,7 +49,7 @@ type OnOff struct {
 	template ports.TemplatePort
 }
 
-func (o *OnOff) Execute(cfg *config.Config, channel string, _ *domain.MessageText) *ports.AnswerType {
+func (o *OnOff) Execute(cfg *config.Config, channel string, _ *message.Text) *ports.AnswerType {
 	return o.handleOnOff(cfg, channel)
 }
 
@@ -65,11 +66,11 @@ type Game struct {
 	stream ports.StreamPort
 }
 
-func (g *Game) Execute(_ *config.Config, _ string, text *domain.MessageText) *ports.AnswerType {
+func (g *Game) Execute(_ *config.Config, _ string, text *message.Text) *ports.AnswerType {
 	return g.handleGame(text)
 }
 
-func (g *Game) handleGame(text *domain.MessageText) *ports.AnswerType {
+func (g *Game) handleGame(text *message.Text) *ports.AnswerType {
 	matches := g.re.FindStringSubmatch(text.Text()) // !am game <игра>
 	if len(matches) != 2 {
 		return nonParametr
@@ -95,7 +96,7 @@ type Status struct {
 	template ports.TemplatePort
 }
 
-func (s *Status) Execute(cfg *config.Config, channel string, _ *domain.MessageText) *ports.AnswerType {
+func (s *Status) Execute(cfg *config.Config, channel string, _ *message.Text) *ports.AnswerType {
 	return s.handleStatus(cfg, channel)
 }
 
@@ -125,7 +126,7 @@ type Reset struct {
 	manager *config.Manager
 }
 
-func (r *Reset) Execute(cfg *config.Config, channel string, _ *domain.MessageText) *ports.AnswerType {
+func (r *Reset) Execute(cfg *config.Config, channel string, _ *message.Text) *ports.AnswerType {
 	return r.handleReset(cfg, channel)
 }
 
@@ -138,11 +139,11 @@ type Say struct {
 	re *regexp.Regexp
 }
 
-func (s *Say) Execute(_ *config.Config, _ string, text *domain.MessageText) *ports.AnswerType {
+func (s *Say) Execute(_ *config.Config, _ string, text *message.Text) *ports.AnswerType {
 	return s.handleSay(text)
 }
 
-func (s *Say) handleSay(text *domain.MessageText) *ports.AnswerType {
+func (s *Say) handleSay(text *message.Text) *ports.AnswerType {
 	matches := s.re.FindStringSubmatch(text.Text()) // !am say <текст>
 	if len(matches) != 2 {
 		return nonParametr
@@ -158,11 +159,11 @@ type Spam struct {
 	re *regexp.Regexp
 }
 
-func (s *Spam) Execute(_ *config.Config, _ string, text *domain.MessageText) *ports.AnswerType {
+func (s *Spam) Execute(_ *config.Config, _ string, text *message.Text) *ports.AnswerType {
 	return s.handleSpam(text)
 }
 
-func (s *Spam) handleSpam(text *domain.MessageText) *ports.AnswerType {
+func (s *Spam) handleSpam(text *message.Text) *ports.AnswerType {
 	matches := s.re.FindStringSubmatch(text.Text()) // !am spam <кол-во> <текст>
 	if len(matches) != 3 {
 		return nonParametr
@@ -202,11 +203,11 @@ type Category struct {
 	Name string `json:"name"`
 }
 
-func (c *SetCategory) Execute(_ *config.Config, _ string, text *domain.MessageText) *ports.AnswerType {
+func (c *SetCategory) Execute(_ *config.Config, _ string, text *message.Text) *ports.AnswerType {
 	return c.handleSetCategory(text)
 }
 
-func (c *SetCategory) handleSetCategory(text *domain.MessageText) *ports.AnswerType {
+func (c *SetCategory) handleSetCategory(text *message.Text) *ports.AnswerType {
 	matches := c.re.FindStringSubmatch(text.Text()) // !am cat <название категории>
 	if len(matches) != 2 {
 		return nonParametr
@@ -230,7 +231,7 @@ func (c *SetCategory) handleSetCategory(text *domain.MessageText) *ports.AnswerT
 	}
 
 	var id, name string
-	key := text.Text(domain.RemovePunctuationOption)
+	key := text.Text(message.RemovePunctuationOption)
 	if cat, ok := c.cacheCategories.Get(key); ok {
 		id, name = cat.ID, cat.Name
 		c.log.Info("Category found in cache", slog.String("id", id), slog.String("name", name))
@@ -287,11 +288,11 @@ type SetTitle struct {
 	api    ports.APIPort
 }
 
-func (t *SetTitle) Execute(_ *config.Config, _ string, text *domain.MessageText) *ports.AnswerType {
+func (t *SetTitle) Execute(_ *config.Config, _ string, text *message.Text) *ports.AnswerType {
 	return t.handleSetTitle(text)
 }
 
-func (t *SetTitle) handleSetTitle(text *domain.MessageText) *ports.AnswerType {
+func (t *SetTitle) handleSetTitle(text *message.Text) *ports.AnswerType {
 	matches := t.re.FindStringSubmatch(text.Text()) // !am title <название>
 	if len(matches) != 2 {
 		return nonParametr

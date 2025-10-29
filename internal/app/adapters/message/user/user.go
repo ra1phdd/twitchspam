@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 	"twitchspam/internal/app/adapters/metrics"
-	"twitchspam/internal/app/domain"
+	"twitchspam/internal/app/domain/message"
 	"twitchspam/internal/app/infrastructure/config"
 	"twitchspam/internal/app/ports"
 	"twitchspam/pkg/logger"
@@ -38,7 +38,7 @@ func New(log logger.Logger, manager *config.Manager, stream ports.StreamPort, te
 	}
 }
 
-func (u *User) FindMessages(msg *domain.ChatMessage) *ports.AnswerType {
+func (u *User) FindMessages(msg *message.ChatMessage) *ports.AnswerType {
 	cfg := u.manager.Get()
 	u.ensureUserLimiter(msg.Chatter.Username, cfg.Limiter)
 
@@ -75,8 +75,8 @@ func (u *User) FindMessages(msg *domain.ChatMessage) *ports.AnswerType {
 	return nil
 }
 
-func (u *User) handleStats(msg *domain.ChatMessage) *ports.AnswerType {
-	if !strings.HasPrefix(msg.Message.Text.Text(domain.LowerOption), "!stats") {
+func (u *User) handleStats(msg *message.ChatMessage) *ports.AnswerType {
+	if !strings.HasPrefix(msg.Message.Text.Text(message.LowerOption), "!stats") {
 		u.log.Trace("Message does not start with !stats, skipping", slog.String("username", msg.Chatter.Username))
 		return nil
 	}
@@ -92,7 +92,7 @@ func (u *User) handleStats(msg *domain.ChatMessage) *ports.AnswerType {
 	}
 
 	target := msg.Chatter.Username
-	words := msg.Message.Text.Words(domain.LowerOption)
+	words := msg.Message.Text.Words(message.LowerOption)
 
 	u.log.Info("User command executed",
 		slog.String("user", msg.Chatter.Username),
@@ -117,7 +117,7 @@ func (u *User) handleStats(msg *domain.ChatMessage) *ports.AnswerType {
 	return u.stream.Stats().GetUserStats(target)
 }
 
-func (u *User) handleCommands(msg *domain.ChatMessage) *ports.AnswerType {
+func (u *User) handleCommands(msg *message.ChatMessage) *ports.AnswerType {
 	var replyUsername string
 	if msg.Reply != nil {
 		replyUsername = msg.Reply.ParentChatter.Username

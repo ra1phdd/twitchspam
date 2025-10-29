@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 	"twitchspam/internal/app/adapters/message/checker"
-	"twitchspam/internal/app/domain"
+	"twitchspam/internal/app/domain/message"
 	"twitchspam/internal/app/infrastructure/config"
 	"twitchspam/internal/app/infrastructure/storage"
 	"twitchspam/internal/app/ports"
@@ -24,11 +24,11 @@ type Nuke struct {
 	messages ports.StorePort[storage.Message]
 }
 
-func (n *Nuke) Execute(_ *config.Config, _ string, text *domain.MessageText) *ports.AnswerType {
+func (n *Nuke) Execute(_ *config.Config, _ string, text *message.Text) *ports.AnswerType {
 	return n.handleNuke(text)
 }
 
-func (n *Nuke) handleNuke(text *domain.MessageText) *ports.AnswerType {
+func (n *Nuke) handleNuke(text *message.Text) *ports.AnswerType {
 	// !am nuke <*наказание> <*длительность> <*scrollback> <слова/фразы через запятую или regex>
 	matches := n.re.FindStringSubmatch(text.Text())
 	if len(matches) != 5 {
@@ -190,7 +190,7 @@ type NukeStop struct {
 	template ports.TemplatePort
 }
 
-func (n *NukeStop) Execute(_ *config.Config, _ string, _ *domain.MessageText) *ports.AnswerType {
+func (n *NukeStop) Execute(_ *config.Config, _ string, _ *message.Text) *ports.AnswerType {
 	return n.handleNukeStop()
 }
 
@@ -205,7 +205,7 @@ type ReNuke struct {
 	template ports.TemplatePort
 }
 
-func (n *ReNuke) Execute(_ *config.Config, _ string, _ *domain.MessageText) *ports.AnswerType {
+func (n *ReNuke) Execute(_ *config.Config, _ string, _ *message.Text) *ports.AnswerType {
 	return n.handleReNuke()
 }
 

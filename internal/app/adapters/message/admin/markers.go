@@ -6,7 +6,7 @@ import (
 	"regexp"
 	"strings"
 	"time"
-	"twitchspam/internal/app/domain"
+	"twitchspam/internal/app/domain/message"
 	"twitchspam/internal/app/infrastructure/config"
 	"twitchspam/internal/app/ports"
 	"twitchspam/pkg/logger"
@@ -20,7 +20,7 @@ type AddMarker struct {
 	username string
 }
 
-func (m *AddMarker) Execute(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
+func (m *AddMarker) Execute(cfg *config.Config, channel string, text *message.Text) *ports.AnswerType {
 	return m.handleMarkersAdd(cfg, channel, text)
 }
 
@@ -28,7 +28,7 @@ func (m *AddMarker) SetUsername(username string) {
 	m.username = username
 }
 
-func (m *AddMarker) handleMarkersAdd(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
+func (m *AddMarker) handleMarkersAdd(cfg *config.Config, channel string, text *message.Text) *ports.AnswerType {
 	if !m.stream.IsLive() {
 		return streamOff
 	}
@@ -71,7 +71,7 @@ type ClearMarker struct {
 	username string
 }
 
-func (m *ClearMarker) Execute(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
+func (m *ClearMarker) Execute(cfg *config.Config, channel string, text *message.Text) *ports.AnswerType {
 	return m.handleMarkersClear(cfg, channel, text)
 }
 
@@ -79,7 +79,7 @@ func (m *ClearMarker) SetUsername(username string) {
 	m.username = username
 }
 
-func (m *ClearMarker) handleMarkersClear(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
+func (m *ClearMarker) handleMarkersClear(cfg *config.Config, channel string, text *message.Text) *ports.AnswerType {
 	matches := m.re.FindStringSubmatch(text.Text()) // !am mark clear <имя маркера> или !am mark clear
 	if len(matches) != 2 {
 		return nonParametr
@@ -111,7 +111,7 @@ type ListMarker struct {
 	username string
 }
 
-func (m *ListMarker) Execute(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
+func (m *ListMarker) Execute(cfg *config.Config, channel string, text *message.Text) *ports.AnswerType {
 	return m.handleMarkersList(cfg, channel, text)
 }
 
@@ -119,7 +119,7 @@ func (m *ListMarker) SetUsername(username string) {
 	m.username = username
 }
 
-func (m *ListMarker) handleMarkersList(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
+func (m *ListMarker) handleMarkersList(cfg *config.Config, channel string, text *message.Text) *ports.AnswerType {
 	userMarkers, ok := cfg.Channels[channel].Markers[m.username+"_"+m.stream.ChannelID()]
 	if !ok || len(userMarkers) == 0 {
 		return &ports.AnswerType{

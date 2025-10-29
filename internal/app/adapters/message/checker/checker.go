@@ -11,6 +11,7 @@ import (
 	"twitchspam/internal/app/adapters/metrics"
 	"twitchspam/internal/app/adapters/seventv"
 	"twitchspam/internal/app/domain"
+	"twitchspam/internal/app/domain/message"
 	"twitchspam/internal/app/infrastructure/config"
 	"twitchspam/internal/app/infrastructure/storage"
 	"twitchspam/internal/app/ports"
@@ -49,7 +50,7 @@ func NewCheck(log logger.Logger, cfg *config.Config, stream ports.StreamPort, te
 	}
 }
 
-func (c *Checker) Check(msg *domain.ChatMessage, checkSpam bool) *ports.CheckerAction {
+func (c *Checker) Check(msg *message.ChatMessage, checkSpam bool) *ports.CheckerAction {
 	c.log.Trace("Checker.Check called",
 		slog.String("user", msg.Chatter.Username),
 		slog.String("message", msg.Message.Text.Text()),
@@ -94,7 +95,7 @@ func (c *Checker) Check(msg *domain.ChatMessage, checkSpam bool) *ports.CheckerA
 	metrics.ModulesProcessingTime.With(prometheus.Labels{"module": "banwords"}).Observe(endProcessing)
 
 	startProcessing = time.Now()
-	if action := c.checkAds(msg.Message.Text.Text(domain.LowerOption), msg.Chatter.Username); action != nil {
+	if action := c.checkAds(msg.Message.Text.Text(message.LowerOption), msg.Chatter.Username); action != nil {
 		c.log.Info("Message detected as advertisement",
 			slog.String("user", msg.Chatter.Username),
 			slog.String("message", msg.Message.Text.Text()),
@@ -137,7 +138,7 @@ func (c *Checker) Check(msg *domain.ChatMessage, checkSpam bool) *ports.CheckerA
 	return &ports.CheckerAction{Type: None}
 }
 
-func (c *Checker) checkBypass(msg *domain.ChatMessage) *ports.CheckerAction {
+func (c *Checker) checkBypass(msg *message.ChatMessage) *ports.CheckerAction {
 	if msg.Chatter.IsBroadcaster || msg.Chatter.IsMod {
 		c.log.Debug("Bypass: user is broadcaster or mod",
 			slog.String("user", msg.Chatter.Username),
@@ -156,10 +157,10 @@ func (c *Checker) checkBypass(msg *domain.ChatMessage) *ports.CheckerAction {
 	return nil
 }
 
-func (c *Checker) checkBanwords(msg *domain.ChatMessage) *ports.CheckerAction {
+func (c *Checker) checkBanwords(msg *message.ChatMessage) *ports.CheckerAction {
 	if !c.template.Banwords().CheckMessage(
-		msg.Message.Text.Words(domain.RemovePunctuationOption, domain.RemoveDuplicateLettersOption),
-		msg.Message.Text.Words(domain.LowerOption, domain.RemovePunctuationOption, domain.RemoveDuplicateLettersOption),
+		msg.Message.Text.Words(message.RemovePunctuationOption, message.RemoveDuplicateLettersOption),
+		msg.Message.Text.Words(message.LowerOption, message.RemovePunctuationOption, message.RemoveDuplicateLettersOption),
 	) {
 		c.log.Debug("No banwords detected", slog.String("user", msg.Chatter.Username), slog.String("message", msg.Message.Text.Text()))
 		return nil
@@ -193,7 +194,7 @@ func (c *Checker) checkAds(text string, username string) *ports.CheckerAction {
 	}
 }
 
-func (c *Checker) checkMwords(msg *domain.ChatMessage) *ports.CheckerAction {
+func (c *Checker) checkMwords(msg *message.ChatMessage) *ports.CheckerAction {
 	punishments := c.template.Mword().Check(msg, c.stream.IsLive())
 	if len(punishments) == 0 {
 		c.log.Debug("No muteword violations found", slog.String("message", msg.Message.Text.Text()))
@@ -232,7 +233,7 @@ func (c *Checker) checkMwords(msg *domain.ChatMessage) *ports.CheckerAction {
 	}
 }
 
-func (c *Checker) checkSpam(msg *domain.ChatMessage) *ports.CheckerAction {
+func (c *Checker) checkSpam(msg *message.ChatMessage) *ports.CheckerAction {
 	settings := c.cfg.Channels[msg.Broadcaster.Login].Spam.SettingsDefault
 	if msg.Chatter.IsVip {
 		c.log.Trace("Applied VIP spam settings", slog.String("user", msg.Chatter.Username))
@@ -258,7 +259,7 @@ func (c *Checker) checkSpam(msg *domain.ChatMessage) *ports.CheckerAction {
 		return nil
 	}
 
-	if action := c.handleWordLength(msg.Message.Text.Words(domain.LowerOption, domain.RemovePunctuationOption, domain.RemoveDuplicateLettersOption), settings); action != nil {
+	if action := c.handleWordLength(msg.Message.Text.Words(message.LowerOption, message.RemovePunctuationOption, message.RemoveDuplicateLettersOption), settings); action != nil {
 		c.log.Info("Message exceeded max word length",
 			slog.String("user", msg.Chatter.Username),
 			slog.String("message", msg.Message.Text.Text()),
@@ -350,7 +351,7 @@ func (c *Checker) checkSpam(msg *domain.ChatMessage) *ports.CheckerAction {
 	}
 }
 
-func (c *Checker) calculateSpamMessages(msg *domain.ChatMessage, settings config.SpamSettings) (int, time.Duration) {
+func (c *Checker) calculateSpamMessages(msg *message.ChatMessage, settings config.SpamSettings) (int, time.Duration) {
 	var countSpam, gap int
 	var timestamps []time.Time
 
@@ -367,7 +368,7 @@ func (c *Checker) calculateSpamMessages(msg *domain.ChatMessage, settings config
 			return
 		}
 
-		similarity := domain.JaccardHashSimilarity(msg.Message.Text.Words(domain.RemovePunctuationOption), item.Data.Message.Text.Words(domain.RemovePunctuationOption))
+		similarity := domain.JaccardHashSimilarity(msg.Message.Text.Words(message.RemovePunctuationOption), item.Data.Message.Text.Words(message.RemovePunctuationOption))
 		c.log.Trace("Calculated similarity with previous message",
 			slog.String("user", msg.Chatter.Username),
 			slog.String("message", msg.Message.Text.Text()),
@@ -384,7 +385,7 @@ func (c *Checker) calculateSpamMessages(msg *domain.ChatMessage, settings config
 			)
 
 			if !c.cfg.Channels[msg.Broadcaster.Login].Spam.SettingsEmotes.Enabled {
-				_, isOnlyEmotes := c.sevenTV.EmoteStats(item.Data.Message.Text.Words(domain.RemovePunctuationOption))
+				_, isOnlyEmotes := c.sevenTV.EmoteStats(item.Data.Message.Text.Words(message.RemovePunctuationOption))
 				if isOnlyEmotes || item.Data.Message.EmoteOnly {
 					c.log.Trace("Skipping message because it contains only emotes",
 						slog.String("user", msg.Chatter.Username),
@@ -472,8 +473,8 @@ func (c *Checker) handleWordLength(words []string, settings config.SpamSettings)
 	return nil
 }
 
-func (c *Checker) handleEmotes(msg *domain.ChatMessage, countSpam int) *ports.CheckerAction {
-	count, isOnlyEmotes := c.sevenTV.EmoteStats(msg.Message.Text.Words(domain.RemovePunctuationOption))
+func (c *Checker) handleEmotes(msg *message.ChatMessage, countSpam int) *ports.CheckerAction {
+	count, isOnlyEmotes := c.sevenTV.EmoteStats(msg.Message.Text.Words(message.RemovePunctuationOption))
 	emoteOnly := msg.Message.EmoteOnly || isOnlyEmotes
 
 	c.log.Debug("Checking emotes in message",
@@ -558,7 +559,7 @@ func (c *Checker) handleEmotes(msg *domain.ChatMessage, countSpam int) *ports.Ch
 	}
 }
 
-func (c *Checker) handleExceptions(msg *domain.ChatMessage, countSpam int, typeSpam string) *ports.CheckerAction {
+func (c *Checker) handleExceptions(msg *message.ChatMessage, countSpam int, typeSpam string) *ports.CheckerAction {
 	exceptions, subKey := c.cfg.Channels[msg.Broadcaster.Login].Spam.Exceptions, "except_spam"
 	if typeSpam == "emote" {
 		exceptions, subKey = c.cfg.Channels[msg.Broadcaster.Login].Spam.SettingsEmotes.Exceptions, "except_emote"
@@ -597,13 +598,13 @@ func (c *Checker) handleExceptions(msg *domain.ChatMessage, countSpam int, typeS
 	return nil
 }
 
-func (c *Checker) matchExceptRule(msg *domain.ChatMessage, word string, re *regexp.Regexp, opts *config.ExceptOptions) bool {
+func (c *Checker) matchExceptRule(msg *message.ChatMessage, word string, re *regexp.Regexp, opts *config.ExceptOptions) bool {
 	if word == "" {
 		return false
 	}
 
-	text := msg.Message.Text.Text(domain.LowerOption, domain.RemovePunctuationOption, domain.RemoveDuplicateLettersOption)
-	words := msg.Message.Text.Words(domain.LowerOption, domain.RemovePunctuationOption, domain.RemoveDuplicateLettersOption)
+	text := msg.Message.Text.Text(message.LowerOption, message.RemovePunctuationOption, message.RemoveDuplicateLettersOption)
+	words := msg.Message.Text.Words(message.LowerOption, message.RemovePunctuationOption, message.RemoveDuplicateLettersOption)
 
 	if (opts == nil || opts.OneWord == nil || *opts.OneWord) && !c.template.Mword().CheckOneWord(words) {
 		return false
@@ -617,15 +618,15 @@ func (c *Checker) matchExceptRule(msg *domain.ChatMessage, word string, re *rege
 			return false
 		}
 
-		textOpts := make([]domain.TextOptionFuncWithID, 0, 3)
+		textOpts := make([]message.TextOptionFuncWithID, 0, 3)
 		if opts.SavePunctuation != nil && !*opts.SavePunctuation {
-			textOpts = append(textOpts, domain.RemovePunctuationOption)
+			textOpts = append(textOpts, message.RemovePunctuationOption)
 		}
 		if opts.NoRepeat == nil || !*opts.NoRepeat {
-			textOpts = append(textOpts, domain.RemoveDuplicateLettersOption)
+			textOpts = append(textOpts, message.RemoveDuplicateLettersOption)
 		}
 		if opts.CaseSensitive == nil || !*opts.CaseSensitive {
-			textOpts = append(textOpts, domain.LowerOption)
+			textOpts = append(textOpts, message.LowerOption)
 		}
 
 		text = msg.Message.Text.Text(textOpts...)

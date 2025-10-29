@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 	"twitchspam/internal/app/adapters/platform/twitch/api"
-	"twitchspam/internal/app/domain"
+	"twitchspam/internal/app/domain/message"
 	"twitchspam/internal/app/infrastructure/config"
 	"twitchspam/internal/app/ports"
 )
@@ -19,11 +19,11 @@ type CreatePrediction struct {
 	pred     *ports.Predictions
 }
 
-func (p *CreatePrediction) Execute(_ *config.Config, _ string, text *domain.MessageText) *ports.AnswerType {
+func (p *CreatePrediction) Execute(_ *config.Config, _ string, text *message.Text) *ports.AnswerType {
 	return p.handleCreatePrediction(text)
 }
 
-func (p *CreatePrediction) handleCreatePrediction(text *domain.MessageText) *ports.AnswerType {
+func (p *CreatePrediction) handleCreatePrediction(text *message.Text) *ports.AnswerType {
 	if p.pred != nil && p.pred.Status != "RESOLVED" && p.pred.Status != "CANCELED" {
 		return &ports.AnswerType{
 			Text:    []string{"перед открытием ставки нужно закрыть предыдущую!"},
@@ -99,11 +99,11 @@ type EndPrediction struct {
 	pred     *ports.Predictions
 }
 
-func (p *EndPrediction) Execute(_ *config.Config, _ string, text *domain.MessageText) *ports.AnswerType {
+func (p *EndPrediction) Execute(_ *config.Config, _ string, text *message.Text) *ports.AnswerType {
 	return p.handleEndPrediction(text)
 }
 
-func (p *EndPrediction) handleEndPrediction(text *domain.MessageText) *ports.AnswerType {
+func (p *EndPrediction) handleEndPrediction(text *message.Text) *ports.AnswerType {
 	if p.pred == nil || p.pred.ID == "" {
 		return &ports.AnswerType{
 			Text:    []string{"ставка не найдена!"},
@@ -178,7 +178,7 @@ type RePrediction struct {
 	pred     *ports.Predictions
 }
 
-func (p *RePrediction) Execute(_ *config.Config, _ string, _ *domain.MessageText) *ports.AnswerType {
+func (p *RePrediction) Execute(_ *config.Config, _ string, _ *message.Text) *ports.AnswerType {
 	return p.handleRePrediction()
 }
 

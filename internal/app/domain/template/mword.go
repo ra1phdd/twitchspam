@@ -7,7 +7,7 @@ import (
 	"sort"
 	"strings"
 	"time"
-	"twitchspam/internal/app/domain"
+	"twitchspam/internal/app/domain/message"
 	"twitchspam/internal/app/infrastructure/config"
 	"twitchspam/internal/app/infrastructure/storage"
 	"twitchspam/internal/app/ports"
@@ -118,7 +118,7 @@ func (t *MwordTemplate) Update(mwords []config.Mword, mwordGroups map[string]*co
 	t.mwords = mws
 }
 
-func (t *MwordTemplate) Check(msg *domain.ChatMessage, isLive bool) []config.Punishment {
+func (t *MwordTemplate) Check(msg *message.ChatMessage, isLive bool) []config.Punishment {
 	match, ok := t.cache.Get(t.getCacheKey(msg))
 	if ok {
 		if trueMatch, exists := match[true]; exists && msg.Message.IsFirst() {
@@ -152,7 +152,7 @@ func (t *MwordTemplate) Check(msg *domain.ChatMessage, isLive bool) []config.Pun
 	return nil
 }
 
-func (t *MwordTemplate) matchMwordRule(msg *domain.ChatMessage, word string, re *regexp.Regexp, opts *config.MwordOptions, isLive bool) bool {
+func (t *MwordTemplate) matchMwordRule(msg *message.ChatMessage, word string, re *regexp.Regexp, opts *config.MwordOptions, isLive bool) bool {
 	if word == "" {
 		return false
 	}
@@ -166,8 +166,8 @@ func (t *MwordTemplate) matchMwordRule(msg *domain.ChatMessage, word string, re 
 		return false
 	}
 
-	text := msg.Message.Text.Text(domain.LowerOption, domain.RemovePunctuationOption, domain.RemoveDuplicateLettersOption)
-	words := msg.Message.Text.Words(domain.LowerOption, domain.RemovePunctuationOption, domain.RemoveDuplicateLettersOption)
+	text := msg.Message.Text.Text(message.LowerOption, message.RemovePunctuationOption, message.RemoveDuplicateLettersOption)
+	words := msg.Message.Text.Words(message.LowerOption, message.RemovePunctuationOption, message.RemoveDuplicateLettersOption)
 	if opts != nil {
 		if opts.NoVip != nil && *opts.NoVip && msg.Chatter.IsVip {
 			return false
@@ -182,15 +182,15 @@ func (t *MwordTemplate) matchMwordRule(msg *domain.ChatMessage, word string, re 
 			return false
 		}
 
-		textOpts := make([]domain.TextOptionFuncWithID, 0, 3)
+		textOpts := make([]message.TextOptionFuncWithID, 0, 3)
 		if opts.SavePunctuation != nil && !*opts.SavePunctuation {
-			textOpts = append(textOpts, domain.RemovePunctuationOption)
+			textOpts = append(textOpts, message.RemovePunctuationOption)
 		}
 		if opts.NoRepeat == nil || !*opts.NoRepeat {
-			textOpts = append(textOpts, domain.RemoveDuplicateLettersOption)
+			textOpts = append(textOpts, message.RemoveDuplicateLettersOption)
 		}
 		if opts.CaseSensitive == nil || !*opts.CaseSensitive {
-			textOpts = append(textOpts, domain.LowerOption)
+			textOpts = append(textOpts, message.LowerOption)
 		}
 
 		text = msg.Message.Text.Text(textOpts...)
@@ -207,8 +207,8 @@ func (t *MwordTemplate) matchMwordRule(msg *domain.ChatMessage, word string, re 
 	return slices.Contains(words, word)
 }
 
-func (t *MwordTemplate) getCacheKey(msg *domain.ChatMessage) string {
-	return fmt.Sprintf("%s_%v_%v", msg.Message.Text.Text(domain.RemovePunctuationOption),
+func (t *MwordTemplate) getCacheKey(msg *message.ChatMessage) string {
+	return fmt.Sprintf("%s_%v_%v", msg.Message.Text.Text(message.RemovePunctuationOption),
 		msg.Chatter.IsVip, msg.Chatter.IsSubscriber)
 }
 

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 	"twitchspam/internal/app/adapters/platform/twitch/api"
-	"twitchspam/internal/app/domain"
+	"twitchspam/internal/app/domain/message"
 	"twitchspam/internal/app/infrastructure/config"
 	"twitchspam/internal/app/ports"
 )
@@ -19,11 +19,11 @@ type CreatePoll struct {
 	poll     *ports.Poll
 }
 
-func (p *CreatePoll) Execute(_ *config.Config, _ string, text *domain.MessageText) *ports.AnswerType {
+func (p *CreatePoll) Execute(_ *config.Config, _ string, text *message.Text) *ports.AnswerType {
 	return p.handleCreatePoll(text)
 }
 
-func (p *CreatePoll) handleCreatePoll(text *domain.MessageText) *ports.AnswerType {
+func (p *CreatePoll) handleCreatePoll(text *message.Text) *ports.AnswerType {
 	if p.poll != nil && p.poll.Status == "ACTIVE" {
 		return &ports.AnswerType{
 			Text:    []string{"перед открытием опроса нужно закрыть предыдущий!"},
@@ -107,11 +107,11 @@ type EndPoll struct {
 	poll     *ports.Poll
 }
 
-func (p *EndPoll) Execute(_ *config.Config, _ string, text *domain.MessageText) *ports.AnswerType {
+func (p *EndPoll) Execute(_ *config.Config, _ string, text *message.Text) *ports.AnswerType {
 	return p.handleEndPoll(text)
 }
 
-func (p *EndPoll) handleEndPoll(text *domain.MessageText) *ports.AnswerType {
+func (p *EndPoll) handleEndPoll(text *message.Text) *ports.AnswerType {
 	if p.poll == nil || p.poll.ID == "" {
 		return &ports.AnswerType{
 			Text:    []string{"опрос не найден!"},
@@ -157,7 +157,7 @@ type RePoll struct {
 	poll     *ports.Poll
 }
 
-func (p *RePoll) Execute(_ *config.Config, _ string, _ *domain.MessageText) *ports.AnswerType {
+func (p *RePoll) Execute(_ *config.Config, _ string, _ *message.Text) *ports.AnswerType {
 	return p.handleRePoll()
 }
 

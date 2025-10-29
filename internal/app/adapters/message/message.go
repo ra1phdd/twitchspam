@@ -11,7 +11,7 @@ import (
 	"twitchspam/internal/app/adapters/message/checker"
 	"twitchspam/internal/app/adapters/message/user"
 	"twitchspam/internal/app/adapters/metrics"
-	"twitchspam/internal/app/domain"
+	"twitchspam/internal/app/domain/message"
 	"twitchspam/internal/app/domain/template"
 	"twitchspam/internal/app/infrastructure/config"
 	"twitchspam/internal/app/infrastructure/storage"
@@ -67,7 +67,7 @@ func New(log logger.Logger, manager *config.Manager, stream ports.StreamPort, ap
 	return m
 }
 
-func (m *Message) Check(msg *domain.ChatMessage) {
+func (m *Message) Check(msg *message.ChatMessage) {
 	startProcessing := time.Now()
 	m.log.Trace("Processing new message", slog.String("username", msg.Chatter.Username), slog.String("message", msg.Message.Text.Text()))
 	if m.stream.IsLive() {
@@ -138,7 +138,7 @@ func (m *Message) Check(msg *domain.ChatMessage) {
 	m.getAction(action, msg)
 }
 
-func (m *Message) CheckAutomod(msg *domain.ChatMessage) {
+func (m *Message) CheckAutomod(msg *message.ChatMessage) {
 	startProcessing := time.Now()
 	if m.stream.IsLive() {
 		m.stream.Stats().AddMessage(msg.Chatter.Username)
@@ -152,7 +152,7 @@ func (m *Message) CheckAutomod(msg *domain.ChatMessage) {
 		time.Sleep(time.Duration(m.cfg.Channels[m.stream.ChannelName()].Automod.Delay) * time.Second)
 	}
 
-	if msg.Message.Text.Text(domain.RemoveDuplicateLettersOption) == "(" {
+	if msg.Message.Text.Text(message.RemoveDuplicateLettersOption) == "(" {
 		err := m.api.ManageHeldAutoModMessage(m.cfg.App.UserID, msg.Message.ID, "ALLOW")
 		if err != nil {
 			m.log.Error("Failed to manage held automod", err)
@@ -166,7 +166,7 @@ func (m *Message) CheckAutomod(msg *domain.ChatMessage) {
 	m.getAction(action, msg)
 }
 
-func (m *Message) getAction(action *ports.CheckerAction, msg *domain.ChatMessage) {
+func (m *Message) getAction(action *ports.CheckerAction, msg *message.ChatMessage) {
 	switch action.Type {
 	case checker.None:
 		return

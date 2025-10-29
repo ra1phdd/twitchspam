@@ -13,7 +13,7 @@ import (
 	"strings"
 	"sync"
 	"time"
-	"twitchspam/internal/app/domain"
+	"twitchspam/internal/app/domain/message"
 	"twitchspam/internal/app/infrastructure/config"
 	"twitchspam/internal/app/ports"
 	"twitchspam/pkg/logger"
@@ -199,17 +199,17 @@ func (es *EventSub) handleMessage(ctx context.Context, msgBytes []byte) {
 			}
 			es.log.Info("AutoMod held message", slog.String("user_id", am.UserID), slog.String("message_id", am.MessageID), slog.String("text", am.Message.Text))
 
-			msg := &domain.ChatMessage{
-				Broadcaster: domain.Broadcaster{
+			msg := &message.ChatMessage{
+				Broadcaster: message.Broadcaster{
 					UserID: am.UserID,
 				},
-				Chatter: domain.Chatter{
+				Chatter: message.Chatter{
 					UserID:   am.UserID,
 					Username: am.UserName,
 				},
-				Message: domain.Message{
+				Message: message.Message{
 					ID: am.MessageID,
-					Text: domain.MessageText{
+					Text: message.Text{
 						Original: am.Message.Text,
 					},
 				},
@@ -325,7 +325,7 @@ func (es *EventSub) subscribeEvent(ctx context.Context, eventType, version strin
 	return nil
 }
 
-func (es *EventSub) convertMap(msgEvent ChatMessageEvent) *domain.ChatMessage {
+func (es *EventSub) convertMap(msgEvent ChatMessageEvent) *message.ChatMessage {
 	var isBroadcaster, isMod, isVip, isSubscriber bool
 	for _, badge := range msgEvent.Badges {
 		switch badge.SetID {
@@ -362,13 +362,13 @@ func (es *EventSub) convertMap(msgEvent ChatMessageEvent) *domain.ChatMessage {
 	total := emoteChars + textChars
 	emoteOnly := total > 0 && float64(emoteChars)/float64(total) >= es.cfg.Channels[msgEvent.BroadcasterUserLogin].Spam.SettingsEmotes.EmoteThreshold
 
-	msg := &domain.ChatMessage{
-		Broadcaster: domain.Broadcaster{
+	msg := &message.ChatMessage{
+		Broadcaster: message.Broadcaster{
 			UserID:   msgEvent.BroadcasterUserID,
 			Login:    msgEvent.BroadcasterUserLogin,
 			Username: msgEvent.BroadcasterUserName,
 		},
-		Chatter: domain.Chatter{
+		Chatter: message.Chatter{
 			UserID:        msgEvent.ChatterUserID,
 			Login:         msgEvent.ChatterUserLogin,
 			Username:      msgEvent.ChatterUserName,
@@ -377,9 +377,9 @@ func (es *EventSub) convertMap(msgEvent ChatMessageEvent) *domain.ChatMessage {
 			IsVip:         isVip,
 			IsSubscriber:  isSubscriber,
 		},
-		Message: domain.Message{
+		Message: message.Message{
 			ID: msgEvent.MessageID,
-			Text: domain.MessageText{
+			Text: message.Text{
 				Original: msgEvent.Message.Text,
 			},
 			EmoteOnly: emoteOnly,
@@ -392,15 +392,15 @@ func (es *EventSub) convertMap(msgEvent ChatMessageEvent) *domain.ChatMessage {
 	}
 
 	if msgEvent.Reply != nil {
-		msg.Reply = &domain.Reply{
-			ParentChatter: domain.Chatter{
+		msg.Reply = &message.Reply{
+			ParentChatter: message.Chatter{
 				UserID:   msgEvent.Reply.ParentUserID,
 				Login:    msgEvent.Reply.ParentUserLogin,
 				Username: msgEvent.Reply.ParentUserName,
 			},
-			ParentMessage: domain.Message{
+			ParentMessage: message.Message{
 				ID: msgEvent.Reply.ParentMessageID,
-				Text: domain.MessageText{
+				Text: message.Text{
 					Original: msgEvent.Reply.ParentMessageBody,
 				},
 			},

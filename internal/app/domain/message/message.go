@@ -1,4 +1,4 @@
-package domain
+package message
 
 import (
 	"strings"
@@ -35,103 +35,27 @@ type Reply struct {
 
 type Message struct {
 	ID        string
-	Text      MessageText
+	Text      Text
 	EmoteOnly bool     // если Fragments type == "text" отсутствует
 	Emotes    []string // text в Fragments при type == "emote"
 	IsFirst   func() bool
 }
 
-type MessageText struct {
+type Text struct {
 	Original string
 
 	cacheText  map[uint64]string
 	cacheWords map[uint64][]string
 }
 
-func (m *MessageText) ReplaceOriginal(text string) {
-	m.Original = text
-	m.cacheText = make(map[uint64]string)
-	m.cacheWords = make(map[uint64][]string)
+func (t *Text) ReplaceOriginal(text string) {
+	t.Original = text
+	t.cacheText = make(map[uint64]string)
+	t.cacheWords = make(map[uint64][]string)
 }
 
 func lower(s string) string {
 	return strings.ToLower(s)
-}
-
-var zeroWidthRunes = map[rune]struct{}{
-	'\u200B': {}, // ZERO WIDTH SPACE
-	'\u200C': {}, // ZERO WIDTH NON-JOINER
-	'\u200D': {}, // ZERO WIDTH JOINER
-	'\u200E': {}, // LEFT-TO-RIGHT MARK
-	'\u200F': {}, // RIGHT-TO-LEFT MARK
-	'\u202A': {}, // LEFT-TO-RIGHT EMBEDDING
-	'\u202B': {}, // RIGHT-TO-LEFT EMBEDDING
-	'\u202C': {}, // POP DIRECTIONAL FORMATTING
-	'\u202D': {}, // LEFT-TO-RIGHT OVERRIDE
-	'\u202E': {}, // RIGHT-TO-LEFT OVERRIDE
-	'\u2060': {}, // WORD JOINER
-	'\u2061': {}, // FUNCTION APPLICATION
-	'\u2062': {}, // INVISIBLE TIMES
-	'\u2063': {}, // INVISIBLE SEPARATOR
-	'\u2064': {}, // INVISIBLE PLUS
-	'\u2066': {}, // LEFT-TO-RIGHT ISOLATE
-	'\u2067': {}, // RIGHT-TO-LEFT ISOLATE
-	'\u2068': {}, // FIRST STRONG ISOLATE
-	'\u2069': {}, // POP DIRECTIONAL ISOLATE
-	'\uFEFF': {}, // ZERO WIDTH NO-BREAK SPACE (BOM)
-	'\u180E': {}, // MONGOLIAN VOWEL SEPARATOR (deprecated, still invisible)
-}
-
-func isInvisibleRune(r rune) bool {
-	if _, bad := zeroWidthRunes[r]; bad {
-		return true
-	}
-
-	switch {
-	// Tag characters
-	case r >= 0xE0020 && r <= 0xE007F:
-		return true
-
-	// Variation Selectors
-	case r >= 0xFE00 && r <= 0xFE0F:
-		return true
-
-	// Variation Selectors Supplement
-	case r >= 0xE0100 && r <= 0xE01EF:
-		return true
-
-	// Language tag & private-use invisible (Plane 14)
-	case r >= 0xE0000 && r <= 0xE007F:
-		return true
-
-	// General control characters (C0 + DEL + C1)
-	case r >= 0x0000 && r <= 0x001F, r == 0x007F, r >= 0x0080 && r <= 0x009F:
-		return true
-
-	// Bidirectional & format controls (RLM, LRM, ZWNJ, etc.)
-	case r >= 0x200B && r <= 0x200F:
-		return true
-	case r >= 0x202A && r <= 0x202E:
-		return true
-	case r >= 0x2060 && r <= 0x206F:
-		return true
-
-	default:
-		return false
-	}
-}
-
-func removeInvisibleRune(s string) string {
-	var b strings.Builder
-	b.Grow(len(s))
-
-	for _, r := range s {
-		if isInvisibleRune(r) {
-			continue
-		}
-		b.WriteRune(r)
-	}
-	return b.String()
 }
 
 func removePunctuation(s string) string {
@@ -210,9 +134,9 @@ var RemoveDuplicateLettersOption = TextOptionFuncWithID{
 	ID: 3,
 }
 
-func (m *MessageText) Text(opts ...TextOptionFuncWithID) string {
-	if m.cacheText == nil {
-		m.cacheText = make(map[uint64]string)
+func (t *Text) Text(opts ...TextOptionFuncWithID) string {
+	if t.cacheText == nil {
+		t.cacheText = make(map[uint64]string)
 	}
 
 	var key uint64
@@ -220,11 +144,11 @@ func (m *MessageText) Text(opts ...TextOptionFuncWithID) string {
 		key = key*31 + opt.ID
 	}
 
-	if val, ok := m.cacheText[key]; ok {
+	if val, ok := t.cacheText[key]; ok {
 		return val
 	}
 
-	result := m.Original
+	result := t.Original
 	isRemovePunctuation := false
 	for _, opt := range opts {
 		if opt.ID == 2 {
@@ -236,14 +160,15 @@ func (m *MessageText) Text(opts ...TextOptionFuncWithID) string {
 	if !isRemovePunctuation {
 		result = removeInvisibleRune(result)
 	}
+	result = removeHomoglyphs(result)
 
-	m.cacheText[key] = result
+	t.cacheText[key] = result
 	return result
 }
 
-func (m *MessageText) Words(opts ...TextOptionFuncWithID) []string {
-	if m.cacheWords == nil {
-		m.cacheWords = make(map[uint64][]string)
+func (t *Text) Words(opts ...TextOptionFuncWithID) []string {
+	if t.cacheWords == nil {
+		t.cacheWords = make(map[uint64][]string)
 	}
 
 	var key uint64
@@ -251,12 +176,12 @@ func (m *MessageText) Words(opts ...TextOptionFuncWithID) []string {
 		key = key*31 + opt.ID
 	}
 
-	if val, ok := m.cacheWords[key]; ok {
+	if val, ok := t.cacheWords[key]; ok {
 		return val
 	}
 
-	result := strings.Fields(m.Text(opts...))
-	m.cacheWords[key] = result
+	result := strings.Fields(t.Text(opts...))
+	t.cacheWords[key] = result
 	return result
 }
 

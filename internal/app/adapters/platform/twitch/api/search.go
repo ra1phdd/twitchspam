@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
-	"twitchspam/internal/app/domain"
+	"twitchspam/internal/app/domain/message"
 )
 
 func (t *Twitch) SearchCategory(categoryName string) (string, string, error) {
@@ -28,7 +28,7 @@ func (t *Twitch) SearchCategory(categoryName string) (string, string, error) {
 	}
 
 	for _, g := range searchResp.Data {
-		if strings.EqualFold(domain.RemovePunctuationOption.Fn(g.Name), domain.RemovePunctuationOption.Fn(categoryName)) {
+		if strings.EqualFold(message.RemovePunctuationOption.Fn(g.Name), message.RemovePunctuationOption.Fn(categoryName)) {
 			return g.ID, g.Name, nil
 		}
 	}

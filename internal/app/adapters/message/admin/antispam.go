@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 	"twitchspam/internal/app/adapters/metrics"
-	"twitchspam/internal/app/domain"
+	"twitchspam/internal/app/domain/message"
 	"twitchspam/internal/app/infrastructure/config"
 	"twitchspam/internal/app/infrastructure/storage"
 	"twitchspam/internal/app/ports"
@@ -19,11 +19,11 @@ type PauseAntispam struct {
 	template ports.TemplatePort
 }
 
-func (a *PauseAntispam) Execute(_ *config.Config, _ string, text *domain.MessageText) *ports.AnswerType {
+func (a *PauseAntispam) Execute(_ *config.Config, _ string, text *message.Text) *ports.AnswerType {
 	return a.handleAntiSpamPause(text)
 }
 
-func (a *PauseAntispam) handleAntiSpamPause(text *domain.MessageText) *ports.AnswerType {
+func (a *PauseAntispam) handleAntiSpamPause(text *message.Text) *ports.AnswerType {
 	matches := a.re.FindStringSubmatch(text.Text()) // !am as <значение>
 	if len(matches) != 2 {
 		return nonParametr
@@ -46,7 +46,7 @@ type OnOffAntispam struct {
 	template ports.TemplatePort
 }
 
-func (a *OnOffAntispam) Execute(cfg *config.Config, channel string, _ *domain.MessageText) *ports.AnswerType {
+func (a *OnOffAntispam) Execute(cfg *config.Config, channel string, _ *message.Text) *ports.AnswerType {
 	return a.handleAntiSpamOnOff(cfg, channel)
 }
 
@@ -73,7 +73,7 @@ type InfoAntispam struct {
 	fs       ports.FileServerPort
 }
 
-func (a *InfoAntispam) Execute(cfg *config.Config, channel string, _ *domain.MessageText) *ports.AnswerType {
+func (a *InfoAntispam) Execute(cfg *config.Config, channel string, _ *message.Text) *ports.AnswerType {
 	return a.handleAntiSpamInfo(cfg, channel)
 }
 
@@ -177,7 +177,7 @@ type ModeAntispam struct {
 	mode int
 }
 
-func (a *ModeAntispam) Execute(cfg *config.Config, channel string, _ *domain.MessageText) *ports.AnswerType {
+func (a *ModeAntispam) Execute(cfg *config.Config, channel string, _ *message.Text) *ports.AnswerType {
 	return a.handleAntispamMode(cfg, channel)
 }
 
@@ -193,11 +193,11 @@ type SimAntispam struct {
 	typeSpam string
 }
 
-func (a *SimAntispam) Execute(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
+func (a *SimAntispam) Execute(cfg *config.Config, channel string, text *message.Text) *ports.AnswerType {
 	return a.handleSim(cfg, channel, text)
 }
 
-func (a *SimAntispam) handleSim(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
+func (a *SimAntispam) handleSim(cfg *config.Config, channel string, text *message.Text) *ports.AnswerType {
 	target := &cfg.Channels[channel].Spam.SettingsDefault.SimilarityThreshold
 	if a.typeSpam == "vip" {
 		target = &cfg.Channels[channel].Spam.SettingsVIP.SimilarityThreshold
@@ -238,11 +238,11 @@ type MsgAntispam struct {
 	typeSpam string
 }
 
-func (a *MsgAntispam) Execute(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
+func (a *MsgAntispam) Execute(cfg *config.Config, channel string, text *message.Text) *ports.AnswerType {
 	return a.handleMsg(cfg, channel, text)
 }
 
-func (a *MsgAntispam) handleMsg(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
+func (a *MsgAntispam) handleMsg(cfg *config.Config, channel string, text *message.Text) *ports.AnswerType {
 	target := &cfg.Channels[channel].Spam.SettingsDefault.MessageLimit
 	switch a.typeSpam {
 	case "vip":
@@ -282,11 +282,11 @@ type PunishmentsAntispam struct {
 	typeSpam string
 }
 
-func (a *PunishmentsAntispam) Execute(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
+func (a *PunishmentsAntispam) Execute(cfg *config.Config, channel string, text *message.Text) *ports.AnswerType {
 	return a.handlePunishments(cfg, channel, text)
 }
 
-func (a *PunishmentsAntispam) handlePunishments(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
+func (a *PunishmentsAntispam) handlePunishments(cfg *config.Config, channel string, text *message.Text) *ports.AnswerType {
 	target := &cfg.Channels[channel].Spam.SettingsDefault.Punishments
 	switch a.typeSpam {
 	case "vip":
@@ -344,11 +344,11 @@ type ResetPunishmentsAntispam struct {
 	typeSpam string
 }
 
-func (a *ResetPunishmentsAntispam) Execute(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
+func (a *ResetPunishmentsAntispam) Execute(cfg *config.Config, channel string, text *message.Text) *ports.AnswerType {
 	return a.handleDurationResetPunishments(cfg, channel, text)
 }
 
-func (a *ResetPunishmentsAntispam) handleDurationResetPunishments(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
+func (a *ResetPunishmentsAntispam) handleDurationResetPunishments(cfg *config.Config, channel string, text *message.Text) *ports.AnswerType {
 	target := &cfg.Channels[channel].Spam.SettingsDefault.DurationResetPunishments
 	switch a.typeSpam {
 	case "vip":
@@ -379,11 +379,11 @@ type MaxLenAntispam struct {
 	typeSpam string
 }
 
-func (a *MaxLenAntispam) Execute(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
+func (a *MaxLenAntispam) Execute(cfg *config.Config, channel string, text *message.Text) *ports.AnswerType {
 	return a.handleMaxLen(cfg, channel, text)
 }
 
-func (a *MaxLenAntispam) handleMaxLen(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
+func (a *MaxLenAntispam) handleMaxLen(cfg *config.Config, channel string, text *message.Text) *ports.AnswerType {
 	params := map[string]struct {
 		target *int
 		max    int
@@ -420,11 +420,11 @@ type MaxPunishmentAntispam struct {
 	typeSpam string
 }
 
-func (a *MaxPunishmentAntispam) Execute(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
+func (a *MaxPunishmentAntispam) Execute(cfg *config.Config, channel string, text *message.Text) *ports.AnswerType {
 	return a.handleMaxPunishment(cfg, channel, text)
 }
 
-func (a *MaxPunishmentAntispam) handleMaxPunishment(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
+func (a *MaxPunishmentAntispam) handleMaxPunishment(cfg *config.Config, channel string, text *message.Text) *ports.AnswerType {
 	target := &cfg.Channels[channel].Spam.SettingsDefault.MaxWordPunishment
 	switch a.typeSpam {
 	case "vip":
@@ -465,11 +465,11 @@ type MinGapAntispam struct {
 	typeSpam string
 }
 
-func (a *MinGapAntispam) Execute(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
+func (a *MinGapAntispam) Execute(cfg *config.Config, channel string, text *message.Text) *ports.AnswerType {
 	return a.handleMinGap(cfg, channel, text)
 }
 
-func (a *MinGapAntispam) handleMinGap(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
+func (a *MinGapAntispam) handleMinGap(cfg *config.Config, channel string, text *message.Text) *ports.AnswerType {
 	target := &cfg.Channels[channel].Spam.SettingsDefault.MinGapMessages
 	if a.typeSpam == "vip" {
 		target = &cfg.Channels[channel].Spam.SettingsVIP.MinGapMessages
@@ -507,11 +507,11 @@ type AddAntispam struct {
 	re *regexp.Regexp
 }
 
-func (a *AddAntispam) Execute(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
+func (a *AddAntispam) Execute(cfg *config.Config, channel string, text *message.Text) *ports.AnswerType {
 	return a.handleAdd(cfg, channel, text)
 }
 
-func (a *AddAntispam) handleAdd(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
+func (a *AddAntispam) handleAdd(cfg *config.Config, channel string, text *message.Text) *ports.AnswerType {
 	matches := a.re.FindStringSubmatch(text.Text()) // !am add <пользователи через запятую>
 	if len(matches) != 2 {
 		return nonParametr
@@ -540,11 +540,11 @@ type DelAntispam struct {
 	re *regexp.Regexp
 }
 
-func (a *DelAntispam) Execute(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
+func (a *DelAntispam) Execute(cfg *config.Config, channel string, text *message.Text) *ports.AnswerType {
 	return a.handleDel(cfg, channel, text)
 }
 
-func (a *DelAntispam) handleDel(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
+func (a *DelAntispam) handleDel(cfg *config.Config, channel string, text *message.Text) *ports.AnswerType {
 	matches := a.re.FindStringSubmatch(text.Text()) // !am del <пользователи через запятую>
 	if len(matches) != 2 {
 		return nonParametr

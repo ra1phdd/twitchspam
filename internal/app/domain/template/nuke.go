@@ -8,7 +8,7 @@ import (
 	"strings"
 	"sync"
 	"time"
-	"twitchspam/internal/app/domain"
+	"twitchspam/internal/app/domain/message"
 	"twitchspam/internal/app/infrastructure/config"
 	"twitchspam/internal/app/ports"
 )
@@ -105,7 +105,7 @@ func (n *NukeTemplate) Cancel() {
 	n.nuke = nil
 }
 
-func (n *NukeTemplate) Check(text *domain.MessageText, ignoreNuke bool) *ports.CheckerAction {
+func (n *NukeTemplate) Check(text *message.Text, ignoreNuke bool) *ports.CheckerAction {
 	if n.nuke == nil || ignoreNuke {
 		return nil
 	}
@@ -123,15 +123,15 @@ func (n *NukeTemplate) Check(text *domain.MessageText, ignoreNuke bool) *ports.C
 	}
 
 	for _, w := range n.nuke.containsWords {
-		w = domain.LowerOption.Fn(domain.RemoveDuplicateLettersOption.Fn(w))
-		if strings.Contains(text.Text(domain.LowerOption, domain.RemoveDuplicateLettersOption), w) {
+		w = message.LowerOption.Fn(message.RemoveDuplicateLettersOption.Fn(w))
+		if strings.Contains(text.Text(message.LowerOption, message.RemoveDuplicateLettersOption), w) {
 			return apply()
 		}
 	}
 
 	for _, w := range n.nuke.words {
-		w = domain.LowerOption.Fn(domain.RemoveDuplicateLettersOption.Fn(w))
-		if slices.Contains(text.Words(domain.LowerOption, domain.RemoveDuplicateLettersOption), w) {
+		w = message.LowerOption.Fn(message.RemoveDuplicateLettersOption.Fn(w))
+		if slices.Contains(text.Words(message.LowerOption, message.RemoveDuplicateLettersOption), w) {
 			return apply()
 		}
 	}

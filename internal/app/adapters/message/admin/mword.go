@@ -6,7 +6,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-	"twitchspam/internal/app/domain"
+	"twitchspam/internal/app/domain/message"
 	"twitchspam/internal/app/domain/template"
 	"twitchspam/internal/app/infrastructure/config"
 	"twitchspam/internal/app/ports"
@@ -19,11 +19,11 @@ type AddMword struct {
 	template ports.TemplatePort
 }
 
-func (m *AddMword) Execute(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
+func (m *AddMword) Execute(cfg *config.Config, channel string, text *message.Text) *ports.AnswerType {
 	return m.handleMwAdd(cfg, channel, text)
 }
 
-func (m *AddMword) handleMwAdd(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
+func (m *AddMword) handleMwAdd(cfg *config.Config, channel string, text *message.Text) *ports.AnswerType {
 	textWithoutOpts, opts := m.template.Options().ParseAll(text.Text(), template.MwordOptions)
 
 	// !am mw (add) <наказания через запятую> <слова/фразы через запятую>
@@ -86,14 +86,14 @@ func (m *AddMword) handleMwAdd(cfg *config.Config, channel string, text *domain.
 		}
 
 		var options *config.MwordOptions
-		if domain.HasDoubleLetters(word) || domain.HasSpecialSymbols(word) {
+		if message.HasDoubleLetters(word) || message.HasSpecialSymbols(word) {
 			options = &config.MwordOptions{}
 
 			trueVal := true
-			if domain.HasDoubleLetters(word) {
+			if message.HasDoubleLetters(word) {
 				options.NoRepeat = &trueVal
 			}
-			if domain.HasSpecialSymbols(word) {
+			if message.HasSpecialSymbols(word) {
 				options.SavePunctuation = &trueVal
 			}
 		}
@@ -115,11 +115,11 @@ type SetMword struct {
 	template ports.TemplatePort
 }
 
-func (m *SetMword) Execute(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
+func (m *SetMword) Execute(cfg *config.Config, channel string, text *message.Text) *ports.AnswerType {
 	return m.handleMwSet(cfg, channel, text)
 }
 
-func (m *SetMword) handleMwSet(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
+func (m *SetMword) handleMwSet(cfg *config.Config, channel string, text *message.Text) *ports.AnswerType {
 	textWithoutOpts, opts := m.template.Options().ParseAll(text.Text(), template.MwordOptions)
 
 	// или !am mw set <наказания через запятую> <слова или фразы через запятую>
@@ -176,11 +176,11 @@ type DelMword struct {
 	template ports.TemplatePort
 }
 
-func (m *DelMword) Execute(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
+func (m *DelMword) Execute(cfg *config.Config, channel string, text *message.Text) *ports.AnswerType {
 	return m.handleMwDel(cfg, channel, text)
 }
 
-func (m *DelMword) handleMwDel(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
+func (m *DelMword) handleMwDel(cfg *config.Config, channel string, text *message.Text) *ports.AnswerType {
 	matches := m.re.FindStringSubmatch(text.Text()) // !am mw del <слова/фразы через запятую или regex>
 	if len(matches) != 2 {
 		return nonParametr
@@ -213,7 +213,7 @@ type ListMword struct {
 	fs       ports.FileServerPort
 }
 
-func (m *ListMword) Execute(cfg *config.Config, channel string, _ *domain.MessageText) *ports.AnswerType {
+func (m *ListMword) Execute(cfg *config.Config, channel string, _ *message.Text) *ports.AnswerType {
 	return m.handleMwList(cfg, channel)
 }
 
@@ -242,11 +242,11 @@ type CreateMwordGroup struct {
 	template ports.TemplatePort
 }
 
-func (m *CreateMwordGroup) Execute(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
+func (m *CreateMwordGroup) Execute(cfg *config.Config, channel string, text *message.Text) *ports.AnswerType {
 	return m.handleMwgCreate(cfg, channel, text)
 }
 
-func (m *CreateMwordGroup) handleMwgCreate(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
+func (m *CreateMwordGroup) handleMwgCreate(cfg *config.Config, channel string, text *message.Text) *ports.AnswerType {
 	textWithoutOpts, opts := m.template.Options().ParseAll(text.Text(), template.MwordOptions)
 
 	matches := m.re.FindStringSubmatch(textWithoutOpts) // !am mwg create <название_группы> <наказания через запятую>
@@ -294,11 +294,11 @@ type AddMwordGroup struct {
 	template ports.TemplatePort
 }
 
-func (m *AddMwordGroup) Execute(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
+func (m *AddMwordGroup) Execute(cfg *config.Config, channel string, text *message.Text) *ports.AnswerType {
 	return m.handleMwgAdd(cfg, channel, text)
 }
 
-func (m *AddMwordGroup) handleMwgAdd(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
+func (m *AddMwordGroup) handleMwgAdd(cfg *config.Config, channel string, text *message.Text) *ports.AnswerType {
 	// !am mwg add <название_группы> <слова/фразы через запятую>
 	// или !am mwg add <название_группы> re <name> <regex>
 	matches := m.re.FindStringSubmatch(text.Text())
@@ -341,14 +341,14 @@ func (m *AddMwordGroup) handleMwgAdd(cfg *config.Config, channel string, text *d
 		}
 
 		var options *config.MwordOptions
-		if domain.HasDoubleLetters(word) || domain.HasSpecialSymbols(word) {
+		if message.HasDoubleLetters(word) || message.HasSpecialSymbols(word) {
 			options = &config.MwordOptions{}
 
 			trueVal := true
-			if domain.HasDoubleLetters(word) {
+			if message.HasDoubleLetters(word) {
 				options.NoRepeat = &trueVal
 			}
-			if domain.HasSpecialSymbols(word) {
+			if message.HasSpecialSymbols(word) {
 				options.SavePunctuation = &trueVal
 			}
 		}
@@ -369,11 +369,11 @@ type GlobalSetMwordGroup struct {
 	template ports.TemplatePort
 }
 
-func (m *GlobalSetMwordGroup) Execute(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
+func (m *GlobalSetMwordGroup) Execute(cfg *config.Config, channel string, text *message.Text) *ports.AnswerType {
 	return m.handleMwgGlobalSet(cfg, channel, text)
 }
 
-func (m *GlobalSetMwordGroup) handleMwgGlobalSet(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
+func (m *GlobalSetMwordGroup) handleMwgGlobalSet(cfg *config.Config, channel string, text *message.Text) *ports.AnswerType {
 	textWithoutOpts, opts := m.template.Options().ParseAll(text.Text(), template.MwordOptions)
 
 	// !am mwg glset <название_группы> <*наказания через запятую> <*опции>
@@ -417,11 +417,11 @@ type SetMwordGroup struct {
 	template ports.TemplatePort
 }
 
-func (m *SetMwordGroup) Execute(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
+func (m *SetMwordGroup) Execute(cfg *config.Config, channel string, text *message.Text) *ports.AnswerType {
 	return m.handleMwgSet(cfg, channel, text)
 }
 
-func (m *SetMwordGroup) handleMwgSet(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
+func (m *SetMwordGroup) handleMwgSet(cfg *config.Config, channel string, text *message.Text) *ports.AnswerType {
 	textWithoutOpts, opts := m.template.Options().ParseAll(text.Text(), template.MwordOptions)
 
 	// !am mwg set <название_группы> <*наказания через запятую> <слова/фразы или regex> <*опции>
@@ -482,11 +482,11 @@ type DelMwordGroup struct {
 	template ports.TemplatePort
 }
 
-func (m *DelMwordGroup) Execute(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
+func (m *DelMwordGroup) Execute(cfg *config.Config, channel string, text *message.Text) *ports.AnswerType {
 	return m.handleMwgDel(cfg, channel, text)
 }
 
-func (m *DelMwordGroup) handleMwgDel(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
+func (m *DelMwordGroup) handleMwgDel(cfg *config.Config, channel string, text *message.Text) *ports.AnswerType {
 	// !am mwg del <название_группы> <слова/фразы через запятую или ничего для all>
 	matches := m.re.FindStringSubmatch(text.Text())
 	if len(matches) != 3 {
@@ -532,11 +532,11 @@ type OnOffMwordGroup struct {
 	template ports.TemplatePort
 }
 
-func (m *OnOffMwordGroup) Execute(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
+func (m *OnOffMwordGroup) Execute(cfg *config.Config, channel string, text *message.Text) *ports.AnswerType {
 	return m.handleMwgOnOff(cfg, channel, text)
 }
 
-func (m *OnOffMwordGroup) handleMwgOnOff(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
+func (m *OnOffMwordGroup) handleMwgOnOff(cfg *config.Config, channel string, text *message.Text) *ports.AnswerType {
 	matches := m.re.FindStringSubmatch(text.Text()) // !am mwg on/off <название_группы>
 	if len(matches) != 3 {
 		return nonParametr
@@ -559,7 +559,7 @@ type ListMwordGroup struct {
 	fs       ports.FileServerPort
 }
 
-func (m *ListMwordGroup) Execute(cfg *config.Config, channel string, _ *domain.MessageText) *ports.AnswerType {
+func (m *ListMwordGroup) Execute(cfg *config.Config, channel string, _ *message.Text) *ports.AnswerType {
 	return m.handleMwgList(cfg, channel)
 }
 

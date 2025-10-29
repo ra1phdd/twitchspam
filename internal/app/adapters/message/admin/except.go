@@ -5,7 +5,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"twitchspam/internal/app/domain"
+	"twitchspam/internal/app/domain/message"
 	"twitchspam/internal/app/domain/template"
 	"twitchspam/internal/app/infrastructure/config"
 	"twitchspam/internal/app/ports"
@@ -17,11 +17,11 @@ type AddExcept struct {
 	typeExcept string
 }
 
-func (e *AddExcept) Execute(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
+func (e *AddExcept) Execute(cfg *config.Config, channel string, text *message.Text) *ports.AnswerType {
 	return e.handleExceptAdd(cfg, channel, text)
 }
 
-func (e *AddExcept) handleExceptAdd(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
+func (e *AddExcept) handleExceptAdd(cfg *config.Config, channel string, text *message.Text) *ports.AnswerType {
 	textWithoutOpts, opts := e.template.Options().ParseAll(text.Text(), template.ExceptOptions)
 
 	// !am ex (add) <кол-во сообщений> <наказания через запятую> <слова/фразы через запятую>
@@ -108,14 +108,14 @@ func (e *AddExcept) handleExceptAdd(cfg *config.Config, channel string, text *do
 		}
 
 		var options *config.ExceptOptions
-		if domain.HasDoubleLetters(word) || domain.HasSpecialSymbols(word) {
+		if message.HasDoubleLetters(word) || message.HasSpecialSymbols(word) {
 			options = &config.ExceptOptions{}
 
 			trueVal := true
-			if domain.HasDoubleLetters(word) {
+			if message.HasDoubleLetters(word) {
 				options.NoRepeat = &trueVal
 			}
-			if domain.HasSpecialSymbols(word) {
+			if message.HasSpecialSymbols(word) {
 				options.SavePunctuation = &trueVal
 			}
 		}
@@ -138,11 +138,11 @@ type SetExcept struct {
 	typeExcept string
 }
 
-func (e *SetExcept) Execute(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
+func (e *SetExcept) Execute(cfg *config.Config, channel string, text *message.Text) *ports.AnswerType {
 	return e.handleExceptSet(cfg, channel, text)
 }
 
-func (e *SetExcept) handleExceptSet(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
+func (e *SetExcept) handleExceptSet(cfg *config.Config, channel string, text *message.Text) *ports.AnswerType {
 	textWithoutOpts, opts := e.template.Options().ParseAll(text.Text(), template.ExceptOptions)
 
 	// !am ex set ml <значение> <слова или фразы через запятую>
@@ -244,11 +244,11 @@ type DelExcept struct {
 	typeExcept string
 }
 
-func (e *DelExcept) Execute(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
+func (e *DelExcept) Execute(cfg *config.Config, channel string, text *message.Text) *ports.AnswerType {
 	return e.handleExceptDel(cfg, channel, text)
 }
 
-func (e *DelExcept) handleExceptDel(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
+func (e *DelExcept) handleExceptDel(cfg *config.Config, channel string, text *message.Text) *ports.AnswerType {
 	matches := e.re.FindStringSubmatch(text.Text()) // !am ex del <слова/фразы через запятую или regex>
 	if len(matches) != 2 {
 		return nonParametr
@@ -284,7 +284,7 @@ type ListExcept struct {
 	typeExcept string
 }
 
-func (e *ListExcept) Execute(cfg *config.Config, channel string, _ *domain.MessageText) *ports.AnswerType {
+func (e *ListExcept) Execute(cfg *config.Config, channel string, _ *message.Text) *ports.AnswerType {
 	return e.handleExceptList(cfg, channel)
 }
 
@@ -307,11 +307,11 @@ type OnOffExcept struct {
 	typeExcept string
 }
 
-func (e *OnOffExcept) Execute(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
+func (e *OnOffExcept) Execute(cfg *config.Config, channel string, text *message.Text) *ports.AnswerType {
 	return e.handleExceptOnOff(cfg, channel, text)
 }
 
-func (e *OnOffExcept) handleExceptOnOff(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
+func (e *OnOffExcept) handleExceptOnOff(cfg *config.Config, channel string, text *message.Text) *ports.AnswerType {
 	matches := e.re.FindStringSubmatch(text.Text()) // !am ex on/off <слова/фразы через запятую>
 	if len(matches) != 3 {
 		return nonParametr

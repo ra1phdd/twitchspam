@@ -6,7 +6,7 @@ import (
 	"regexp"
 	"strings"
 	"time"
-	"twitchspam/internal/app/domain"
+	"twitchspam/internal/app/domain/message"
 	"twitchspam/internal/app/infrastructure/config"
 	"twitchspam/internal/app/infrastructure/storage"
 	"twitchspam/internal/app/ports"
@@ -133,7 +133,7 @@ func New(log logger.Logger, manager *config.Manager, stream ports.StreamPort, ap
 
 var startApp = time.Now()
 
-func (a *Admin) FindMessages(msg *domain.ChatMessage) *ports.AnswerType {
+func (a *Admin) FindMessages(msg *message.ChatMessage) *ports.AnswerType {
 	a.log.Trace("Admin.FindMessages called",
 		slog.String("user", msg.Chatter.Username),
 		slog.String("message", msg.Message.Text.Text()),
@@ -141,7 +141,7 @@ func (a *Admin) FindMessages(msg *domain.ChatMessage) *ports.AnswerType {
 		slog.Bool("is_mod", msg.Chatter.IsMod),
 	)
 
-	if (!msg.Chatter.IsBroadcaster && !msg.Chatter.IsMod) || !strings.HasPrefix(msg.Message.Text.Text(domain.LowerOption), "!am") {
+	if (!msg.Chatter.IsBroadcaster && !msg.Chatter.IsMod) || !strings.HasPrefix(msg.Message.Text.Text(message.LowerOption), "!am") {
 		a.log.Debug("Skipping message: user not authorized or command prefix missing",
 			slog.String("user", msg.Chatter.Username),
 			slog.String("message", msg.Message.Text.Text()),
@@ -150,7 +150,7 @@ func (a *Admin) FindMessages(msg *domain.ChatMessage) *ports.AnswerType {
 		return nil
 	}
 
-	words := msg.Message.Text.Words(domain.LowerOption)
+	words := msg.Message.Text.Words(message.LowerOption)
 	if len(words) < 2 {
 		a.log.Warn("Command not found or incomplete", slog.String("user", msg.Chatter.Username), slog.String("message", msg.Message.Text.Text()))
 		return notFoundCmd
@@ -181,8 +181,8 @@ func (a *Admin) FindMessages(msg *domain.ChatMessage) *ports.AnswerType {
 	return success
 }
 
-func (c *CompositeCommand) Execute(cfg *config.Config, channel string, text *domain.MessageText) *ports.AnswerType {
-	words := text.Words(domain.LowerOption)
+func (c *CompositeCommand) Execute(cfg *config.Config, channel string, text *message.Text) *ports.AnswerType {
+	words := text.Words(message.LowerOption)
 	if c.cursor >= len(words) {
 		if c.defaultCmd != nil {
 			return c.defaultCmd.Execute(cfg, channel, text)
