@@ -146,11 +146,6 @@ type Timers struct {
 	Options  *TimerOptions `json:"options"`
 }
 
-type Banwords struct {
-	Words  []string         `json:"words"`
-	Regexp []*regexp.Regexp `json:"regexp"`
-}
-
 type Punishment struct {
 	Action   string `json:"action"`   // "delete", "ban", "timeout"
 	Duration int    `json:"duration"` // только для таймаута
@@ -193,4 +188,11 @@ type Limiter struct {
 	Requests int           `json:"requests"`        // сколько запросов
 	Per      time.Duration `json:"per,format:nano"` // за какое время
 	Rate     *rate.Limiter `json:"-"`
+}
+
+type Banwords struct {
+	Words              []string `json:"words"`
+	ContainsWords      []string `json:"contains_words"`
+	CaseSensitiveWords []string `json:"case_words"`
+	ExcludeWords       []string `json:"exclude_words"`
 }

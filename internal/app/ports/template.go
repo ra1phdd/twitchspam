@@ -30,7 +30,7 @@ type PlaceholdersPort interface {
 }
 
 type BanwordsPort interface {
-	CheckMessage(textLower string, wordsOriginal []string) bool
+	CheckMessage(wordsOriginal, wordsLower []string) bool
 }
 
 type OptionsPort interface {

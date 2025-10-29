@@ -46,7 +46,7 @@ func New(log logger.Logger, manager *config.Manager, stream ports.StreamPort, ap
 		template: template.New(
 			template.WithAliases(cfg.Channels[stream.ChannelName()].Aliases, cfg.Channels[stream.ChannelName()].AliasGroups, cfg.GlobalAliases),
 			template.WithPlaceholders(stream),
-			template.WithBanwords(log, cfg.Banwords.Words, cfg.Banwords.Regexp),
+			template.WithBanwords(cfg.Banwords),
 			template.WithMword(cfg.Channels[stream.ChannelName()].Mword, cfg.Channels[stream.ChannelName()].MwordGroup),
 		),
 		messages: storage.New[storage.Message](50, time.Duration(cfg.Channels[stream.ChannelName()].WindowSecs)*time.Second),

@@ -1,10 +1,8 @@
 package template
 
 import (
-	"regexp"
 	"twitchspam/internal/app/infrastructure/config"
 	"twitchspam/internal/app/ports"
-	"twitchspam/pkg/logger"
 )
 
 type Template struct {
@@ -33,9 +31,9 @@ func WithPlaceholders(stream ports.StreamPort) Option {
 	}
 }
 
-func WithBanwords(log logger.Logger, words []string, regexps []*regexp.Regexp) Option {
+func WithBanwords(banwords config.Banwords) Option {
 	return func(t *Template) {
-		t.banwords = NewBanwords(log, words, regexps)
+		t.banwords = NewBanwords(banwords)
 	}
 }
 

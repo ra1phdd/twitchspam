@@ -213,7 +213,7 @@ func (n *ReNuke) handleReNuke() *ports.AnswerType {
 	// !am nuke re
 	if err := n.template.Nuke().Restart(); err != nil {
 		return &ports.AnswerType{
-			Text:    []string{"повтор предыдущего массбана не возможен"},
+			Text:    []string{"повтор предыдущего массбана не возможен!"},
 			IsReply: true,
 		}
 	}

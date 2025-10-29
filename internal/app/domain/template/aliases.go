@@ -13,7 +13,7 @@ type AliasesTemplate struct {
 
 func NewAliases(aliases map[string]string, aliasGroups map[string]*config.AliasGroups, globalAliases map[string]string) *AliasesTemplate {
 	at := &AliasesTemplate{
-		trie: trie.NewTrie(map[string]string{}),
+		trie: trie.NewTrie(map[string]string{}, trie.WordMode),
 	}
 	at.Update(aliases, aliasGroups, globalAliases)
 

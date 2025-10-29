@@ -158,8 +158,8 @@ func (c *Checker) checkBypass(msg *domain.ChatMessage) *ports.CheckerAction {
 
 func (c *Checker) checkBanwords(msg *domain.ChatMessage) *ports.CheckerAction {
 	if !c.template.Banwords().CheckMessage(
-		msg.Message.Text.Text(domain.LowerOption, domain.RemovePunctuationOption, domain.RemoveDuplicateLettersOption),
-		msg.Message.Text.Words(),
+		msg.Message.Text.Words(domain.RemovePunctuationOption, domain.RemoveDuplicateLettersOption),
+		msg.Message.Text.Words(domain.LowerOption, domain.RemovePunctuationOption, domain.RemoveDuplicateLettersOption),
 	) {
 		c.log.Debug("No banwords detected", slog.String("user", msg.Chatter.Username), slog.String("message", msg.Message.Text.Text()))
 		return nil
