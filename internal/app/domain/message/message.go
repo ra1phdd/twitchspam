@@ -68,9 +68,9 @@ func (t *Text) Text(opts ...TextOption) string {
 	}
 
 	key := computeCacheKey(opts)
-	//if val, ok := t.cacheText[key]; ok {
-	//	return val
-	//}
+	if val, ok := t.cacheText[key]; ok {
+		return val
+	}
 
 	hashOpts := parseOptions(opts)
 	result := normalizeText(t.Original, hashOpts)
@@ -136,7 +136,7 @@ func normalizeText(original string, hashOpts map[TextOption]bool) string {
 
 	var prev rune
 	var lastWasSpace bool
-	var word []rune
+	word := make([]rune, 0, 16)
 
 	flushWord := func() {
 		if len(word) == 0 {
