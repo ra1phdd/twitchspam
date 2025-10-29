@@ -7,15 +7,22 @@ import (
 )
 
 type BanwordsTemplate struct {
+	trieWords    ports.TriePort[struct{}]
 	trieCase     ports.TriePort[struct{}]
 	trieContains ports.TriePort[struct{}]
 	trieExclude  ports.TriePort[struct{}]
 }
 
 func NewBanwords(banwords config.Banwords) *BanwordsTemplate {
+	mWords := make(map[string]struct{})
 	mCase := make(map[string]struct{})
 	mContains := make(map[string]struct{})
 	mExclude := make(map[string]struct{})
+
+	for _, word := range banwords.Words {
+		mWords[word] = struct{}{}
+		mWords[transliterateRuToEnKeyboard(word)] = struct{}{}
+	}
 
 	for _, word := range banwords.ContainsWords {
 		mContains[word] = struct{}{}
@@ -33,6 +40,7 @@ func NewBanwords(banwords config.Banwords) *BanwordsTemplate {
 	}
 
 	bt := &BanwordsTemplate{
+		trieWords:    trie.NewTrie(mWords, trie.CharMode),
 		trieCase:     trie.NewTrie(mCase, trie.CharMode),
 		trieContains: trie.NewTrie(mContains, trie.CharMode),
 		trieExclude:  trie.NewTrie(mExclude, trie.CharMode),
@@ -42,20 +50,26 @@ func NewBanwords(banwords config.Banwords) *BanwordsTemplate {
 }
 
 func (bt *BanwordsTemplate) CheckMessage(wordsOriginal, wordsLower []string) bool {
-	check := func(word string, trie ports.TriePort[struct{}]) bool {
-		if trie.Contains([]rune(word)) {
-			return !bt.trieExclude.Contains([]rune(word))
+	check := func(word []rune, trie ports.TriePort[struct{}]) bool {
+		if trie.Contains(word) {
+			return !bt.trieExclude.Contains(word)
 		}
 		return false
 	}
 
 	for _, word := range wordsOriginal {
-		if check(word, bt.trieCase) {
+		if check([]rune(word), bt.trieCase) {
 			return true
 		}
 	}
+
 	for _, word := range wordsLower {
-		if check(word, bt.trieContains) {
+		runes := []rune(word)
+		if check(runes, bt.trieContains) {
+			return true
+		}
+
+		if bt.trieWords.Match(runes) {
 			return true
 		}
 	}

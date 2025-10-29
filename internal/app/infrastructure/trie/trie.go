@@ -72,3 +72,15 @@ func (t *Trie[T]) Contains(runes []rune) bool {
 	}
 	return false
 }
+
+func (t *Trie[T]) Match(runes []rune) bool {
+	cur := t.root
+	for _, r := range runes {
+		next, ok := cur.children[string(r)]
+		if !ok {
+			return false
+		}
+		cur = next
+	}
+	return cur.value != nil
+}
