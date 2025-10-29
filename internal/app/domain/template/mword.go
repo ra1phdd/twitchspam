@@ -15,8 +15,13 @@ import (
 
 type MwordTemplate struct {
 	options ports.OptionsPort
-	cache   ports.CachePort[map[bool][]config.Punishment] // ключ - мворд применяется только для первых сообщений или нет
+	cache   ports.CachePort[map[bool]*CacheMword] // ключ - мворд применяется только для первых сообщений или нет
 	mwords  []Mwords
+}
+
+type CacheMword struct {
+	Trigger     string
+	Punishments []config.Punishment
 }
 
 type Mwords struct {
@@ -30,7 +35,7 @@ type Mwords struct {
 func NewMword(options ports.OptionsPort, mwords []config.Mword, mwordGroups map[string]*config.MwordGroup) *MwordTemplate {
 	mt := &MwordTemplate{
 		options: options,
-		cache:   storage.NewCache[map[bool][]config.Punishment](500, 3*time.Minute, false, false, "", 0),
+		cache:   storage.NewCache[map[bool]*CacheMword](500, 3*time.Minute, false, false, "", 0),
 	}
 	mt.Update(mwords, mwordGroups)
 
@@ -118,18 +123,18 @@ func (t *MwordTemplate) Update(mwords []config.Mword, mwordGroups map[string]*co
 	t.mwords = mws
 }
 
-func (t *MwordTemplate) Check(msg *message.ChatMessage, isLive bool) []config.Punishment {
+func (t *MwordTemplate) Check(msg *message.ChatMessage, isLive bool) (string, []config.Punishment) {
 	match, ok := t.cache.Get(t.getCacheKey(msg))
 	if ok {
 		if trueMatch, exists := match[true]; exists && msg.Message.IsFirst() {
-			return trueMatch
+			return trueMatch.Trigger, trueMatch.Punishments
 		}
 
 		if falseMatch, exists := match[false]; exists {
-			return falseMatch
+			return falseMatch.Trigger, falseMatch.Punishments
 		}
 	} else {
-		match = make(map[bool][]config.Punishment)
+		match = make(map[bool]*CacheMword)
 	}
 
 	for _, mw := range t.mwords {
@@ -137,19 +142,27 @@ func (t *MwordTemplate) Check(msg *message.ChatMessage, isLive bool) []config.Pu
 			continue
 		}
 
+		trigger := mw.Word
+		if trigger == "" {
+			trigger = mw.NameRegexp
+		}
+
 		isFirst := false
 		if mw.Options != nil && mw.Options.IsFirst != nil {
 			isFirst = *mw.Options.IsFirst
 		}
-		match[isFirst] = mw.Punishments
-		t.cache.Set(t.getCacheKey(msg), match)
+		match[isFirst] = &CacheMword{
+			Trigger:     trigger,
+			Punishments: mw.Punishments,
+		}
 
-		return mw.Punishments
+		t.cache.Set(t.getCacheKey(msg), match)
+		return trigger, mw.Punishments
 	}
 
 	match[false] = nil
 	t.cache.Set(t.getCacheKey(msg), match)
-	return nil
+	return "", nil
 }
 
 func (t *MwordTemplate) matchMwordRule(msg *message.ChatMessage, word string, re *regexp.Regexp, opts *config.MwordOptions, isLive bool) bool {

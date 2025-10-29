@@ -175,10 +175,7 @@ func (a *Admin) FindMessages(msg *message.ChatMessage) *ports.AnswerType {
 		return unknownError
 	}
 
-	if result != nil {
-		return result
-	}
-	return success
+	return result
 }
 
 func (c *CompositeCommand) Execute(cfg *config.Config, channel string, text *message.Text) *ports.AnswerType {

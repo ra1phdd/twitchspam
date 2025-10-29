@@ -15,6 +15,7 @@ import (
 	"twitchspam/internal/app/adapters/platform/twitch/api"
 	"twitchspam/internal/app/domain"
 	"twitchspam/internal/app/domain/message"
+	"twitchspam/internal/app/domain/template"
 	"twitchspam/internal/app/infrastructure/config"
 	"twitchspam/internal/app/infrastructure/storage"
 	"twitchspam/internal/app/ports"
@@ -215,6 +216,13 @@ func (c *SetCategory) handleSetCategory(text *message.Text) *ports.AnswerType {
 
 	match := strings.TrimSpace(matches[1])
 	if match == "" {
+		if _, ok := template.NonGameCategories[c.stream.Category()]; ok {
+			return nil
+		}
+		return &ports.AnswerType{Text: []string{fmt.Sprintf("игра - %s!", c.stream.Category())}, IsReply: true}
+	}
+
+	if match == "-" {
 		if err := c.api.UpdateChannelCategoryID(c.stream.ChannelID(), "0"); err != nil {
 			c.log.Error("Failed to remove Category", err)
 
@@ -226,6 +234,7 @@ func (c *SetCategory) handleSetCategory(text *message.Text) *ports.AnswerType {
 			}
 			return unknownError
 		}
+		c.stream.SetCategory("")
 		c.log.Info("Category removed", slog.String("channel_id", c.stream.ChannelID()))
 		return &ports.AnswerType{Text: []string{"категория удалена!"}, IsReply: true}
 	}
@@ -277,6 +286,7 @@ func (c *SetCategory) handleSetCategory(text *message.Text) *ports.AnswerType {
 		return unknownError
 	}
 
+	c.stream.SetCategory(name)
 	c.log.Info("Category set successfully", slog.String("channel_id", c.stream.ChannelID()), slog.String("category_name", name), slog.String("category_id", id))
 	return &ports.AnswerType{Text: []string{fmt.Sprintf("установлена категория %s!", name)}, IsReply: true}
 }

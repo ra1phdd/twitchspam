@@ -1,6 +1,7 @@
 package user
 
 import (
+	"fmt"
 	"github.com/prometheus/client_golang/prometheus"
 	"golang.org/x/time/rate"
 	"log/slog"
@@ -10,6 +11,7 @@ import (
 	"time"
 	"twitchspam/internal/app/adapters/metrics"
 	"twitchspam/internal/app/domain/message"
+	"twitchspam/internal/app/domain/template"
 	"twitchspam/internal/app/infrastructure/config"
 	"twitchspam/internal/app/ports"
 	"twitchspam/pkg/logger"
@@ -62,6 +64,17 @@ func (u *User) FindMessages(msg *message.ChatMessage) *ports.AnswerType {
 	metrics.ModulesProcessingTime.With(prometheus.Labels{"module": "stats"}).Observe(endProcessing)
 
 	startProcessing = time.Now()
+	if action := u.handleGame(msg); action != nil {
+		u.log.Debug("Handled game command",
+			slog.String("username", msg.Chatter.Username),
+			slog.String("message", msg.Message.Text.Text()),
+		)
+		return action
+	}
+	endProcessing = time.Since(startProcessing).Seconds()
+	metrics.ModulesProcessingTime.With(prometheus.Labels{"module": "game"}).Observe(endProcessing)
+
+	startProcessing = time.Now()
 	if action := u.handleCommands(msg); action != nil {
 		u.log.Debug("Handled user command",
 			slog.String("username", msg.Chatter.Username),
@@ -86,7 +99,7 @@ func (u *User) handleStats(msg *message.ChatMessage) *ports.AnswerType {
 		return nil
 	}
 
-	if !u.allowUser(msg.Chatter.Username) {
+	if !msg.Chatter.IsMod && !msg.Chatter.IsBroadcaster && !u.allowUser(msg.Chatter.Username) {
 		u.log.Debug("User not allowed to access stats due to limiter", slog.String("username", msg.Chatter.Username))
 		return nil
 	}
@@ -117,6 +130,54 @@ func (u *User) handleStats(msg *message.ChatMessage) *ports.AnswerType {
 	return u.stream.Stats().GetUserStats(target)
 }
 
+func (u *User) handleGame(msg *message.ChatMessage) *ports.AnswerType {
+	if !strings.HasPrefix(msg.Message.Text.Text(message.LowerOption), "!am cat") {
+		u.log.Trace("Message does not start with !am cat, skipping", slog.String("username", msg.Chatter.Username))
+		return nil
+	}
+
+	if u.stream.IsLive() {
+		u.log.Debug("Stream is live, game command not allowed", slog.String("username", msg.Chatter.Username))
+		return nil
+	}
+
+	if _, ok := template.NonGameCategories[u.stream.Category()]; ok {
+		u.log.Debug("Category found in non-game categories, skipping", slog.String("username", msg.Chatter.Username), slog.String("category_name", u.stream.Category()))
+		return nil
+	}
+
+	if !msg.Chatter.IsMod && !msg.Chatter.IsBroadcaster && !u.allowUser(msg.Chatter.Username) {
+		u.log.Debug("User not allowed to access game due to limiter", slog.String("username", msg.Chatter.Username))
+		return nil
+	}
+
+	u.log.Info("User command executed",
+		slog.String("user", msg.Chatter.Username),
+		slog.String("message", msg.Message.Text.Text()),
+	)
+
+	var replyUsername string
+	if msg.Reply != nil {
+		replyUsername = msg.Reply.ParentChatter.Username
+		u.log.Debug("Message is a reply", slog.String("reply_username", replyUsername))
+	}
+
+	for _, word := range msg.Message.Text.Words() {
+		word = strings.TrimSpace(word)
+		if word == "" {
+			continue
+		}
+
+		username := extractUsername(word)
+		if username != "" {
+			u.log.Debug("Detected reply username from @ mention", slog.String("reply_username", replyUsername))
+			replyUsername = username
+		}
+	}
+
+	return &ports.AnswerType{Text: []string{fmt.Sprintf("игра - %s!", u.stream.Category())}, IsReply: true, ReplyUsername: replyUsername}
+}
+
 func (u *User) handleCommands(msg *message.ChatMessage) *ports.AnswerType {
 	var replyUsername string
 	if msg.Reply != nil {
@@ -134,9 +195,10 @@ func (u *User) handleCommands(msg *message.ChatMessage) *ports.AnswerType {
 			continue
 		}
 
-		if strings.HasPrefix(word, "@") && replyUsername == "" {
-			replyUsername = strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(word, "@"), ","))
+		username := extractUsername(word)
+		if username != "" {
 			u.log.Debug("Detected reply username from @ mention", slog.String("reply_username", replyUsername))
+			replyUsername = username
 		}
 
 		cmd, ok := cfg.Channels[u.stream.ChannelName()].Commands[strings.ToLower(word)]
@@ -179,7 +241,7 @@ func (u *User) handleCommands(msg *message.ChatMessage) *ports.AnswerType {
 			mode = *cmd.Options.Mode
 		}
 
-		if (mode == config.OnlineMode && !u.stream.IsLive()) || (mode == config.OfflineMode && u.stream.IsLive()) {
+		if !msg.Chatter.IsMod && !msg.Chatter.IsBroadcaster && ((mode == config.OnlineMode && !u.stream.IsLive()) || (mode == config.OfflineMode && u.stream.IsLive())) {
 			u.log.Trace("Command mode does not match stream status, skipping",
 				slog.String("command", word),
 				slog.Int("option_mode", mode),
@@ -188,12 +250,12 @@ func (u *User) handleCommands(msg *message.ChatMessage) *ports.AnswerType {
 			return nil
 		}
 
-		if !u.allowUser(msg.Chatter.Username) {
-			u.log.Warn("User blocked by limiter during command execution", slog.String("username", msg.Chatter.Username), slog.String("command", word))
+		if !msg.Chatter.IsMod && !msg.Chatter.IsBroadcaster && !u.allowUser(msg.Chatter.Username) {
+			u.log.Debug("User not allowed to access command due to limiter", slog.String("username", msg.Chatter.Username))
 			return nil
 		}
 
-		if !u.allowCommand(word, cmd.Limiter) {
+		if !msg.Chatter.IsMod && !msg.Chatter.IsBroadcaster && !u.allowCommand(word, cmd.Limiter) {
 			u.log.Warn("Command blocked by limiter", slog.String("username", msg.Chatter.Username), slog.String("command", word))
 			return nil
 		}
@@ -279,4 +341,15 @@ func (u *User) allowCommand(command string, limiter *config.Limiter) bool {
 	}
 
 	return limiter.Rate == nil || limiter.Rate.Allow()
+}
+
+func extractUsername(word string) string {
+	word = strings.TrimPrefix(word, "@")
+
+	if i := strings.IndexAny(word, " ,"); i != -1 {
+		word = word[:i]
+	} else if !strings.HasPrefix(word, "@") {
+		return ""
+	}
+	return word
 }

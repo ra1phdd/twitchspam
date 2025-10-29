@@ -135,6 +135,7 @@ func New() error {
 				livedStreams[d.UserLogin] = struct{}{}
 
 				s.SetIslive(true)
+				s.SetCategory(d.GameName)
 				s.Stats().SetOnline(d.ViewerCount)
 				s.OnceStart().Do(func() {
 					s.Stats().SetStartTime(d.StartedAt.In(time.Local))

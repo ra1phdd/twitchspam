@@ -62,22 +62,22 @@ func newStats(channelName string, fs ports.FileServerPort, cache ports.CachePort
 		s.stats = stats
 
 		var countBans, countTimeouts, countDeletes, countMessages int
-		for _, v := range s.stats.CountMessages {
+		for _, v := range stats.CountMessages {
 			countMessages += v
 		}
-		for _, v := range s.stats.CountDeletes {
+		for _, v := range stats.CountDeletes {
 			countDeletes += v
 		}
-		for _, v := range s.stats.CountTimeouts {
+		for _, v := range stats.CountTimeouts {
 			countTimeouts += v
 		}
-		for _, v := range s.stats.CountBans {
+		for _, v := range stats.CountBans {
 			countBans += v
 		}
 
 		var avgViewers float64
-		if s.stats.Online.Count > 0 {
-			avgViewers = math.Round(float64(s.stats.Online.SumViewers) / float64(s.stats.Online.Count))
+		if stats.Online.Count > 0 {
+			avgViewers = math.Round(float64(stats.Online.SumViewers) / float64(stats.Online.Count))
 		}
 
 		metrics.StreamStartTime.With(prometheus.Labels{"channel": s.channelName}).Set(float64(stats.StartStreamTime.Unix()))

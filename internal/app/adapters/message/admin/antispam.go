@@ -208,27 +208,7 @@ func (a *SimAntispam) handleSim(cfg *config.Config, channel string, text *messag
 		return nonParametr
 	}
 
-	if val, ok := a.template.Parser().ParseFloatArg(strings.TrimSpace(matches[1]), 0.1, 1); ok {
-		*target = val
-
-		capacity := func() int32 {
-			defLimit := float64(cfg.Channels[channel].Spam.SettingsDefault.MessageLimit*cfg.Channels[channel].Spam.SettingsDefault.MinGapMessages) / cfg.Channels[channel].Spam.SettingsDefault.SimilarityThreshold
-			vipLimit := float64(cfg.Channels[channel].Spam.SettingsVIP.MessageLimit*cfg.Channels[channel].Spam.SettingsVIP.MinGapMessages) / cfg.Channels[channel].Spam.SettingsVIP.SimilarityThreshold
-			emoteLimit := float64(cfg.Channels[channel].Spam.SettingsEmotes.MessageLimit) / cfg.Channels[channel].Spam.SettingsEmotes.EmoteThreshold
-
-			return int32(max(defLimit, vipLimit, emoteLimit))
-		}()
-
-		if capacity > 50 {
-			a.messages.SetCapacity(capacity)
-		}
-		return success
-	}
-
-	return &ports.AnswerType{
-		Text:    []string{"значение порога схожести сообщений должно быть от 0.1 до 1.0!"},
-		IsReply: true,
-	}
+	return applyParsedValue[float64](cfg, a.template, a.messages, channel, target, strings.TrimSpace(matches[1]), 0.1, 1, "значение порога схожести сообщений должно быть от 0.1 до 1.0!")
 }
 
 type MsgAntispam struct {
@@ -256,24 +236,7 @@ func (a *MsgAntispam) handleMsg(cfg *config.Config, channel string, text *messag
 		return nonParametr
 	}
 
-	if val, ok := a.template.Parser().ParseIntArg(strings.TrimSpace(matches[1]), 2, 15); ok {
-		*target = val
-
-		capacity := func() int32 {
-			defLimit := float64(cfg.Channels[channel].Spam.SettingsDefault.MessageLimit*cfg.Channels[channel].Spam.SettingsDefault.MinGapMessages) / cfg.Channels[channel].Spam.SettingsDefault.SimilarityThreshold
-			vipLimit := float64(cfg.Channels[channel].Spam.SettingsVIP.MessageLimit*cfg.Channels[channel].Spam.SettingsVIP.MinGapMessages) / cfg.Channels[channel].Spam.SettingsVIP.SimilarityThreshold
-			emoteLimit := float64(cfg.Channels[channel].Spam.SettingsEmotes.MessageLimit) / cfg.Channels[channel].Spam.SettingsEmotes.EmoteThreshold
-
-			return int32(max(defLimit, vipLimit, emoteLimit))
-		}()
-
-		if capacity > 50 {
-			a.messages.SetCapacity(capacity)
-		}
-		return success
-	}
-
-	return invalidMessageLimitValue
+	return applyParsedValue[int](cfg, a.template, a.messages, channel, target, strings.TrimSpace(matches[1]), 2, 15, invalidMessageLimitValue.Text[0])
 }
 
 type PunishmentsAntispam struct {
@@ -480,27 +443,7 @@ func (a *MinGapAntispam) handleMinGap(cfg *config.Config, channel string, text *
 		return nonParametr
 	}
 
-	if val, ok := a.template.Parser().ParseIntArg(strings.TrimSpace(matches[1]), 0, 15); ok {
-		*target = val
-
-		capacity := func() int32 {
-			defLimit := float64(cfg.Channels[channel].Spam.SettingsDefault.MessageLimit*cfg.Channels[channel].Spam.SettingsDefault.MinGapMessages) / cfg.Channels[channel].Spam.SettingsDefault.SimilarityThreshold
-			vipLimit := float64(cfg.Channels[channel].Spam.SettingsVIP.MessageLimit*cfg.Channels[channel].Spam.SettingsVIP.MinGapMessages) / cfg.Channels[channel].Spam.SettingsVIP.SimilarityThreshold
-			emoteLimit := float64(cfg.Channels[channel].Spam.SettingsEmotes.MessageLimit) / cfg.Channels[channel].Spam.SettingsEmotes.EmoteThreshold
-
-			return int32(max(defLimit, vipLimit, emoteLimit))
-		}()
-
-		if capacity > 50 {
-			a.messages.SetCapacity(capacity)
-		}
-		return success
-	}
-
-	return &ports.AnswerType{
-		Text:    []string{"значение должно быть от 0 до 15!"},
-		IsReply: true,
-	}
+	return applyParsedValue[int](cfg, a.template, a.messages, channel, target, strings.TrimSpace(matches[1]), 0, 15, "значение должно быть от 0 до 15!")
 }
 
 type AddAntispam struct {
@@ -567,4 +510,50 @@ func (a *DelAntispam) handleDel(cfg *config.Config, channel string, text *messag
 	}
 
 	return buildResponse("пользователи не указаны", RespArg{Items: removed, Name: "удалены"}, RespArg{Items: notFound, Name: "не найдены"})
+}
+
+func applyParsedValue[T int | float64](
+	cfg *config.Config, template ports.TemplatePort, messages ports.StorePort[storage.Message],
+	channel string, target *T, rawValue string, minValue, maxValue T, errMsg string,
+) *ports.AnswerType {
+	var val T
+	var ok bool
+
+	switch any(*target).(type) {
+	case int:
+		var v int
+		v, ok = template.Parser().ParseIntArg(strings.TrimSpace(rawValue), int(minValue), int(maxValue))
+		val = any(v).(T)
+	case float64:
+		var v float64
+		v, ok = template.Parser().ParseFloatArg(strings.TrimSpace(rawValue), float64(minValue), float64(maxValue))
+		val = any(v).(T)
+	default:
+		return &ports.AnswerType{
+			Text:    []string{"неподдерживаемый тип"},
+			IsReply: true,
+		}
+	}
+
+	if !ok {
+		return &ports.AnswerType{
+			Text:    []string{errMsg},
+			IsReply: true,
+		}
+	}
+	*target = val
+
+	capacity := calculateCapacity(cfg, channel)
+	if capacity > 50 {
+		messages.SetCapacity(capacity)
+	}
+
+	return success
+}
+
+func calculateCapacity(cfg *config.Config, channel string) int32 {
+	defLimit := float64(cfg.Channels[channel].Spam.SettingsDefault.MessageLimit*cfg.Channels[channel].Spam.SettingsDefault.MinGapMessages) / cfg.Channels[channel].Spam.SettingsDefault.SimilarityThreshold
+	vipLimit := float64(cfg.Channels[channel].Spam.SettingsVIP.MessageLimit*cfg.Channels[channel].Spam.SettingsVIP.MinGapMessages) / cfg.Channels[channel].Spam.SettingsVIP.SimilarityThreshold
+	emoteLimit := float64(cfg.Channels[channel].Spam.SettingsEmotes.MessageLimit) / cfg.Channels[channel].Spam.SettingsEmotes.EmoteThreshold
+	return int32(max(defLimit, vipLimit, emoteLimit))
 }

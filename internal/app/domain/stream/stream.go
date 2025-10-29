@@ -84,6 +84,7 @@ func (s *Stream) SetCategory(category string) {
 func (s *Stream) Category() string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
+
 	return s.category
 }
 

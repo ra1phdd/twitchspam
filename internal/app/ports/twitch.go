@@ -49,6 +49,7 @@ type Stream struct {
 	UserLogin   string
 	Username    string
 	ViewerCount int
+	GameName    string
 	StartedAt   time.Time
 }
 

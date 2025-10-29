@@ -53,7 +53,7 @@ func TestBanwords_CheckMessage(t *testing.T) {
 		{"Английское совпадение (niga)", "you niga", true},
 		{"Transliterated совпадение", "pidor", true},
 		{"Пидарас совпадение", "Пидарас", true},
-		{"Check niggers", "Каша пидорас", true},
+		{"Check niggers", "че за пидор", true},
 	}
 
 	for _, tt := range tests {

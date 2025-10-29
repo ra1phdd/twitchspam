@@ -1,6 +1,7 @@
 package checker
 
 import (
+	"fmt"
 	"github.com/prometheus/client_golang/prometheus"
 	"log/slog"
 	"net/http"
@@ -195,7 +196,7 @@ func (c *Checker) checkAds(text string, username string) *ports.CheckerAction {
 }
 
 func (c *Checker) checkMwords(msg *message.ChatMessage) *ports.CheckerAction {
-	punishments := c.template.Mword().Check(msg, c.stream.IsLive())
+	trigger, punishments := c.template.Mword().Check(msg, c.stream.IsLive())
 	if len(punishments) == 0 {
 		c.log.Debug("No muteword violations found", slog.String("message", msg.Message.Text.Text()))
 		return nil
@@ -228,7 +229,7 @@ func (c *Checker) checkMwords(msg *message.ChatMessage) *ports.CheckerAction {
 
 	return &ports.CheckerAction{
 		Type:     action,
-		Reason:   "мворд",
+		Reason:   fmt.Sprintf("мворд (%s)", trigger),
 		Duration: dur,
 	}
 }

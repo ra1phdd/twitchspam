@@ -13,29 +13,23 @@ import (
 type PlaceholdersTemplate struct {
 	stream ports.StreamPort
 
-	placeholders      map[string]func(args []string) string
-	queryRe           *regexp.Regexp
-	nonGameCategories map[string]struct{}
+	placeholders map[string]func(args []string) string
+	queryRe      *regexp.Regexp
+}
+
+var NonGameCategories = map[string]struct{}{
+	"": {}, "Just Chatting": {}, "IRL": {}, "I'm Only Sleeping": {}, "DJs": {}, "Music": {},
+	"Games + Demos": {}, "ASMR": {}, "Special Events": {}, "Art": {}, "Politics": {},
+	"Pools, Hot Tubs, and Beaches": {}, "Slots": {}, "Food & Drink": {},
+	"Science & Technology": {}, "Sports": {}, "Animals, Aquariums, and Zoos": {},
+	"Crypto": {}, "Talk Shows & Podcasts": {}, "Co-working & Studying": {},
+	"Software and Game Development": {}, "Makers & Crafting": {}, "Writing & Reading": {},
 }
 
 func NewPlaceholders(stream ports.StreamPort) *PlaceholdersTemplate {
-	nonGameCategories := []string{
-		"", "Just Chatting", "IRL", "I'm Only Sleeping", "DJs", "Music",
-		"Games + Demos", "ASMR", "Special Events", "Art", "Politics",
-		"Pools, Hot Tubs, and Beaches", "Slots", "Food & Drink",
-		"Science & Technology", "Sports", "Animals, Aquariums, and Zoos",
-		"Crypto", "Talk Shows & Podcasts", "Co-working & Studying",
-		"Software and Game Development", "Makers & Crafting", "Writing & Reading",
-	}
-
 	pt := &PlaceholdersTemplate{
-		stream:            stream,
-		queryRe:           regexp.MustCompile(`\{query(?: (\d+))?\}`),
-		nonGameCategories: make(map[string]struct{}, len(nonGameCategories)),
-	}
-
-	for _, c := range nonGameCategories {
-		pt.nonGameCategories[c] = struct{}{}
+		stream:  stream,
+		queryRe: regexp.MustCompile(`\{query(?: (\d+))?\}`),
 	}
 
 	pt.placeholders = map[string]func(args []string) string{
@@ -158,7 +152,7 @@ func (pt *PlaceholdersTemplate) replace(s, key, replacement string) string {
 }
 
 func (pt *PlaceholdersTemplate) placeholderGame(args []string) string {
-	if _, ok := pt.nonGameCategories[pt.stream.Category()]; ok {
+	if _, ok := NonGameCategories[pt.stream.Category()]; ok {
 		if len(args) > 0 && args[0] == "true" {
 			return "игра не найдена"
 		}

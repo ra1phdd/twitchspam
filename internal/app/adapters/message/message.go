@@ -87,9 +87,9 @@ func (m *Message) Check(msg *message.ChatMessage) {
 
 	skip := false
 	for _, prefix := range []string{
-		"!am al ", "!am alg ", "!am title ", "!am cat ",
-		"!am mw ", "!am mwg ", "!am cmd ", "!am ex ",
-		"!am emote ex ", "!am pred ", "!am poll ", "!am nuke ",
+		"!am title ", "!am cat ", "!am mw ", "!am mwg ",
+		"!am cmd ", "!am ex ", "!am emote ex ",
+		"!am pred ", "!am poll ", "!am nuke ",
 		"!am mark ", "!stats ",
 	} {
 		if strings.HasPrefix(msg.Message.Text.Text(), prefix) {

@@ -21,7 +21,7 @@ func TestMatchMwordRule_CaseSensitiveAlwaysMode(t *testing.T) {
 		},
 	}
 
-	matched := tmpl.Mword().Check(msg, true)
+	_, matched := tmpl.Mword().Check(msg, true)
 	assert.Empty(t, matched, "issuing punishments without mwords")
 
 	trueVal := true
@@ -42,7 +42,7 @@ func TestMatchMwordRule_CaseSensitiveAlwaysMode(t *testing.T) {
 		},
 	}, make(map[string]*config.MwordGroup))
 
-	matched = tmpl.Mword().Check(msg, true)
+	_, matched = tmpl.Mword().Check(msg, true)
 	assert.NotEmpty(t, matched, "the punishment was not issued under the current law")
 
 	msg = &message.ChatMessage{
@@ -51,6 +51,6 @@ func TestMatchMwordRule_CaseSensitiveAlwaysMode(t *testing.T) {
 		},
 	}
 
-	matched = tmpl.Mword().Check(msg, true)
+	_, matched = tmpl.Mword().Check(msg, true)
 	assert.Empty(t, matched, "the punishment was given for a word with a mismatched case")
 }

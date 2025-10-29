@@ -37,6 +37,7 @@ func (t *Twitch) GetLiveStreams(channelIDs []string) ([]*ports.Stream, error) {
 			UserLogin:   stream.UserLogin,
 			Username:    stream.UserName,
 			ViewerCount: stream.ViewerCount,
+			GameName:    stream.GameName,
 			StartedAt:   startTime.In(loc),
 		})
 	}
