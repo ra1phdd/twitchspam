@@ -605,7 +605,7 @@ func (c *Checker) matchExceptRule(msg *domain.ChatMessage, word string, re *rege
 	text := msg.Message.Text.Text(domain.LowerOption, domain.RemovePunctuationOption, domain.RemoveDuplicateLettersOption)
 	words := msg.Message.Text.Words(domain.LowerOption, domain.RemovePunctuationOption, domain.RemoveDuplicateLettersOption)
 
-	if (opts == nil || opts.OneWord == nil || *opts.OneWord) && c.template.Mword().CheckOneWord(words) {
+	if (opts == nil || opts.OneWord == nil || *opts.OneWord) && !c.template.Mword().CheckOneWord(words) {
 		return false
 	}
 

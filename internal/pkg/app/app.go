@@ -96,10 +96,7 @@ func New() error {
 			channelIDs = append(channelIDs, channel.ID)
 
 			msg := message.New(prefixedLog, manager, st, t.API(), client)
-			if err := t.AddChannel(channel.Name, st, msg); err != nil {
-				log.Info(fmt.Sprintf("[%s] Failed add channel", channel.Name))
-				return
-			}
+			t.AddChannel(channel.Name, st, msg)
 
 			mu.Lock()
 			streams[channel.Name] = st

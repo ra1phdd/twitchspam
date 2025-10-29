@@ -44,17 +44,9 @@ func (t *Twitch) IRC() ports.IRCPort {
 	return t.irc
 }
 
-func (t *Twitch) AddChannel(channel string, stream ports.StreamPort, message ports.MessagePort) error {
+func (t *Twitch) AddChannel(channel string, stream ports.StreamPort, message ports.MessagePort) {
 	t.irc.AddChannel(channel)
-
-	channelID, err := t.api.GetChannelID(channel)
-	if err != nil {
-		return err
-	}
-	stream.SetChannelID(channelID)
-
-	t.eventSub.AddChannel(channelID, channel, stream, message)
-	return nil
+	t.eventSub.AddChannel(stream.ChannelID(), channel, stream, message)
 }
 
 func (t *Twitch) RemoveChannel(channel string) {

@@ -129,6 +129,7 @@ func removeInvisibleRune(s string) string {
 		if isInvisibleRune(r) {
 			continue
 		}
+		b.WriteRune(r)
 	}
 	return b.String()
 }
