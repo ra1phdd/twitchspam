@@ -411,8 +411,8 @@ func (c *Checker) calculateSpamMessages(msg *message.ChatMessage, settings confi
 					slog.Int("gap", gap),
 					slog.Int("min_gap_required", settings.MinGapMessages),
 				)
+				gap = 0
 			}
-			gap = 0
 		} else {
 			gap++
 			c.log.Trace("Messages are not similar, incrementing gap", slog.Int("gap", gap))

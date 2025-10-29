@@ -8,6 +8,7 @@ import (
 )
 
 func TestBanwords_CheckMessage(t *testing.T) {
+	t.Parallel()
 	bw := config.Banwords{
 		Words: []string{
 			"пидр", "нига", "pidr", "niga",
@@ -56,6 +57,8 @@ func TestBanwords_CheckMessage(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			wordsOriginal := strings.Fields(tt.input)
 			wordsLower := strings.Fields(strings.ToLower(tt.input))
 
