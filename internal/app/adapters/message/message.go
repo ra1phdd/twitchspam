@@ -85,10 +85,23 @@ func (m *Message) Check(msg *domain.ChatMessage) {
 	metrics.ModulesProcessingTime.With(prometheus.Labels{"module": "push_message"}).Observe(endModuleProcessing)
 	m.log.Trace("Message pushed to storage", slog.String("username", msg.Chatter.Username), slog.String("message_id", msg.Message.ID))
 
-	if !strings.HasPrefix(msg.Message.Text.Text(), "!am al ") && !strings.HasPrefix(msg.Message.Text.Text(), "!am alg ") {
+	skip := false
+	for _, prefix := range []string{
+		"!am al ", "!am alg ", "!am title ", "!am cat ",
+		"!am mw ", "!am mwg ", "!am cmd ", "!am ex ",
+		"!am emote ex ", "!am pred ", "!am poll ", "!am nuke ",
+		"!am mark ", "!stats ",
+	} {
+		if strings.HasPrefix(msg.Message.Text.Text(), prefix) {
+			skip = true
+			break
+		}
+	}
+
+	if !skip {
 		startModuleProcessing = time.Now()
 
-		text, ok := m.template.Aliases().Replace(msg.Message.Text.Words(domain.RemovePunctuationOption))
+		text, ok := m.template.Aliases().Replace(msg.Message.Text.Words())
 		if ok {
 			m.log.Debug("Message text replaced via alias",
 				slog.String("username", msg.Chatter.Username),
