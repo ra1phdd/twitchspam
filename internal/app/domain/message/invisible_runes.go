@@ -1,7 +1,5 @@
 package message
 
-import "strings"
-
 var zeroWidthRunes = map[rune]struct{}{
 	'\u200B': {}, // ZERO WIDTH SPACE
 	'\u200C': {}, // ZERO WIDTH NON-JOINER
@@ -63,17 +61,4 @@ func isInvisibleRune(r rune) bool {
 	default:
 		return false
 	}
-}
-
-func removeInvisibleRune(s string) string {
-	var b strings.Builder
-	b.Grow(len(s))
-
-	for _, r := range s {
-		if isInvisibleRune(r) {
-			continue
-		}
-		b.WriteRune(r)
-	}
-	return b.String()
 }

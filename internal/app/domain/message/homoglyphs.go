@@ -1,7 +1,6 @@
 package message
 
 import (
-	"strings"
 	"unicode"
 )
 
@@ -25,9 +24,9 @@ var engToRus = map[rune]rune{
 	'x': 'х', 'X': 'Х',
 }
 
-func dominantLayout(word string) string {
+func dominantLayout(runes []rune) string {
 	var rus, eng int
-	for _, r := range word {
+	for _, r := range runes {
 		if unicode.In(r, unicode.Cyrillic) {
 			rus++
 		} else if unicode.In(r, unicode.Latin) {
@@ -38,46 +37,4 @@ func dominantLayout(word string) string {
 		return "rus"
 	}
 	return "eng"
-}
-
-func removeHomoglyphs(s string) string {
-	var b strings.Builder
-	b.Grow(len(s))
-
-	var word []rune
-	flushWord := func() {
-		if len(word) == 0 {
-			return
-		}
-		layout := dominantLayout(string(word))
-		for _, r := range word {
-			switch layout {
-			case "rus":
-				if mapped, ok := engToRus[r]; ok {
-					b.WriteRune(mapped)
-				} else {
-					b.WriteRune(r)
-				}
-			case "eng":
-				if mapped, ok := rusToEng[r]; ok {
-					b.WriteRune(mapped)
-				} else {
-					b.WriteRune(r)
-				}
-			}
-		}
-		word = word[:0]
-	}
-
-	for _, r := range s {
-		if unicode.IsSpace(r) || unicode.IsPunct(r) {
-			flushWord()
-			b.WriteRune(r)
-		} else {
-			word = append(word, r)
-		}
-	}
-
-	flushWord()
-	return b.String()
 }

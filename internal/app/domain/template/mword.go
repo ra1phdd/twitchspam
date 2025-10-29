@@ -182,7 +182,7 @@ func (t *MwordTemplate) matchMwordRule(msg *message.ChatMessage, word string, re
 			return false
 		}
 
-		textOpts := make([]message.TextOptionFuncWithID, 0, 3)
+		textOpts := make([]message.TextOption, 0, 3)
 		if opts.SavePunctuation != nil && !*opts.SavePunctuation {
 			textOpts = append(textOpts, message.RemovePunctuationOption)
 		}

@@ -28,7 +28,10 @@ func (t *Twitch) SearchCategory(categoryName string) (string, string, error) {
 	}
 
 	for _, g := range searchResp.Data {
-		if strings.EqualFold(message.RemovePunctuationOption.Fn(g.Name), message.RemovePunctuationOption.Fn(categoryName)) {
+		if strings.EqualFold(
+			(&message.Text{Original: g.Name}).Text(message.RemovePunctuationOption),
+			(&message.Text{Original: categoryName}).Text(message.RemovePunctuationOption),
+		) {
 			return g.ID, g.Name, nil
 		}
 	}

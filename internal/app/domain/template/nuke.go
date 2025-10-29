@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"regexp"
-	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -123,15 +122,19 @@ func (n *NukeTemplate) Check(text *message.Text, ignoreNuke bool) *ports.Checker
 	}
 
 	for _, w := range n.nuke.containsWords {
-		w = message.LowerOption.Fn(message.RemoveDuplicateLettersOption.Fn(w))
-		if strings.Contains(text.Text(message.LowerOption, message.RemoveDuplicateLettersOption), w) {
+		if strings.Contains(
+			text.Text(message.LowerOption, message.RemoveDuplicateLettersOption),
+			(&message.Text{Original: w}).Text(message.LowerOption, message.RemoveDuplicateLettersOption),
+		) {
 			return apply()
 		}
 	}
 
 	for _, w := range n.nuke.words {
-		w = message.LowerOption.Fn(message.RemoveDuplicateLettersOption.Fn(w))
-		if slices.Contains(text.Words(message.LowerOption, message.RemoveDuplicateLettersOption), w) {
+		if strings.Contains(
+			text.Text(message.LowerOption, message.RemoveDuplicateLettersOption),
+			(&message.Text{Original: w}).Text(message.LowerOption, message.RemoveDuplicateLettersOption),
+		) {
 			return apply()
 		}
 	}

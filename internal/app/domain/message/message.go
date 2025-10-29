@@ -54,128 +54,37 @@ func (t *Text) ReplaceOriginal(text string) {
 	t.cacheWords = make(map[uint64][]string)
 }
 
-func lower(s string) string {
-	return strings.ToLower(s)
-}
+type TextOption uint64
 
-func removePunctuation(s string) string {
-	var b strings.Builder
-	b.Grow(len(s))
+const (
+	LowerOption TextOption = iota
+	RemovePunctuationOption
+	RemoveDuplicateLettersOption
+)
 
-	atWordStart := true
-	lastWasSpace := false
-
-	for _, r := range s {
-		if isInvisibleRune(r) {
-			continue
-		}
-
-		if atWordStart {
-			if r == '!' {
-				b.WriteRune(r)
-				atWordStart = false
-				continue
-			}
-			atWordStart = false
-		}
-
-		if unicode.IsSpace(r) {
-			atWordStart = true
-			if b.Len() != 0 {
-				lastWasSpace = true
-			}
-
-			continue
-		}
-
-		if unicode.IsLetter(r) || unicode.IsNumber(r) {
-			if lastWasSpace {
-				b.WriteRune(' ')
-				lastWasSpace = false
-			}
-			b.WriteRune(r)
-		}
-	}
-
-	return b.String()
-}
-
-func removeDuplicateLetters(s string) string {
-	var b strings.Builder
-	b.Grow(len(s))
-	var prev rune
-	for _, r := range s {
-		if r == prev && unicode.IsLetter(r) {
-			continue
-		}
-		b.WriteRune(r)
-		prev = r
-	}
-	return b.String()
-}
-
-type TextOptionFuncWithID struct {
-	Fn func(string) string
-	ID uint64
-}
-
-var LowerOption = TextOptionFuncWithID{
-	Fn: lower,
-	ID: 1,
-}
-
-var RemovePunctuationOption = TextOptionFuncWithID{
-	Fn: removePunctuation,
-	ID: 2,
-}
-
-var RemoveDuplicateLettersOption = TextOptionFuncWithID{
-	Fn: removeDuplicateLetters,
-	ID: 3,
-}
-
-func (t *Text) Text(opts ...TextOptionFuncWithID) string {
+func (t *Text) Text(opts ...TextOption) string {
 	if t.cacheText == nil {
 		t.cacheText = make(map[uint64]string)
 	}
 
-	var key uint64
-	for _, opt := range opts {
-		key = key*31 + opt.ID
-	}
+	key := computeCacheKey(opts)
+	//if val, ok := t.cacheText[key]; ok {
+	//	return val
+	//}
 
-	if val, ok := t.cacheText[key]; ok {
-		return val
-	}
-
-	result := t.Original
-	isRemovePunctuation := false
-	for _, opt := range opts {
-		if opt.ID == 2 {
-			isRemovePunctuation = true
-		}
-		result = opt.Fn(result)
-	}
-
-	if !isRemovePunctuation {
-		result = removeInvisibleRune(result)
-	}
-	result = removeHomoglyphs(result)
+	hashOpts := parseOptions(opts)
+	result := normalizeText(t.Original, hashOpts)
 
 	t.cacheText[key] = result
 	return result
 }
 
-func (t *Text) Words(opts ...TextOptionFuncWithID) []string {
+func (t *Text) Words(opts ...TextOption) []string {
 	if t.cacheWords == nil {
 		t.cacheWords = make(map[uint64][]string)
 	}
 
-	var key uint64
-	for _, opt := range opts {
-		key = key*31 + opt.ID
-	}
-
+	key := computeCacheKey(opts)
 	if val, ok := t.cacheWords[key]; ok {
 		return val
 	}
@@ -203,4 +112,87 @@ func HasSpecialSymbols(s string) bool {
 		}
 	}
 	return false
+}
+
+func computeCacheKey(opts []TextOption) uint64 {
+	var key uint64
+	for _, opt := range opts {
+		key = key*31 + uint64(opt)
+	}
+	return key
+}
+
+func parseOptions(opts []TextOption) map[TextOption]bool {
+	hashOpts := make(map[TextOption]bool)
+	for _, opt := range opts {
+		hashOpts[opt] = true
+	}
+	return hashOpts
+}
+
+func normalizeText(original string, hashOpts map[TextOption]bool) string {
+	var b strings.Builder
+	b.Grow(len(original))
+
+	var prev rune
+	var lastWasSpace bool
+	var word []rune
+
+	flushWord := func() {
+		if len(word) == 0 {
+			return
+		}
+		processWord(&b, word, hashOpts, &prev, &lastWasSpace)
+		word = word[:0]
+	}
+
+	for _, r := range original {
+		if isInvisibleRune(r) {
+			continue
+		}
+		if unicode.IsSpace(r) {
+			flushWord()
+			lastWasSpace = true
+			continue
+		}
+		if len(word) == 0 && r == '!' {
+			word = append(word, r)
+			continue
+		}
+		if hashOpts[RemovePunctuationOption] && !unicode.IsLetter(r) && !unicode.IsNumber(r) {
+			continue
+		}
+		word = append(word, r)
+	}
+
+	flushWord()
+	return b.String()
+}
+
+func processWord(b *strings.Builder, word []rune, hashOpts map[TextOption]bool, prev *rune, lastWasSpace *bool) {
+	layout := dominantLayout(word)
+	for _, r := range word {
+		switch layout {
+		case "rus":
+			if mapped, ok := engToRus[r]; ok {
+				r = mapped
+			}
+		case "eng":
+			if mapped, ok := rusToEng[r]; ok {
+				r = mapped
+			}
+		}
+		if hashOpts[LowerOption] && unicode.IsUpper(r) {
+			r = unicode.ToLower(r)
+		}
+		if hashOpts[RemoveDuplicateLettersOption] && r == *prev {
+			continue
+		}
+		if *lastWasSpace && b.Len() > 0 {
+			b.WriteRune(' ')
+			*lastWasSpace = false
+		}
+		b.WriteRune(r)
+		*prev = r
+	}
 }
