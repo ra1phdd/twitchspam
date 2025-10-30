@@ -36,6 +36,15 @@ type TimeoutData struct {
 	Reason   string `json:"reason,omitempty"`
 }
 
+type WarnRequest struct {
+	Data WarnData `json:"data"`
+}
+
+type WarnData struct {
+	UserID string `json:"user_id"`
+	Reason string `json:"reason,omitempty"`
+}
+
 type AnnouncementRequest struct {
 	Message string `json:"message"`
 	Color   string `json:"color,omitempty"`

@@ -30,7 +30,8 @@ type AnswerType struct {
 }
 
 type CheckerAction struct {
-	Type     string
-	Reason   string
-	Duration time.Duration
+	Type       string
+	ReasonMod  string
+	ReasonUser string
+	Duration   time.Duration
 }

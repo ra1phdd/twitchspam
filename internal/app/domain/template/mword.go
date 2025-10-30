@@ -15,7 +15,7 @@ import (
 
 type MwordTemplate struct {
 	options ports.OptionsPort
-	cache   ports.CachePort[map[bool]*CacheMword] // ключ - мворд применяется только для первых сообщений или нет
+	cache   ports.CachePort[map[bool]CacheMword] // ключ - мворд применяется только для первых сообщений или нет
 	mwords  []Mwords
 }
 
@@ -35,7 +35,7 @@ type Mwords struct {
 func NewMword(options ports.OptionsPort, mwords []config.Mword, mwordGroups map[string]*config.MwordGroup) *MwordTemplate {
 	mt := &MwordTemplate{
 		options: options,
-		cache:   storage.NewCache[map[bool]*CacheMword](500, 3*time.Minute, false, false, "", 0),
+		cache:   storage.NewCache[map[bool]CacheMword](500, 3*time.Minute, false, false, "", 0),
 	}
 	mt.Update(mwords, mwordGroups)
 
@@ -152,7 +152,7 @@ func (t *MwordTemplate) Check(msg *message.ChatMessage, isLive bool) (string, []
 			return falseMatch.Trigger, falseMatch.Punishments
 		}
 	} else {
-		match = make(map[bool]*CacheMword)
+		match = make(map[bool]CacheMword)
 	}
 
 	for _, mw := range t.mwords {
@@ -169,7 +169,7 @@ func (t *MwordTemplate) Check(msg *message.ChatMessage, isLive bool) (string, []
 		if mw.Options != nil && mw.Options.IsFirst != nil {
 			isFirst = *mw.Options.IsFirst
 		}
-		match[isFirst] = &CacheMword{
+		match[isFirst] = CacheMword{
 			Trigger:     trigger,
 			Punishments: mw.Punishments,
 		}
@@ -178,7 +178,10 @@ func (t *MwordTemplate) Check(msg *message.ChatMessage, isLive bool) (string, []
 		return trigger, mw.Punishments
 	}
 
-	match[false] = nil
+	match[false] = CacheMword{
+		Trigger:     "",
+		Punishments: nil,
+	}
 	t.cache.Set(t.getCacheKey(msg), match)
 	return "", nil
 }

@@ -23,6 +23,7 @@ const (
 	None    string = "none"
 	Ban     string = "ban"
 	Timeout string = "timeout"
+	Warn    string = "warn"
 	Delete  string = "delete"
 )
 
@@ -169,8 +170,8 @@ func (c *Checker) checkBanwords(msg *message.ChatMessage) *ports.CheckerAction {
 
 	c.log.Debug("Banword detected", slog.String("user", msg.Chatter.Username), slog.String("message", msg.Message.Text.Text()))
 	return &ports.CheckerAction{
-		Type:   Ban,
-		Reason: "банворд",
+		Type:      Ban,
+		ReasonMod: "банворд",
 	}
 }
 
@@ -190,8 +191,8 @@ func (c *Checker) checkAds(text string, username string) *ports.CheckerAction {
 
 	c.log.Debug("Advertisement detected", slog.String("user", username), slog.String("text", text))
 	return &ports.CheckerAction{
-		Type:   Ban,
-		Reason: "реклама",
+		Type:      Ban,
+		ReasonMod: "реклама",
 	}
 }
 
@@ -228,9 +229,10 @@ func (c *Checker) checkMwords(msg *message.ChatMessage) *ports.CheckerAction {
 	)
 
 	return &ports.CheckerAction{
-		Type:     action,
-		Reason:   fmt.Sprintf("мворд (%s)", trigger),
-		Duration: dur,
+		Type:       action,
+		ReasonMod:  fmt.Sprintf("мворд (%s)", trigger),
+		ReasonUser: fmt.Sprintf("Не используй запрещенное слово! (%s)", trigger),
+		Duration:   dur,
 	}
 }
 
@@ -264,7 +266,7 @@ func (c *Checker) checkSpam(msg *message.ChatMessage) *ports.CheckerAction {
 		c.log.Info("Message exceeded max word length",
 			slog.String("user", msg.Chatter.Username),
 			slog.String("message", msg.Message.Text.Text()),
-			slog.String("reason", action.Reason),
+			slog.String("reason", action.ReasonMod),
 			slog.Any("action", action),
 		)
 		return action
@@ -282,7 +284,7 @@ func (c *Checker) checkSpam(msg *message.ChatMessage) *ports.CheckerAction {
 		c.log.Debug("Emote spam check triggered",
 			slog.String("user", msg.Chatter.Username),
 			slog.String("message", msg.Message.Text.Text()),
-			slog.String("reason", action.Reason),
+			slog.String("reason", action.ReasonMod),
 			slog.Any("action", action),
 		)
 
@@ -346,9 +348,10 @@ func (c *Checker) checkSpam(msg *message.ChatMessage) *ports.CheckerAction {
 
 	c.messages.ClearKey(msg.Chatter.Username)
 	return &ports.CheckerAction{
-		Type:     action,
-		Reason:   "спам",
-		Duration: dur,
+		Type:       action,
+		ReasonMod:  "спам",
+		ReasonUser: "Не спамь!",
+		Duration:   dur,
 	}
 }
 
@@ -465,9 +468,10 @@ func (c *Checker) handleWordLength(words []string, settings config.SpamSettings)
 				slog.Int("max_length", settings.MaxWordLength),
 			)
 			return &ports.CheckerAction{
-				Type:     settings.MaxWordPunishment.Action,
-				Reason:   "превышена максимальная длина слова",
-				Duration: time.Duration(settings.MaxWordPunishment.Duration) * time.Second,
+				Type:       settings.MaxWordPunishment.Action,
+				ReasonMod:  "превышена максимальная длина слова",
+				ReasonUser: "Твоё сообщение содержит слишком длинное слово!",
+				Duration:   time.Duration(settings.MaxWordPunishment.Duration) * time.Second,
 			}
 		}
 	}
@@ -514,9 +518,10 @@ func (c *Checker) handleEmotes(msg *message.ChatMessage, countSpam int) *ports.C
 				slog.Int("max_allowed", c.cfg.Channels[msg.Broadcaster.Login].Spam.SettingsEmotes.MaxEmotesLength),
 			)
 			return &ports.CheckerAction{
-				Type:     c.cfg.Channels[msg.Broadcaster.Login].Spam.SettingsEmotes.MaxEmotesPunishment.Action,
-				Reason:   "превышено максимальное кол-во эмоутов в сообщении",
-				Duration: time.Duration(c.cfg.Channels[msg.Broadcaster.Login].Spam.SettingsEmotes.MaxEmotesPunishment.Duration) * time.Second,
+				Type:       c.cfg.Channels[msg.Broadcaster.Login].Spam.SettingsEmotes.MaxEmotesPunishment.Action,
+				ReasonMod:  "превышено максимальное кол-во эмоутов в сообщении",
+				ReasonUser: "Твоё сообщение содержит слишком много эмоутов!",
+				Duration:   time.Duration(c.cfg.Channels[msg.Broadcaster.Login].Spam.SettingsEmotes.MaxEmotesPunishment.Duration) * time.Second,
 			}
 		}
 	}
@@ -554,9 +559,10 @@ func (c *Checker) handleEmotes(msg *message.ChatMessage, countSpam int) *ports.C
 	)
 
 	return &ports.CheckerAction{
-		Type:     action,
-		Reason:   "спам эмоутов",
-		Duration: dur,
+		Type:       action,
+		ReasonMod:  "спам эмоутов",
+		ReasonUser: "Не спамь!",
+		Duration:   dur,
 	}
 }
 
@@ -590,9 +596,10 @@ func (c *Checker) handleExceptions(msg *message.ChatMessage, countSpam int, type
 		})
 
 		return &ports.CheckerAction{
-			Type:     action,
-			Reason:   "спам",
-			Duration: dur,
+			Type:       action,
+			ReasonMod:  "спам",
+			ReasonUser: "Не спамь!",
+			Duration:   dur,
 		}
 	}
 

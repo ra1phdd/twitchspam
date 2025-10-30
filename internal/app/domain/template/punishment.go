@@ -18,19 +18,23 @@ func NewPunishment() *PunishmentTemplate {
 
 func (p *PunishmentTemplate) Parse(punishment string, allowInherit bool) (config.Punishment, error) {
 	punishment = strings.TrimSpace(punishment)
-	if punishment == "-" {
-		return config.Punishment{Action: "delete"}, nil
-	}
-
-	if punishment == "none" {
-		return config.Punishment{Action: "none"}, nil
-	}
-
 	if allowInherit && punishment == "*" {
 		return config.Punishment{Action: "inherit"}, nil
 	}
 
-	if punishment == "0" {
+	if punishment == "none" || punishment == "n" {
+		return config.Punishment{Action: "none"}, nil
+	}
+
+	if punishment == "delete" || punishment == "d" {
+		return config.Punishment{Action: "delete"}, nil
+	}
+
+	if punishment == "warn" || punishment == "w" {
+		return config.Punishment{Action: "warn"}, nil
+	}
+
+	if punishment == "ban" || punishment == "b" || punishment == "0" {
 		return config.Punishment{Action: "ban"}, nil
 	}
 

@@ -109,6 +109,7 @@ func New() error {
 			metrics.MessagesPerStream.With(prometheus.Labels{"channel": channel.Name}).Add(0)
 			metrics.ModerationActions.With(prometheus.Labels{"channel": channel.Name, "action": "delete"}).Set(0)
 			metrics.ModerationActions.With(prometheus.Labels{"channel": channel.Name, "action": "timeout"}).Set(0)
+			metrics.ModerationActions.With(prometheus.Labels{"channel": channel.Name, "action": "warn"}).Set(0)
 			metrics.ModerationActions.With(prometheus.Labels{"channel": channel.Name, "action": "ban"}).Set(0)
 			log.Info(fmt.Sprintf("[%s] Chatbot started", channel.Name))
 		}()

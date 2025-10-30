@@ -172,10 +172,18 @@ func (m *Message) getAction(action *ports.CheckerAction, msg *message.ChatMessag
 		return
 	case checker.Ban:
 		m.log.Warn("Ban user", slog.String("username", msg.Chatter.Username), slog.String("text", msg.Message.Text.Text()))
-		m.api.BanUser(m.stream.ChannelName(), m.stream.ChannelID(), msg.Chatter.UserID, action.Reason)
+		m.api.BanUser(m.stream.ChannelName(), m.stream.ChannelID(), msg.Chatter.UserID, action.ReasonMod)
 	case checker.Timeout:
 		m.log.Warn("Timeout user", slog.String("username", msg.Chatter.Username), slog.String("text", msg.Message.Text.Text()), slog.Int("duration", int(action.Duration.Seconds())))
-		m.api.TimeoutUser(m.stream.ChannelName(), m.stream.ChannelID(), msg.Chatter.UserID, int(action.Duration.Seconds()), action.Reason)
+		m.api.TimeoutUser(m.stream.ChannelName(), m.stream.ChannelID(), msg.Chatter.UserID, int(action.Duration.Seconds()), action.ReasonMod)
+	case checker.Warn:
+		m.log.Warn("Warn user", slog.String("username", msg.Chatter.Username), slog.String("text", msg.Message.Text.Text()))
+		if err := m.api.WarnUser(m.stream.ChannelName(), m.stream.ChannelID(), msg.Chatter.UserID, action.ReasonUser); err != nil {
+			m.log.Error("Failed to warn message on chat", err)
+		}
+		if err := m.api.DeleteChatMessage(m.stream.ChannelName(), m.stream.ChannelID(), msg.Message.ID); err != nil {
+			m.log.Error("Failed to delete message on chat", err)
+		}
 	case checker.Delete:
 		m.log.Warn("Delete message", slog.String("username", msg.Chatter.Username), slog.String("text", msg.Message.Text.Text()))
 		if err := m.api.DeleteChatMessage(m.stream.ChannelName(), m.stream.ChannelID(), msg.Message.ID); err != nil {

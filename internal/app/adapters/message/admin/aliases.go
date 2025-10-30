@@ -88,7 +88,8 @@ func (a *AddAlias) handleAliasesAdd(cfg *config.Config, channel string, text *me
 			continue
 		}
 
-		if strings.Contains(alias, "!am al ") || strings.Contains(alias, "!am alg ") || alias == original {
+		if strings.Contains(alias, "!am al ") || strings.Contains(alias, "!am alg ") ||
+			alias == original || cfg.Channels[channel].Aliases[alias] != "" {
 			return aliasDenied
 		}
 
@@ -205,7 +206,8 @@ func (a *AddAliasGroup) handleAlgAdd(cfg *config.Config, channel string, text *m
 			continue
 		}
 
-		if strings.Contains(alias, "!am al ") || strings.Contains(alias, "!am alg ") || alias == group.Original {
+		if strings.Contains(alias, "!am al ") || strings.Contains(alias, "!am alg ") ||
+			alias == group.Original || cfg.Channels[channel].Aliases[alias] != "" {
 			return aliasDenied
 		}
 

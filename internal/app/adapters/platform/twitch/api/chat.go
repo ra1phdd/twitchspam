@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/prometheus/client_golang/prometheus"
 	"log/slog"
@@ -147,6 +148,56 @@ func (t *Twitch) TimeoutUser(channelName, channelID, userID string, duration int
 
 	t.log.Info("Timeout applied successfully", slog.String("user_id", userID), slog.Int("duration", duration), slog.String("reason", reason))
 	metrics.ModerationActions.With(prometheus.Labels{"channel": channelName, "action": "timeout"}).Inc()
+}
+
+func (t *Twitch) WarnUser(channelName, broadcasterID, userID, reason string) error {
+	reqBody := WarnRequest{
+		Data: WarnData{
+			UserID: userID,
+			Reason: reason,
+		},
+	}
+
+	bodyBytes, err := json.Marshal(reqBody)
+	if err != nil {
+		t.log.Error("Failed to marshal request body", err)
+		return err
+	}
+
+	params := url.Values{}
+	params.Set("broadcaster_id", broadcasterID)
+	params.Set("moderator_id", broadcasterID)
+
+	token, err := t.ensureUserToken(context.Background(), broadcasterID)
+	if err != nil {
+		t.log.Error("Failed to get user token", err)
+		return err
+	}
+
+	if statusCode, err := t.doTwitchRequest(context.Background(), twitchRequest{
+		Method: http.MethodPost,
+		URL:    "https://api.twitch.tv/helix/moderation/warnings?" + params.Encode(),
+		Token:  token,
+		Body:   bytes.NewReader(bodyBytes),
+	}, nil); err != nil {
+		switch statusCode {
+		case http.StatusUnauthorized:
+			return ErrUserAuthNotCompleted
+		case http.StatusBadRequest:
+			return ErrBadRequest
+		case http.StatusConflict:
+			return errors.New("warning update conflict — another process is updating the user's warning state")
+		}
+		return err
+	}
+
+	t.log.Info("User warning issued successfully",
+		slog.String("channel", channelName),
+		slog.String("user_id", userID),
+		slog.String("reason", reason))
+
+	metrics.ModerationActions.With(prometheus.Labels{"channel": channelName, "action": "warn"}).Inc()
+	return nil
 }
 
 func (t *Twitch) BanUser(channelName, channelID, userID string, reason string) {
