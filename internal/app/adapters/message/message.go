@@ -144,7 +144,7 @@ func (m *Message) CheckAutomod(msg *message.ChatMessage) {
 		m.stream.Stats().AddMessage(msg.Chatter.Username)
 	}
 
-	if m.cfg.Channels[m.stream.ChannelName()].Enabled && m.cfg.Channels[m.stream.ChannelName()].Automod.Enabled {
+	if !m.cfg.Channels[m.stream.ChannelName()].Enabled || !m.cfg.Channels[m.stream.ChannelName()].Automod.Enabled {
 		return
 	}
 
