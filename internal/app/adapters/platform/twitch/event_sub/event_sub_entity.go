@@ -101,11 +101,14 @@ type ChatMessageEvent struct {
 }
 
 type AutomodHoldEvent struct {
-	BroadcasterUserID string `json:"broadcaster_user_id"`
-	UserID            string `json:"user_id"`
-	UserName          string `json:"user_name"`
-	MessageID         string `json:"message_id"`
-	Message           struct {
+	BroadcasterUserID    string `json:"broadcaster_user_id"`
+	BroadcasterUserLogin string `json:"broadcaster_user_login"`
+	BroadcasterUserName  string `json:"broadcaster_user_name"`
+	UserID               string `json:"user_id"`
+	UserLogin            string `json:"user_login"`
+	UserName             string `json:"user_name"`
+	MessageID            string `json:"message_id"`
+	Message              struct {
 		Text      string `json:"text"`
 		Fragments []struct {
 			Type      string  `json:"type"`
