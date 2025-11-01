@@ -74,6 +74,16 @@ func New() error {
 		go func() {
 			defer wg.Done()
 
+			metrics.BotEnabled.With(prometheus.Labels{"channel": channel.Name}).Set(map[bool]float64{true: 1, false: 0}[channel.Enabled])
+			metrics.AntiSpamEnabled.With(prometheus.Labels{"channel": channel.Name, "type": "default"}).Set(map[bool]float64{true: 1, false: 0}[channel.Spam.SettingsDefault.Enabled])
+			metrics.AntiSpamEnabled.With(prometheus.Labels{"channel": channel.Name, "type": "vip"}).Set(map[bool]float64{true: 1, false: 0}[channel.Spam.SettingsVIP.Enabled])
+			metrics.AntiSpamEnabled.With(prometheus.Labels{"channel": channel.Name, "type": "emote"}).Set(map[bool]float64{true: 1, false: 0}[channel.Spam.SettingsEmotes.Enabled])
+			metrics.MessagesPerStream.With(prometheus.Labels{"channel": channel.Name}).Add(0)
+			metrics.ModerationActions.With(prometheus.Labels{"channel": channel.Name, "action": "delete"}).Set(0)
+			metrics.ModerationActions.With(prometheus.Labels{"channel": channel.Name, "action": "timeout"}).Set(0)
+			metrics.ModerationActions.With(prometheus.Labels{"channel": channel.Name, "action": "warn"}).Set(0)
+			metrics.ModerationActions.With(prometheus.Labels{"channel": channel.Name, "action": "ban"}).Set(0)
+
 			prefixedLog := logger.NewPrefixedLogger(log, channel.Name)
 			st := stream.NewStream(channel.Name, fs, cacheStats)
 
@@ -102,15 +112,6 @@ func New() error {
 			streams[channel.Name] = st
 			mu.Unlock()
 
-			metrics.BotEnabled.With(prometheus.Labels{"channel": channel.Name}).Set(map[bool]float64{true: 1, false: 0}[channel.Enabled])
-			metrics.AntiSpamEnabled.With(prometheus.Labels{"channel": channel.Name, "type": "default"}).Set(map[bool]float64{true: 1, false: 0}[channel.Spam.SettingsDefault.Enabled])
-			metrics.AntiSpamEnabled.With(prometheus.Labels{"channel": channel.Name, "type": "vip"}).Set(map[bool]float64{true: 1, false: 0}[channel.Spam.SettingsVIP.Enabled])
-			metrics.AntiSpamEnabled.With(prometheus.Labels{"channel": channel.Name, "type": "emote"}).Set(map[bool]float64{true: 1, false: 0}[channel.Spam.SettingsEmotes.Enabled])
-			metrics.MessagesPerStream.With(prometheus.Labels{"channel": channel.Name}).Add(0)
-			metrics.ModerationActions.With(prometheus.Labels{"channel": channel.Name, "action": "delete"}).Set(0)
-			metrics.ModerationActions.With(prometheus.Labels{"channel": channel.Name, "action": "timeout"}).Set(0)
-			metrics.ModerationActions.With(prometheus.Labels{"channel": channel.Name, "action": "warn"}).Set(0)
-			metrics.ModerationActions.With(prometheus.Labels{"channel": channel.Name, "action": "ban"}).Set(0)
 			log.Info(fmt.Sprintf("[%s] Chatbot started", channel.Name))
 		}()
 	}
