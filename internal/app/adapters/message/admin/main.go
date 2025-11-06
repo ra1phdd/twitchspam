@@ -1,6 +1,7 @@
 package admin
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"github.com/prometheus/client_golang/prometheus"
@@ -24,11 +25,7 @@ import (
 
 type Ping struct{}
 
-func (p *Ping) Execute(_ *config.Config, _ string, _ *message.Text) *ports.AnswerType {
-	return p.handlePing()
-}
-
-func (p *Ping) handlePing() *ports.AnswerType {
+func (p *Ping) Execute(_ *config.Config, _ string, _ *message.ChatMessage) *ports.AnswerType {
 	uptime := time.Since(startApp)
 
 	var m runtime.MemStats
@@ -50,11 +47,7 @@ type OnOff struct {
 	template ports.TemplatePort
 }
 
-func (o *OnOff) Execute(cfg *config.Config, channel string, _ *message.Text) *ports.AnswerType {
-	return o.handleOnOff(cfg, channel)
-}
-
-func (o *OnOff) handleOnOff(cfg *config.Config, channel string) *ports.AnswerType {
+func (o *OnOff) Execute(cfg *config.Config, channel string, _ *message.ChatMessage) *ports.AnswerType {
 	cfg.Channels[channel].Enabled = o.enabled
 
 	metrics.BotEnabled.With(prometheus.Labels{"channel": channel}).Set(map[bool]float64{true: 1, false: 0}[o.enabled])
@@ -67,12 +60,8 @@ type Game struct {
 	stream ports.StreamPort
 }
 
-func (g *Game) Execute(_ *config.Config, _ string, text *message.Text) *ports.AnswerType {
-	return g.handleGame(text)
-}
-
-func (g *Game) handleGame(text *message.Text) *ports.AnswerType {
-	matches := g.re.FindStringSubmatch(text.Text()) // !am game <игра>
+func (g *Game) Execute(_ *config.Config, _ string, msg *message.ChatMessage) *ports.AnswerType {
+	matches := g.re.FindStringSubmatch(msg.Message.Text.Text()) // !am game <игра>
 	if len(matches) != 2 {
 		return nonParametr
 	}
@@ -97,11 +86,7 @@ type Status struct {
 	template ports.TemplatePort
 }
 
-func (s *Status) Execute(cfg *config.Config, channel string, _ *message.Text) *ports.AnswerType {
-	return s.handleStatus(cfg, channel)
-}
-
-func (s *Status) handleStatus(cfg *config.Config, channel string) *ports.AnswerType {
+func (s *Status) Execute(cfg *config.Config, channel string, _ *message.ChatMessage) *ports.AnswerType {
 	if !cfg.Channels[channel].Enabled {
 		return &ports.AnswerType{Text: []string{"бот выключен!"}, IsReply: true}
 	}
@@ -123,15 +108,45 @@ func (s *Status) handleStatus(cfg *config.Config, channel string) *ports.AnswerT
 	}
 }
 
+type Auth struct {
+	log    logger.Logger
+	stream ports.StreamPort
+	api    ports.APIPort
+}
+
+func (a *Auth) Execute(cfg *config.Config, channel string, _ *message.ChatMessage) *ports.AnswerType {
+	token, ok := cfg.UsersTokens[a.stream.ChannelID()]
+	if !ok {
+		return &ports.AnswerType{Text: []string{"авторизация не пройдена!"}, IsReply: true}
+	}
+
+	err := a.api.ValidateToken(context.Background(), token.AccessToken)
+	if err == nil {
+		return &ports.AnswerType{Text: []string{"авторизация пройдена!"}, IsReply: true}
+	}
+	a.log.Error("Failed to validate access token", err, slog.String("channel_id", channel))
+
+	resp, err := a.api.RefreshToken(context.Background(), a.stream.ChannelID(), token)
+	if err != nil {
+		return &ports.AnswerType{Text: []string{"авторизация не пройдена!"}, IsReply: true}
+	}
+
+	newToken := &config.UserTokens{
+		AccessToken:  resp.AccessToken,
+		RefreshToken: resp.RefreshToken,
+		ExpiresIn:    resp.ExpiresIn,
+		ObtainedAt:   time.Now(),
+	}
+	cfg.UsersTokens[a.stream.ChannelID()] = newToken
+
+	return &ports.AnswerType{Text: []string{"авторизация пройдена!"}, IsReply: true}
+}
+
 type Reset struct {
 	manager *config.Manager
 }
 
-func (r *Reset) Execute(cfg *config.Config, channel string, _ *message.Text) *ports.AnswerType {
-	return r.handleReset(cfg, channel)
-}
-
-func (r *Reset) handleReset(cfg *config.Config, channel string) *ports.AnswerType {
+func (r *Reset) Execute(cfg *config.Config, channel string, _ *message.ChatMessage) *ports.AnswerType {
 	cfg.Channels[channel].Spam = r.manager.GetChannel().Spam // !am reset
 	return success
 }
@@ -140,12 +155,8 @@ type Say struct {
 	re *regexp.Regexp
 }
 
-func (s *Say) Execute(_ *config.Config, _ string, text *message.Text) *ports.AnswerType {
-	return s.handleSay(text)
-}
-
-func (s *Say) handleSay(text *message.Text) *ports.AnswerType {
-	matches := s.re.FindStringSubmatch(text.Text()) // !am say <текст>
+func (s *Say) Execute(_ *config.Config, _ string, msg *message.ChatMessage) *ports.AnswerType {
+	matches := s.re.FindStringSubmatch(msg.Message.Text.Text()) // !am say <текст>
 	if len(matches) != 2 {
 		return nonParametr
 	}
@@ -160,12 +171,8 @@ type Spam struct {
 	re *regexp.Regexp
 }
 
-func (s *Spam) Execute(_ *config.Config, _ string, text *message.Text) *ports.AnswerType {
-	return s.handleSpam(text)
-}
-
-func (s *Spam) handleSpam(text *message.Text) *ports.AnswerType {
-	matches := s.re.FindStringSubmatch(text.Text()) // !am spam <кол-во> <текст>
+func (s *Spam) Execute(_ *config.Config, _ string, msg *message.ChatMessage) *ports.AnswerType {
+	matches := s.re.FindStringSubmatch(msg.Message.Text.Text()) // !am spam <кол-во> <текст>
 	if len(matches) != 3 {
 		return nonParametr
 	}
@@ -179,10 +186,10 @@ func (s *Spam) handleSpam(text *message.Text) *ports.AnswerType {
 		count = 100
 	}
 
-	msg := strings.TrimSpace(matches[2])
+	answer := strings.TrimSpace(matches[2])
 	answers := make([]string, count)
 	for i := range answers {
-		answers[i] = msg
+		answers[i] = answer
 	}
 
 	return &ports.AnswerType{
@@ -204,12 +211,8 @@ type Category struct {
 	Name string `json:"name"`
 }
 
-func (c *SetCategory) Execute(_ *config.Config, _ string, text *message.Text) *ports.AnswerType {
-	return c.handleSetCategory(text)
-}
-
-func (c *SetCategory) handleSetCategory(text *message.Text) *ports.AnswerType {
-	matches := c.re.FindStringSubmatch(text.Text()) // !am cat <название категории>
+func (c *SetCategory) Execute(_ *config.Config, _ string, msg *message.ChatMessage) *ports.AnswerType {
+	matches := c.re.FindStringSubmatch(msg.Message.Text.Text()) // !am cat <название категории>
 	if len(matches) != 2 {
 		return nonParametr
 	}
@@ -240,7 +243,7 @@ func (c *SetCategory) handleSetCategory(text *message.Text) *ports.AnswerType {
 	}
 
 	var id, name string
-	key := text.Text(message.RemovePunctuationOption)
+	key := msg.Message.Text.Text(message.RemovePunctuationOption)
 	if cat, ok := c.cacheCategories.Get(key); ok {
 		id, name = cat.ID, cat.Name
 		c.log.Info("Category found in cache", slog.String("id", id), slog.String("name", name))
@@ -298,12 +301,8 @@ type SetTitle struct {
 	api    ports.APIPort
 }
 
-func (t *SetTitle) Execute(_ *config.Config, _ string, text *message.Text) *ports.AnswerType {
-	return t.handleSetTitle(text)
-}
-
-func (t *SetTitle) handleSetTitle(text *message.Text) *ports.AnswerType {
-	matches := t.re.FindStringSubmatch(text.Text()) // !am title <название>
+func (t *SetTitle) Execute(_ *config.Config, _ string, msg *message.ChatMessage) *ports.AnswerType {
+	matches := t.re.FindStringSubmatch(msg.Message.Text.Text()) // !am title <название>
 	if len(matches) != 2 {
 		return nonParametr
 	}

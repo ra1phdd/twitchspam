@@ -17,12 +17,8 @@ type AddCommandTimer struct {
 	t        *AddTimer
 }
 
-func (c *AddCommandTimer) Execute(cfg *config.Config, channel string, text *message.Text) *ports.AnswerType {
-	return c.handleCommandTimersAdd(cfg, channel, text)
-}
-
-func (c *AddCommandTimer) handleCommandTimersAdd(cfg *config.Config, channel string, text *message.Text) *ports.AnswerType {
-	textWithoutOpts, opts := c.template.Options().ParseAll(text.Text(), template.TimersOptions)
+func (c *AddCommandTimer) Execute(cfg *config.Config, channel string, msg *message.ChatMessage) *ports.AnswerType {
+	textWithoutOpts, opts := c.template.Options().ParseAll(msg.Message.Text.Text(), template.TimersOptions)
 
 	// !am cmd timer <кол-во сообщений> <интервал в секундах> <команда>
 	// или !am cmd timer add <кол-во сообщений> <интервал в секундах> <команда>
@@ -70,12 +66,8 @@ type DelCommandTimer struct {
 	timers   ports.TimersPort
 }
 
-func (c *DelCommandTimer) Execute(cfg *config.Config, channel string, text *message.Text) *ports.AnswerType {
-	return c.handleCommandTimersDel(cfg, channel, text)
-}
-
-func (c *DelCommandTimer) handleCommandTimersDel(cfg *config.Config, channel string, text *message.Text) *ports.AnswerType {
-	matches := c.re.FindStringSubmatch(text.Text()) // !am cmd timer del <команды через запятую>
+func (c *DelCommandTimer) Execute(cfg *config.Config, channel string, msg *message.ChatMessage) *ports.AnswerType {
+	matches := c.re.FindStringSubmatch(msg.Message.Text.Text()) // !am cmd timer del <команды через запятую>
 	if len(matches) != 2 {
 		return nonParametr
 	}
@@ -112,12 +104,8 @@ type OnOffCommandTimer struct {
 	t        *AddTimer
 }
 
-func (c *OnOffCommandTimer) Execute(cfg *config.Config, channel string, text *message.Text) *ports.AnswerType {
-	return c.handleCommandTimersOnOff(cfg, channel, text)
-}
-
-func (c *OnOffCommandTimer) handleCommandTimersOnOff(cfg *config.Config, channel string, text *message.Text) *ports.AnswerType {
-	matches := c.re.FindStringSubmatch(text.Text()) // !am cmd timer on/off <команды через запятую>
+func (c *OnOffCommandTimer) Execute(cfg *config.Config, channel string, msg *message.ChatMessage) *ports.AnswerType {
+	matches := c.re.FindStringSubmatch(msg.Message.Text.Text()) // !am cmd timer on/off <команды через запятую>
 	if len(matches) != 3 {
 		return nonParametr
 	}
@@ -164,12 +152,8 @@ type SetCommandTimer struct {
 	t        *AddTimer
 }
 
-func (c *SetCommandTimer) Execute(cfg *config.Config, channel string, text *message.Text) *ports.AnswerType {
-	return c.handleCommandTimersSet(cfg, channel, text)
-}
-
-func (c *SetCommandTimer) handleCommandTimersSet(cfg *config.Config, channel string, text *message.Text) *ports.AnswerType {
-	textWithoutOpts, opts := c.template.Options().ParseAll(text.Text(), template.TimersOptions)
+func (c *SetCommandTimer) Execute(cfg *config.Config, channel string, msg *message.ChatMessage) *ports.AnswerType {
+	textWithoutOpts, opts := c.template.Options().ParseAll(msg.Message.Text.Text(), template.TimersOptions)
 
 	// !am cmd timer set <кол-во сообщений> <интервал в секундах> <команды через запятую>
 	// или !am cmd timer set <опции> <команды через запятую>

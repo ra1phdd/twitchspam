@@ -12,11 +12,7 @@ type OnOffAutomod struct {
 	enabled bool
 }
 
-func (a *OnOffAutomod) Execute(cfg *config.Config, channel string, _ *message.Text) *ports.AnswerType {
-	return a.handleOnOffAutomod(cfg, channel)
-}
-
-func (a *OnOffAutomod) handleOnOffAutomod(cfg *config.Config, channel string) *ports.AnswerType {
+func (a *OnOffAutomod) Execute(cfg *config.Config, channel string, _ *message.ChatMessage) *ports.AnswerType {
 	cfg.Channels[channel].Automod.Enabled = a.enabled // !am mod on/off
 	return success
 }
@@ -26,12 +22,8 @@ type DelayAutomod struct {
 	template ports.TemplatePort
 }
 
-func (a *DelayAutomod) Execute(cfg *config.Config, channel string, text *message.Text) *ports.AnswerType {
-	return a.handleDelayAutomod(cfg, channel, text)
-}
-
-func (a *DelayAutomod) handleDelayAutomod(cfg *config.Config, channel string, text *message.Text) *ports.AnswerType {
-	matches := a.re.FindStringSubmatch(text.Text()) // !am mod delay <число>
+func (a *DelayAutomod) Execute(cfg *config.Config, channel string, msg *message.ChatMessage) *ports.AnswerType {
+	matches := a.re.FindStringSubmatch(msg.Message.Text.Text()) // !am mod delay <число>
 	if len(matches) != 2 {
 		return nonParametr
 	}

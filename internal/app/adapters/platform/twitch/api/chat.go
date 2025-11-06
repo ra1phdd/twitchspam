@@ -206,3 +206,22 @@ func (t *Twitch) BanUser(channelName, channelID, userID string, reason string) {
 	metrics.ModerationActions.With(prometheus.Labels{"channel": channelName, "action": "ban"}).Inc()
 	metrics.ModerationActions.With(prometheus.Labels{"channel": channelName, "action": "timeout"}).Dec()
 }
+
+func (t *Twitch) UnbanUser(channelID, userID string) {
+	params := url.Values{}
+	params.Set("broadcaster_id", channelID)
+	params.Set("moderator_id", t.cfg.App.UserID)
+	params.Set("user_id", userID)
+
+	if _, err := t.doTwitchRequest(context.Background(), twitchRequest{
+		Method: http.MethodDelete,
+		URL:    "https://api.twitch.tv/helix/moderation/bans?" + params.Encode(),
+		Token:  nil,
+		Body:   nil,
+	}, nil); err != nil {
+		t.log.Error("Failed to unban user", err, slog.String("user_id", userID))
+		return
+	}
+
+	t.log.Info("User unbanned successfully", slog.String("user_id", userID))
+}

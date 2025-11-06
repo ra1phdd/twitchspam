@@ -50,9 +50,6 @@ func (m *Manager) validate(cfg *Config) error {
 		if channel.Spam.Mode < 0 || channel.Spam.Mode > 3 {
 			return fmt.Errorf("spam.mode must be one of always (0), online (1), offline (2); got %d", channel.Spam.Mode)
 		}
-		if channel.Spam.WhitelistUsers == nil {
-			channel.Spam.WhitelistUsers = make(map[string]struct{})
-		}
 		if channel.Spam.Exceptions == nil {
 			channel.Spam.Exceptions = make(map[string]*ExceptionsSettings)
 		}
@@ -272,6 +269,17 @@ func (m *Manager) validate(cfg *Config) error {
 				return errors.New("mword_group.original must not be empty")
 			}
 		}
+
+		if channel.Roles == nil {
+			channel.Roles = make(map[string][]string)
+		}
+		if channel.Trusts == nil {
+			channel.Trusts = make(map[string]*Trust)
+		}
+	}
+
+	if cfg.GlobalRoles == nil {
+		cfg.GlobalRoles = make(map[string][]string)
 	}
 
 	if cfg.GlobalAliases == nil {

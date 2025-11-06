@@ -24,13 +24,9 @@ type Nuke struct {
 	messages ports.StorePort[storage.Message]
 }
 
-func (n *Nuke) Execute(_ *config.Config, _ string, text *message.Text) *ports.AnswerType {
-	return n.handleNuke(text)
-}
-
-func (n *Nuke) handleNuke(text *message.Text) *ports.AnswerType {
+func (n *Nuke) Execute(_ *config.Config, _ string, msg *message.ChatMessage) *ports.AnswerType {
 	// !am nuke <*наказание> <*длительность> <*scrollback> <слова/фразы через запятую или regex>
-	matches := n.re.FindStringSubmatch(text.Text())
+	matches := n.re.FindStringSubmatch(msg.Message.Text.Text())
 	if len(matches) != 5 {
 		return nonParametr
 	}
@@ -190,11 +186,7 @@ type NukeStop struct {
 	template ports.TemplatePort
 }
 
-func (n *NukeStop) Execute(_ *config.Config, _ string, _ *message.Text) *ports.AnswerType {
-	return n.handleNukeStop()
-}
-
-func (n *NukeStop) handleNukeStop() *ports.AnswerType {
+func (n *NukeStop) Execute(_ *config.Config, _ string, _ *message.ChatMessage) *ports.AnswerType {
 	// !am nuke stop
 	n.template.Nuke().Cancel()
 
@@ -205,11 +197,7 @@ type ReNuke struct {
 	template ports.TemplatePort
 }
 
-func (n *ReNuke) Execute(_ *config.Config, _ string, _ *message.Text) *ports.AnswerType {
-	return n.handleReNuke()
-}
-
-func (n *ReNuke) handleReNuke() *ports.AnswerType {
+func (n *ReNuke) Execute(_ *config.Config, _ string, _ *message.ChatMessage) *ports.AnswerType {
 	// !am nuke re
 	if err := n.template.Nuke().Restart(); err != nil {
 		return &ports.AnswerType{

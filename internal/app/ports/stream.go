@@ -18,6 +18,7 @@ type StreamPort interface {
 }
 
 type StatsPort interface {
+	Reset()
 	SetStartTime(t time.Time)
 	GetStartTime() time.Time
 	SetEndTime(t time.Time)
@@ -25,6 +26,7 @@ type StatsPort interface {
 	SetOnline(viewers int)
 	AddMessage(username string)
 	AddDeleted(username string)
+	AddWarn(username string)
 	AddBan(username string)
 	AddTimeout(username string)
 	AddCategoryChange(category string, t time.Time)

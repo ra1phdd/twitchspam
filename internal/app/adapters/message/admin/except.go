@@ -17,12 +17,8 @@ type AddExcept struct {
 	typeExcept string
 }
 
-func (e *AddExcept) Execute(cfg *config.Config, channel string, text *message.Text) *ports.AnswerType {
-	return e.handleExceptAdd(cfg, channel, text)
-}
-
-func (e *AddExcept) handleExceptAdd(cfg *config.Config, channel string, text *message.Text) *ports.AnswerType {
-	textWithoutOpts, opts := e.template.Options().ParseAll(text.Text(), template.ExceptOptions)
+func (e *AddExcept) Execute(cfg *config.Config, channel string, msg *message.ChatMessage) *ports.AnswerType {
+	textWithoutOpts, opts := e.template.Options().ParseAll(msg.Message.Text.Text(), template.ExceptOptions)
 
 	// !am ex (add) <кол-во сообщений> <наказания через запятую> <слова/фразы через запятую>
 	// или !am ex (add) <кол-во сообщений> <наказания через запятую> re <name> <regex>
@@ -138,12 +134,8 @@ type SetExcept struct {
 	typeExcept string
 }
 
-func (e *SetExcept) Execute(cfg *config.Config, channel string, text *message.Text) *ports.AnswerType {
-	return e.handleExceptSet(cfg, channel, text)
-}
-
-func (e *SetExcept) handleExceptSet(cfg *config.Config, channel string, text *message.Text) *ports.AnswerType {
-	textWithoutOpts, opts := e.template.Options().ParseAll(text.Text(), template.ExceptOptions)
+func (e *SetExcept) Execute(cfg *config.Config, channel string, msg *message.ChatMessage) *ports.AnswerType {
+	textWithoutOpts, opts := e.template.Options().ParseAll(msg.Message.Text.Text(), template.ExceptOptions)
 
 	// !am ex set ml <значение> <слова или фразы через запятую>
 	// или !am ex set p <наказания через запятую> <слова или фразы через запятую>
@@ -244,12 +236,8 @@ type DelExcept struct {
 	typeExcept string
 }
 
-func (e *DelExcept) Execute(cfg *config.Config, channel string, text *message.Text) *ports.AnswerType {
-	return e.handleExceptDel(cfg, channel, text)
-}
-
-func (e *DelExcept) handleExceptDel(cfg *config.Config, channel string, text *message.Text) *ports.AnswerType {
-	matches := e.re.FindStringSubmatch(text.Text()) // !am ex del <слова/фразы через запятую или regex>
+func (e *DelExcept) Execute(cfg *config.Config, channel string, msg *message.ChatMessage) *ports.AnswerType {
+	matches := e.re.FindStringSubmatch(msg.Message.Text.Text()) // !am ex del <слова/фразы через запятую или regex>
 	if len(matches) != 2 {
 		return nonParametr
 	}
@@ -284,11 +272,7 @@ type ListExcept struct {
 	typeExcept string
 }
 
-func (e *ListExcept) Execute(cfg *config.Config, channel string, _ *message.Text) *ports.AnswerType {
-	return e.handleExceptList(cfg, channel)
-}
-
-func (e *ListExcept) handleExceptList(cfg *config.Config, channel string) *ports.AnswerType {
+func (e *ListExcept) Execute(cfg *config.Config, channel string, _ *message.ChatMessage) *ports.AnswerType {
 	exSettings := cfg.Channels[channel].Spam.Exceptions
 	if e.typeExcept == "emote" {
 		exSettings = cfg.Channels[channel].Spam.SettingsEmotes.Exceptions
@@ -307,12 +291,8 @@ type OnOffExcept struct {
 	typeExcept string
 }
 
-func (e *OnOffExcept) Execute(cfg *config.Config, channel string, text *message.Text) *ports.AnswerType {
-	return e.handleExceptOnOff(cfg, channel, text)
-}
-
-func (e *OnOffExcept) handleExceptOnOff(cfg *config.Config, channel string, text *message.Text) *ports.AnswerType {
-	matches := e.re.FindStringSubmatch(text.Text()) // !am ex on/off <слова/фразы через запятую>
+func (e *OnOffExcept) Execute(cfg *config.Config, channel string, msg *message.ChatMessage) *ports.AnswerType {
+	matches := e.re.FindStringSubmatch(msg.Message.Text.Text()) // !am ex on/off <слова/фразы через запятую>
 	if len(matches) != 3 {
 		return nonParametr
 	}

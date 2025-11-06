@@ -3,7 +3,6 @@ package template
 import (
 	"context"
 	"errors"
-	"fmt"
 	"regexp"
 	"strings"
 	"sync"
@@ -114,7 +113,7 @@ func (n *NukeTemplate) Check(text *message.Text, ignoreNuke bool) *ports.Checker
 		return &ports.CheckerAction{
 			Type:       n.nuke.punishment.Action,
 			ReasonMod:  "массбан",
-			ReasonUser: fmt.Sprintf("Не используй запрещенное слово!"),
+			ReasonUser: "Не используй запрещенное слово!",
 			Duration:   time.Duration(n.nuke.punishment.Duration) * time.Second,
 		}
 	}

@@ -103,7 +103,7 @@ func (t *MwordTemplate) Update(mwords []config.Mword, mwordGroups map[string]*co
 		}
 	}
 
-	hasEnabledOptions := func(o *config.MwordOptions, ps []config.Punishment) bool {
+	hasEnabledOptions := func(o *config.MwordOptions) bool {
 		if o == nil {
 			return false
 		}
@@ -135,7 +135,7 @@ func (t *MwordTemplate) Update(mwords []config.Mword, mwordGroups map[string]*co
 			return hasNoneI
 		}
 
-		return hasEnabledOptions(mws[i].Options, mws[i].Punishments) && !hasEnabledOptions(mws[j].Options, mws[j].Punishments)
+		return hasEnabledOptions(mws[i].Options) && !hasEnabledOptions(mws[j].Options)
 	})
 
 	t.mwords = mws

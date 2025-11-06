@@ -13,6 +13,7 @@ import (
 	"twitchspam/internal/app/adapters/seventv"
 	"twitchspam/internal/app/domain"
 	"twitchspam/internal/app/domain/message"
+	"twitchspam/internal/app/domain/trusts"
 	"twitchspam/internal/app/infrastructure/config"
 	"twitchspam/internal/app/infrastructure/storage"
 	"twitchspam/internal/app/ports"
@@ -33,6 +34,7 @@ type Checker struct {
 	log      logger.Logger
 	cfg      *config.Config
 	stream   ports.StreamPort
+	trusts   ports.TrustsPort
 	sevenTV  ports.SevenTVPort
 	template ports.TemplatePort
 
@@ -40,11 +42,12 @@ type Checker struct {
 	timeouts ports.StorePort[int]
 }
 
-func NewCheck(log logger.Logger, cfg *config.Config, stream ports.StreamPort, template ports.TemplatePort, messages ports.StorePort[storage.Message], timeouts ports.StorePort[int], client *http.Client) *Checker {
+func NewCheck(log logger.Logger, cfg *config.Config, stream ports.StreamPort, trusts ports.TrustsPort, template ports.TemplatePort, messages ports.StorePort[storage.Message], timeouts ports.StorePort[int], client *http.Client) *Checker {
 	return &Checker{
 		log:      log,
 		cfg:      cfg,
 		stream:   stream,
+		trusts:   trusts,
 		sevenTV:  seventv.New(log, cfg, stream, client),
 		template: template,
 		messages: messages,
@@ -59,23 +62,6 @@ func (c *Checker) Check(msg *message.ChatMessage, checkSpam bool) *ports.Checker
 		slog.Bool("check_spam", checkSpam),
 	)
 
-	if action := c.checkBypass(msg); action != nil {
-		c.log.Debug("User bypassed check", slog.String("user", msg.Chatter.Username))
-		return action
-	}
-
-	startProcessing := time.Now()
-	if action := c.template.Nuke().Check(&msg.Message.Text, false); action != nil {
-		c.log.Info("Message triggered nuke",
-			slog.String("user", msg.Chatter.Username),
-			slog.String("message", msg.Message.Text.Text()),
-			slog.Any("action", action),
-		)
-		return action
-	}
-	endProcessing := time.Since(startProcessing).Seconds()
-	metrics.ModulesProcessingTime.With(prometheus.Labels{"module": "nuke"}).Observe(endProcessing)
-
 	if !c.cfg.Channels[msg.Broadcaster.Login].Enabled {
 		c.log.Debug("Bot disabled, skipping message",
 			slog.String("username", msg.Chatter.Username),
@@ -84,60 +70,62 @@ func (c *Checker) Check(msg *message.ChatMessage, checkSpam bool) *ports.Checker
 		return &ports.CheckerAction{Type: None}
 	}
 
-	startProcessing = time.Now()
-	if action := c.checkBanwords(msg); action != nil {
-		c.log.Info("Message contains banword",
-			slog.String("user", msg.Chatter.Username),
-			slog.String("message", msg.Message.Text.Text()),
-			slog.Any("action", action),
-		)
+	if action := c.checkBypass(msg); action != nil {
+		c.log.Debug("User bypassed check", slog.String("user", msg.Chatter.Username))
 		return action
 	}
-	endProcessing = time.Since(startProcessing).Seconds()
-	metrics.ModulesProcessingTime.With(prometheus.Labels{"module": "banwords"}).Observe(endProcessing)
 
-	startProcessing = time.Now()
-	if action := c.checkAds(msg.Message.Text.Text(message.LowerOption), msg.Chatter.Username); action != nil {
-		c.log.Info("Message detected as advertisement",
-			slog.String("user", msg.Chatter.Username),
-			slog.String("message", msg.Message.Text.Text()),
-			slog.Any("action", action),
-		)
-		return action
+	checks := []struct {
+		module string
+		fn     func() *ports.CheckerAction
+	}{
+		{"nuke", func() *ports.CheckerAction {
+			return c.template.Nuke().Check(&msg.Message.Text, false)
+		}},
+		{"banwords", func() *ports.CheckerAction {
+			return c.checkBanwords(msg)
+		}},
+		{"ads", func() *ports.CheckerAction {
+			return c.checkAds(msg)
+		}},
+		{"mwords", func() *ports.CheckerAction {
+			return c.checkMwords(msg)
+		}},
 	}
-	endProcessing = time.Since(startProcessing).Seconds()
-	metrics.ModulesProcessingTime.With(prometheus.Labels{"module": "ads"}).Observe(endProcessing)
 
-	startProcessing = time.Now()
-	if action := c.checkMwords(msg); action != nil && action.Type != None {
-		c.log.Info("Message contains muteword",
-			slog.String("user", msg.Chatter.Username),
-			slog.String("message", msg.Message.Text.Text()),
-			slog.Any("action", action),
-		)
-		return action
+	for _, ch := range checks {
+		if act := c.runCheck(ch.module, ch.fn, msg); act != nil && act.Type != None {
+			return act
+		}
 	}
-	endProcessing = time.Since(startProcessing).Seconds()
-	metrics.ModulesProcessingTime.With(prometheus.Labels{"module": "mwords"}).Observe(endProcessing)
 
 	if checkSpam {
-		startProcessing = time.Now()
-		if action := c.checkSpam(msg); action != nil {
-			if action.Type != None {
-				c.log.Info("Message flagged as spam",
-					slog.String("user", msg.Chatter.Username),
-					slog.String("message", msg.Message.Text.Text()),
-					slog.Any("action", action),
-				)
-			}
-			return action
+		if act := c.runCheck("spam", func() *ports.CheckerAction { return c.checkSpam(msg) }, msg); act != nil {
+			return act
 		}
-		endProcessing = time.Since(startProcessing).Seconds()
-		metrics.ModulesProcessingTime.With(prometheus.Labels{"module": "spam"}).Observe(endProcessing)
 	}
 
 	c.log.Debug("No violations detected, skipping", slog.String("user", msg.Chatter.Username))
 	return &ports.CheckerAction{Type: None}
+}
+
+func (c *Checker) runCheck(module string, fn func() *ports.CheckerAction, msg *message.ChatMessage) *ports.CheckerAction {
+	start := time.Now()
+	action := fn()
+	metrics.ModulesProcessingTime.With(prometheus.Labels{"module": module}).Observe(time.Since(start).Seconds())
+
+	if action == nil || action.Type == None {
+		c.log.Trace("Module no action", slog.String("module", module), slog.String("user", msg.Chatter.Username))
+		return nil
+	}
+
+	c.log.Debug("Module triggered",
+		slog.String("module", module),
+		slog.String("user", msg.Chatter.Username),
+		slog.String("message", msg.Message.Text.Text()),
+		slog.Any("action", action),
+	)
+	return action
 }
 
 func (c *Checker) checkBypass(msg *message.ChatMessage) *ports.CheckerAction {
@@ -150,16 +138,19 @@ func (c *Checker) checkBypass(msg *message.ChatMessage) *ports.CheckerAction {
 		return &ports.CheckerAction{Type: None}
 	}
 
-	if _, ok := c.cfg.Channels[msg.Broadcaster.Login].Spam.WhitelistUsers[msg.Chatter.Username]; ok {
-		c.log.Debug("Bypass: user in whitelist", slog.String("user", msg.Chatter.Username))
-		return &ports.CheckerAction{Type: None}
-	}
-
 	c.log.Trace("No bypass applied", slog.String("user", msg.Chatter.Username))
 	return nil
 }
 
 func (c *Checker) checkBanwords(msg *message.ChatMessage) *ports.CheckerAction {
+	if c.trusts.HasScope(msg.Chatter.UserID, trusts.ScopeIgnoreBanwords) {
+		c.log.Debug("Bypass: the user has a trust with a scope ignore_banwords",
+			slog.String("username", msg.Chatter.Username),
+			slog.String("user_id", msg.Chatter.UserID),
+		)
+		return nil
+	}
+
 	if !c.template.Banwords().CheckMessage(
 		msg.Message.Text.Words(message.RemovePunctuationOption, message.RemoveDuplicateLettersOption),
 		msg.Message.Text.Words(message.LowerOption, message.RemovePunctuationOption, message.RemoveDuplicateLettersOption),
@@ -175,28 +166,62 @@ func (c *Checker) checkBanwords(msg *message.ChatMessage) *ports.CheckerAction {
 	}
 }
 
-func (c *Checker) checkAds(text string, username string) *ports.CheckerAction {
-	if !strings.Contains(text, "twitch.tv/") ||
-		strings.Contains(text, "twitch.tv/"+strings.ToLower(c.stream.ChannelName())) {
-		c.log.Debug("No external Twitch link detected")
+func (c *Checker) checkAds(msg *message.ChatMessage) *ports.CheckerAction {
+	if c.trusts.HasScope(msg.Chatter.UserID, trusts.ScopeIgnoreAds) {
+		c.log.Debug("Bypass: the user has a trust with a scope ignore_ads",
+			slog.String("username", msg.Chatter.Username),
+			slog.String("user_id", msg.Chatter.UserID),
+		)
 		return nil
 	}
 
-	if !strings.Contains(text, "twitch.tv/"+strings.ToLower(username)) &&
-		!strings.Contains(text, "подписывайтесь") &&
-		!strings.Contains(text, "подпишитесь") {
-		c.log.Debug("No promotional keywords or self-link detected")
-		return nil
+	text := msg.Message.Text.Text(message.LowerOption)
+
+	if strings.Contains(text, "twitch.tv/"+msg.Chatter.Login) {
+		c.log.Debug("Self-advertisement detected",
+			slog.String("user", msg.Chatter.Username),
+			slog.String("text", msg.Message.Text.Text()),
+		)
+
+		return &ports.CheckerAction{
+			Type:      Ban,
+			ReasonMod: "реклама",
+		}
 	}
 
-	c.log.Debug("Advertisement detected", slog.String("user", username), slog.String("text", text))
-	return &ports.CheckerAction{
-		Type:      Ban,
-		ReasonMod: "реклама",
+	isForeignTwitchLink := strings.Contains(text, "twitch.tv/") &&
+		!strings.Contains(text, "twitch.tv/"+strings.ToLower(c.stream.ChannelName()))
+
+	hasCallToAction := strings.Contains(text, "подписывайтесь") ||
+		strings.Contains(text, "подпишитесь") ||
+		strings.Contains(text, "заходите") ||
+		strings.Contains(text, "зайдите")
+
+	if isForeignTwitchLink && hasCallToAction {
+		c.log.Debug("Advertisement detected",
+			slog.String("user", msg.Chatter.Username),
+			slog.String("text", msg.Message.Text.Text()),
+		)
+
+		return &ports.CheckerAction{
+			Type:      Ban,
+			ReasonMod: "реклама",
+		}
 	}
+
+	c.log.Trace("Advertisement not detected", slog.String("user", msg.Chatter.Username), slog.String("text", msg.Message.Text.Text()))
+	return nil
 }
 
 func (c *Checker) checkMwords(msg *message.ChatMessage) *ports.CheckerAction {
+	if c.trusts.HasScope(msg.Chatter.UserID, trusts.ScopeIgnoreMword) {
+		c.log.Debug("Bypass: the user has a trust with a scope ignore_mword",
+			slog.String("username", msg.Chatter.Username),
+			slog.String("user_id", msg.Chatter.UserID),
+		)
+		return nil
+	}
+
 	trigger, punishments := c.template.Mword().Check(msg, c.stream.IsLive())
 	if len(punishments) == 0 {
 		c.log.Debug("No muteword violations found", slog.String("message", msg.Message.Text.Text()))
@@ -237,6 +262,14 @@ func (c *Checker) checkMwords(msg *message.ChatMessage) *ports.CheckerAction {
 }
 
 func (c *Checker) checkSpam(msg *message.ChatMessage) *ports.CheckerAction {
+	if c.trusts.HasScope(msg.Chatter.UserID, trusts.ScopeIgnoreAntispam) {
+		c.log.Debug("Bypass: the user has a trust with a scope ignore_antispam",
+			slog.String("username", msg.Chatter.Username),
+			slog.String("user_id", msg.Chatter.UserID),
+		)
+		return nil
+	}
+
 	settings := c.cfg.Channels[msg.Broadcaster.Login].Spam.SettingsDefault
 	if msg.Chatter.IsVip {
 		c.log.Trace("Applied VIP spam settings", slog.String("user", msg.Chatter.Username))

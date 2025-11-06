@@ -18,7 +18,7 @@ type Stats struct {
 	stats       SessionStats
 	fs          ports.FileServerPort
 	cache       ports.CachePort[SessionStats]
-	mu          sync.Mutex
+	mu          sync.RWMutex
 }
 
 type SessionStats struct {
@@ -33,6 +33,7 @@ type SessionStats struct {
 	CountMessages map[string]int
 	CountDeletes  map[string]int
 	CountTimeouts map[string]int
+	CountWarns    map[string]int
 	CountBans     map[string]int
 
 	CategoryHistory []CategoryInterval
@@ -53,6 +54,7 @@ func newStats(channelName string, fs ports.FileServerPort, cache ports.CachePort
 			CountMessages:   make(map[string]int),
 			CountDeletes:    make(map[string]int),
 			CountTimeouts:   make(map[string]int),
+			CountWarns:      make(map[string]int),
 			CountBans:       make(map[string]int),
 			CategoryHistory: make([]CategoryInterval, 0),
 		},
@@ -61,7 +63,7 @@ func newStats(channelName string, fs ports.FileServerPort, cache ports.CachePort
 	if stats, ok := cache.Get(channelName); ok {
 		s.stats = stats
 
-		var countBans, countTimeouts, countDeletes, countMessages int
+		var countBans, countWarns, countTimeouts, countDeletes, countMessages int
 		for _, v := range stats.CountMessages {
 			countMessages += v
 		}
@@ -70,6 +72,9 @@ func newStats(channelName string, fs ports.FileServerPort, cache ports.CachePort
 		}
 		for _, v := range stats.CountTimeouts {
 			countTimeouts += v
+		}
+		for _, v := range stats.CountWarns {
+			countWarns += v
 		}
 		for _, v := range stats.CountBans {
 			countBans += v
@@ -86,28 +91,30 @@ func newStats(channelName string, fs ports.FileServerPort, cache ports.CachePort
 		metrics.MessagesPerStream.With(prometheus.Labels{"channel": s.channelName}).Add(float64(countMessages))
 		metrics.ModerationActions.With(prometheus.Labels{"channel": s.channelName, "action": "delete"}).Add(float64(countDeletes))
 		metrics.ModerationActions.With(prometheus.Labels{"channel": s.channelName, "action": "timeout"}).Add(float64(countTimeouts))
+		metrics.ModerationActions.With(prometheus.Labels{"channel": s.channelName, "action": "warn"}).Add(float64(countWarns))
 		metrics.ModerationActions.With(prometheus.Labels{"channel": s.channelName, "action": "ban"}).Add(float64(countBans))
 	}
 
 	go func() {
 		ticker := time.NewTicker(1 * time.Minute)
 		for range ticker.C {
-			s.cache.Set(s.channelName, s.stats)
+			s.mu.Lock()
+			stats := s.stats
+			s.mu.Unlock()
+
+			s.cache.Set(s.channelName, stats)
 		}
 	}()
 
 	return s
 }
 
-func (s *Stats) SetStartTime(t time.Time) {
+func (s *Stats) Reset() {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 
-	if s.stats.StartTime.IsZero() {
-		s.stats.StartTime = time.Now()
-	}
-	s.stats.StartStreamTime = t
-	s.stats.EndStreamTime = t
+	s.stats.StartTime = time.Time{}
+	s.stats.StartStreamTime = time.Time{}
+	s.stats.EndStreamTime = time.Time{}
 	s.stats.Online.MaxViewers = 0
 	s.stats.Online.SumViewers = 0
 	s.stats.Online.Count = 0
@@ -122,13 +129,26 @@ func (s *Stats) SetStartTime(t time.Time) {
 	metrics.StreamEndTime.With(prometheus.Labels{"channel": s.channelName}).Set(float64(s.stats.StartStreamTime.Unix()))
 	metrics.OnlineViewers.With(prometheus.Labels{"channel": s.channelName}).Set(0)
 	metrics.MessagesPerStream.Delete(prometheus.Labels{"channel": s.channelName})
-	metrics.ModerationActions.Delete(prometheus.Labels{"channel": s.channelName})
+	metrics.ModerationActions.With(prometheus.Labels{"channel": s.channelName, "action": "delete"}).Set(0)
+	metrics.ModerationActions.With(prometheus.Labels{"channel": s.channelName, "action": "timeout"}).Set(0)
+	metrics.ModerationActions.With(prometheus.Labels{"channel": s.channelName, "action": "warn"}).Set(0)
+	metrics.ModerationActions.With(prometheus.Labels{"channel": s.channelName, "action": "ban"}).Set(0)
 	metrics.UserCommands.Delete(prometheus.Labels{"channel": s.channelName})
+
+	s.mu.Unlock()
+}
+
+func (s *Stats) SetStartTime(t time.Time) {
+	s.mu.Lock()
+	s.stats.StartTime = time.Now()
+	s.stats.StartStreamTime = t
+	s.stats.EndStreamTime = t
+	s.mu.Unlock()
 }
 
 func (s *Stats) GetStartTime() time.Time {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 
 	return s.stats.StartStreamTime
 }
@@ -136,14 +156,13 @@ func (s *Stats) GetStartTime() time.Time {
 func (s *Stats) SetEndTime(t time.Time) {
 	s.mu.Lock()
 	s.stats.EndStreamTime = t
-	s.mu.Unlock()
-
 	metrics.StreamEndTime.With(prometheus.Labels{"channel": s.channelName}).Set(float64(s.stats.EndStreamTime.Unix()))
+	s.mu.Unlock()
 }
 
 func (s *Stats) GetEndTime() time.Time {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 
 	return s.stats.EndStreamTime
 }
@@ -160,9 +179,9 @@ func (s *Stats) SetOnline(viewers int) {
 
 	s.stats.Online.SumViewers += int64(viewers)
 	s.stats.Online.Count++
-	s.mu.Unlock()
 
 	metrics.OnlineViewers.With(prometheus.Labels{"channel": s.channelName}).Set(float64(viewers))
+	s.mu.Unlock()
 }
 
 func (s *Stats) AddMessage(username string) {
@@ -199,6 +218,17 @@ func (s *Stats) AddTimeout(username string) {
 	s.stats.CountTimeouts[strings.ToLower(username)]++
 }
 
+func (s *Stats) AddWarn(username string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.stats.CountWarns == nil {
+		return
+	}
+
+	s.stats.CountWarns[strings.ToLower(username)]++
+}
+
 func (s *Stats) AddBan(username string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -212,8 +242,6 @@ func (s *Stats) AddBan(username string) {
 
 func (s *Stats) AddCategoryChange(category string, t time.Time) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	if n := len(s.stats.CategoryHistory); n > 0 {
 		s.stats.CategoryHistory[n-1].EndTime = t
 	}
@@ -222,13 +250,13 @@ func (s *Stats) AddCategoryChange(category string, t time.Time) {
 		Name:      category,
 		StartTime: t,
 	})
+	s.mu.Unlock()
 }
 
 func (s *Stats) GetStats() *ports.AnswerType {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
+	s.mu.RLock()
 	if s.stats.StartStreamTime.IsZero() {
+		s.mu.RUnlock()
 		return &ports.AnswerType{
 			Text:    []string{"нет данных за последний стрим!"},
 			IsReply: false,
@@ -297,6 +325,7 @@ func (s *Stats) GetStats() *ports.AnswerType {
 	if diff >= 5*time.Minute {
 		msg += fmt.Sprintf(" (статистика велась с %s)", s.stats.StartTime.Format("15:04:05"))
 	}
+	s.mu.RUnlock()
 
 	return &ports.AnswerType{
 		Text:    []string{msg},
@@ -305,10 +334,10 @@ func (s *Stats) GetStats() *ports.AnswerType {
 }
 
 func (s *Stats) GetUserStats(username string) *ports.AnswerType {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.mu.RLock()
 
 	if s.stats.StartStreamTime.IsZero() || len(s.stats.CountMessages) == 0 {
+		s.mu.RUnlock()
 		return &ports.AnswerType{
 			Text:    []string{"нет данных за последний стрим!"},
 			IsReply: false,
@@ -335,6 +364,7 @@ func (s *Stats) GetUserStats(username string) *ports.AnswerType {
 	if diff >= 5*time.Minute {
 		msg += fmt.Sprintf(" (статистика велась с %s)", s.stats.StartTime.Format("15:04:05"))
 	}
+	s.mu.RUnlock()
 
 	return &ports.AnswerType{
 		Text:    []string{msg},
@@ -343,10 +373,10 @@ func (s *Stats) GetUserStats(username string) *ports.AnswerType {
 }
 
 func (s *Stats) GetTopStats(count int) *ports.AnswerType {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.mu.RLock()
 
 	if s.stats.StartStreamTime.IsZero() || len(s.stats.CountMessages) == 0 {
+		s.mu.RUnlock()
 		return &ports.AnswerType{
 			Text:    []string{"нет данных за последний стрим!"},
 			IsReply: false,
@@ -403,6 +433,7 @@ func (s *Stats) GetTopStats(count int) *ports.AnswerType {
 	if diff >= 5*time.Minute {
 		sb.WriteString(fmt.Sprintf(" (статистика велась с %s)", s.stats.StartTime.Format("15:04:05")))
 	}
+	s.mu.RUnlock()
 
 	msg := sb.String()
 	if count > 10 {

@@ -15,11 +15,7 @@ type ListAlias struct {
 	fs ports.FileServerPort
 }
 
-func (a *ListAlias) Execute(cfg *config.Config, channel string, _ *message.Text) *ports.AnswerType {
-	return a.handleAliasesList(cfg, channel)
-}
-
-func (a *ListAlias) handleAliasesList(cfg *config.Config, channel string) *ports.AnswerType {
+func (a *ListAlias) Execute(cfg *config.Config, channel string, _ *message.ChatMessage) *ports.AnswerType {
 	aliases := make(map[string]string) // !am al list
 	for k, v := range cfg.Channels[channel].Aliases {
 		aliases[k] = v
@@ -55,12 +51,8 @@ type AddAlias struct {
 	template ports.TemplatePort
 }
 
-func (a *AddAlias) Execute(cfg *config.Config, channel string, text *message.Text) *ports.AnswerType {
-	return a.handleAliasesAdd(cfg, channel, text)
-}
-
-func (a *AddAlias) handleAliasesAdd(cfg *config.Config, channel string, text *message.Text) *ports.AnswerType {
-	matches := a.re.FindStringSubmatch(text.Text()) // !am al add <алиасы через запятую> from <оригинальная команда>
+func (a *AddAlias) Execute(cfg *config.Config, channel string, msg *message.ChatMessage) *ports.AnswerType {
+	matches := a.re.FindStringSubmatch(msg.Message.Text.Text()) // !am al add <алиасы через запятую> from <оригинальная команда>
 	if len(matches) != 3 {
 		return incorrectSyntax
 	}
@@ -108,12 +100,8 @@ type DelAlias struct {
 	template ports.TemplatePort
 }
 
-func (a *DelAlias) Execute(cfg *config.Config, channel string, text *message.Text) *ports.AnswerType {
-	return a.handleAliasesDel(cfg, channel, text)
-}
-
-func (a *DelAlias) handleAliasesDel(cfg *config.Config, channel string, text *message.Text) *ports.AnswerType {
-	matches := a.re.FindStringSubmatch(text.Text()) // !am al del <алиасы через запятую>
+func (a *DelAlias) Execute(cfg *config.Config, channel string, msg *message.ChatMessage) *ports.AnswerType {
+	matches := a.re.FindStringSubmatch(msg.Message.Text.Text()) // !am al del <алиасы через запятую>
 	if len(matches) != 2 {
 		return nonParametr
 	}
@@ -145,12 +133,8 @@ type CreateAliasGroup struct {
 	template ports.TemplatePort
 }
 
-func (a *CreateAliasGroup) Execute(cfg *config.Config, channel string, text *message.Text) *ports.AnswerType {
-	return a.handleAlgCreate(cfg, channel, text)
-}
-
-func (a *CreateAliasGroup) handleAlgCreate(cfg *config.Config, channel string, text *message.Text) *ports.AnswerType {
-	matches := a.re.FindStringSubmatch(text.Text()) // !am alg create <название_группы> <оригинальная команда>
+func (a *CreateAliasGroup) Execute(cfg *config.Config, channel string, msg *message.ChatMessage) *ports.AnswerType {
+	matches := a.re.FindStringSubmatch(msg.Message.Text.Text()) // !am alg create <название_группы> <оригинальная команда>
 	if len(matches) != 3 {
 		return incorrectSyntax
 	}
@@ -183,12 +167,8 @@ type AddAliasGroup struct {
 	template ports.TemplatePort
 }
 
-func (a *AddAliasGroup) Execute(cfg *config.Config, channel string, text *message.Text) *ports.AnswerType {
-	return a.handleAlgAdd(cfg, channel, text)
-}
-
-func (a *AddAliasGroup) handleAlgAdd(cfg *config.Config, channel string, text *message.Text) *ports.AnswerType {
-	matches := a.re.FindStringSubmatch(text.Text()) // !am alg add <название_группы> <алиасы через запятую>
+func (a *AddAliasGroup) Execute(cfg *config.Config, channel string, msg *message.ChatMessage) *ports.AnswerType {
+	matches := a.re.FindStringSubmatch(msg.Message.Text.Text()) // !am alg add <название_группы> <алиасы через запятую>
 	if len(matches) != 3 {
 		return incorrectSyntax
 	}
@@ -223,12 +203,8 @@ type SetAliasGroup struct {
 	template ports.TemplatePort
 }
 
-func (a *SetAliasGroup) Execute(cfg *config.Config, channel string, text *message.Text) *ports.AnswerType {
-	return a.handleAlgSet(cfg, channel, text)
-}
-
-func (a *SetAliasGroup) handleAlgSet(cfg *config.Config, channel string, text *message.Text) *ports.AnswerType {
-	matches := a.re.FindStringSubmatch(text.Text()) // !am alg set <название_группы> <оригинальная команда>
+func (a *SetAliasGroup) Execute(cfg *config.Config, channel string, msg *message.ChatMessage) *ports.AnswerType {
+	matches := a.re.FindStringSubmatch(msg.Message.Text.Text()) // !am alg set <название_группы> <оригинальная команда>
 	if len(matches) != 3 {
 		return incorrectSyntax
 	}
@@ -253,12 +229,8 @@ type DelAliasGroup struct {
 	template ports.TemplatePort
 }
 
-func (a *DelAliasGroup) Execute(cfg *config.Config, channel string, text *message.Text) *ports.AnswerType {
-	return a.handleAlgDel(cfg, channel, text)
-}
-
-func (a *DelAliasGroup) handleAlgDel(cfg *config.Config, channel string, text *message.Text) *ports.AnswerType {
-	matches := a.re.FindStringSubmatch(text.Text()) // !am alg del <название_группы> <алиасы через запятую или ничего для удаления группы>
+func (a *DelAliasGroup) Execute(cfg *config.Config, channel string, msg *message.ChatMessage) *ports.AnswerType {
+	matches := a.re.FindStringSubmatch(msg.Message.Text.Text()) // !am alg del <название_группы> <алиасы через запятую или ничего для удаления группы>
 	if len(matches) < 2 {
 		return incorrectSyntax
 	}
@@ -294,12 +266,8 @@ type OnOffAliasGroup struct {
 	template ports.TemplatePort
 }
 
-func (a *OnOffAliasGroup) Execute(cfg *config.Config, channel string, text *message.Text) *ports.AnswerType {
-	return a.handleAlgOnOff(cfg, channel, text)
-}
-
-func (a *OnOffAliasGroup) handleAlgOnOff(cfg *config.Config, channel string, text *message.Text) *ports.AnswerType {
-	matches := a.re.FindStringSubmatch(text.Text()) // !am alg on/off <название_группы>
+func (a *OnOffAliasGroup) Execute(cfg *config.Config, channel string, msg *message.ChatMessage) *ports.AnswerType {
+	matches := a.re.FindStringSubmatch(msg.Message.Text.Text()) // !am alg on/off <название_группы>
 	if len(matches) != 3 {
 		return incorrectSyntax
 	}

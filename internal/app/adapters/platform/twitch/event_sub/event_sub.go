@@ -228,6 +228,7 @@ func (es *EventSub) handleMessage(ctx context.Context, msgBytes []byte) {
 
 			if c, ok := es.channels[sm.BroadcasterUserID]; ok {
 				c.stream.SetIslive(true)
+				c.stream.Stats().Reset()
 				c.stream.Stats().SetStartTime(time.Now())
 			}
 		case "stream.offline":

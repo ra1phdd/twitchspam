@@ -19,6 +19,8 @@ func (m *Manager) GetDefault() *Config {
 			Requests: 3,
 			Per:      30 * time.Second,
 		},
+		Channels:      make(map[string]*Channel),
+		GlobalRoles:   make(map[string][]string),
 		GlobalAliases: make(map[string]string),
 	}
 }
@@ -27,9 +29,8 @@ func (m *Manager) GetChannel() *Channel {
 	return &Channel{
 		WindowSecs: 180,
 		Spam: Spam{
-			Mode:           OnlineMode,
-			WhitelistUsers: make(map[string]struct{}),
-			Exceptions:     make(map[string]*ExceptionsSettings),
+			Mode:       OnlineMode,
+			Exceptions: make(map[string]*ExceptionsSettings),
 			SettingsDefault: SpamSettings{
 				Enabled:             true,
 				SimilarityThreshold: 0.7,

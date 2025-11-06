@@ -17,6 +17,9 @@ func (es *EventSub) checkModerate(modEvent ChannelModerateEvent) {
 	case "timeout":
 		es.log.Info("The moderator muted the user", slog.String("mod_username", modEvent.ModeratorUserName), slog.String("username", modEvent.Timeout.Username), slog.Time("expires_at", modEvent.Timeout.ExpiresAt), slog.String("reason", modEvent.Timeout.Reason))
 		c.stream.Stats().AddTimeout(modEvent.ModeratorUserName)
+	case "warn":
+		es.log.Info("The moderator warned the user", slog.String("mod_username", modEvent.ModeratorUserName))
+		c.stream.Stats().AddWarn(modEvent.ModeratorUserName)
 	case "ban":
 		es.log.Info("The moderator banned the user", slog.String("mod_username", modEvent.ModeratorUserName), slog.String("username", modEvent.Ban.Username), slog.String("reason", modEvent.Ban.Reason))
 		c.stream.Stats().AddBan(modEvent.ModeratorUserName)

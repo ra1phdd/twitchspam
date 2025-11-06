@@ -19,11 +19,7 @@ type CreatePoll struct {
 	poll     *ports.Poll
 }
 
-func (p *CreatePoll) Execute(_ *config.Config, _ string, text *message.Text) *ports.AnswerType {
-	return p.handleCreatePoll(text)
-}
-
-func (p *CreatePoll) handleCreatePoll(text *message.Text) *ports.AnswerType {
+func (p *CreatePoll) Execute(_ *config.Config, _ string, msg *message.ChatMessage) *ports.AnswerType {
 	if p.poll != nil && p.poll.Status == "ACTIVE" {
 		return &ports.AnswerType{
 			Text:    []string{"перед открытием опроса нужно закрыть предыдущий!"},
@@ -31,7 +27,7 @@ func (p *CreatePoll) handleCreatePoll(text *message.Text) *ports.AnswerType {
 		}
 	}
 
-	matches := p.re.FindStringSubmatch(text.Text()) // !am poll <*длительность> <*кол-во баллов> <заголовок> / <вариант> / <вариант> / <вариант> / ... (до 5 вариантов)
+	matches := p.re.FindStringSubmatch(msg.Message.Text.Text()) // !am poll <*длительность> <*кол-во баллов> <заголовок> / <вариант> / <вариант> / <вариант> / ... (до 5 вариантов)
 	if len(matches) != 4 {
 		return incorrectSyntax
 	}
@@ -107,11 +103,7 @@ type EndPoll struct {
 	poll     *ports.Poll
 }
 
-func (p *EndPoll) Execute(_ *config.Config, _ string, text *message.Text) *ports.AnswerType {
-	return p.handleEndPoll(text)
-}
-
-func (p *EndPoll) handleEndPoll(text *message.Text) *ports.AnswerType {
+func (p *EndPoll) Execute(_ *config.Config, _ string, msg *message.ChatMessage) *ports.AnswerType {
 	if p.poll == nil || p.poll.ID == "" {
 		return &ports.AnswerType{
 			Text:    []string{"опрос не найден!"},
@@ -120,7 +112,7 @@ func (p *EndPoll) handleEndPoll(text *message.Text) *ports.AnswerType {
 	}
 
 	// !am pred del/end
-	matches := p.re.FindStringSubmatch(text.Text())
+	matches := p.re.FindStringSubmatch(msg.Message.Text.Text())
 	if len(matches) != 2 {
 		return incorrectSyntax
 	}
@@ -157,11 +149,7 @@ type RePoll struct {
 	poll     *ports.Poll
 }
 
-func (p *RePoll) Execute(_ *config.Config, _ string, _ *message.Text) *ports.AnswerType {
-	return p.handleRePoll()
-}
-
-func (p *RePoll) handleRePoll() *ports.AnswerType {
+func (p *RePoll) Execute(_ *config.Config, _ string, _ *message.ChatMessage) *ports.AnswerType {
 	if p.poll == nil || p.poll.ID == "" {
 		return &ports.AnswerType{
 			Text:    []string{"предыдущий опрос не найден!"},

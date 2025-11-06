@@ -14,6 +14,7 @@ type Config struct {
 	CertDomains   []string               `json:"cert_domains"`
 	Limiter       Limiter                `json:"limiter"`
 	Channels      map[string]*Channel    `json:"channels"`
+	GlobalRoles   map[string][]string    `json:"global_roles"` // ключ - название роли, значение - скоупы
 	GlobalAliases map[string]string      `json:"global_aliases"`
 	Banwords      Banwords               `json:"banwords"`
 }
@@ -59,11 +60,18 @@ type Channel struct {
 	Commands    map[string]*Commands             `json:"commands"`
 	Aliases     map[string]string                `json:"aliases"` // ключ - алиас, значение - оригинальная команда
 	AliasGroups map[string]*AliasGroups          `json:"aliases_group"`
+	Roles       map[string][]string              `json:"roles"` // ключ - название роли, значение - скоупы
+	Trusts      map[string]*Trust                `json:"trusts"`
+}
+
+type Trust struct {
+	Username string   `json:"username"`
+	Roles    []string `json:"roles"`
+	Scopes   []string `json:"scopes"`
 }
 
 type Spam struct {
 	Mode            int                            `json:"mode"`
-	WhitelistUsers  map[string]struct{}            `json:"whitelist_users"`
 	SettingsDefault SpamSettings                   `json:"settings_default"`
 	SettingsVIP     SpamSettings                   `json:"settings_vip"`
 	SettingsEmotes  SpamSettingsEmote              `json:"settings_emotes"`

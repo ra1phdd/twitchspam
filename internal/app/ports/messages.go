@@ -20,7 +20,7 @@ type CommandPort interface {
 }
 
 type Command interface {
-	Execute(cfg *config.Config, channel string, text *message.Text) *AnswerType
+	Execute(cfg *config.Config, channel string, msg *message.ChatMessage) *AnswerType
 }
 
 type AnswerType struct {

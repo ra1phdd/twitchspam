@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 	"twitchspam/internal/app/domain/message"
+	"twitchspam/internal/app/domain/trusts"
 	"twitchspam/internal/app/infrastructure/config"
 	"twitchspam/internal/app/infrastructure/storage"
 	"twitchspam/internal/app/ports"
@@ -94,17 +95,25 @@ var (
 		Text:    []string{"мворд группа уже существует!"},
 		IsReply: true,
 	}
+	unknownUser = &ports.AnswerType{
+		Text:    []string{"пользователь не найден!"},
+		IsReply: true,
+	}
 )
 
 type Admin struct {
 	log      logger.Logger
 	manager  *config.Manager
 	stream   ports.StreamPort
+	trusts   ports.TrustsPort
 	fs       ports.FileServerPort
 	api      ports.APIPort
 	template ports.TemplatePort
 	timers   ports.TimersPort
 	messages ports.StorePort[storage.Message]
+
+	poll        *ports.Poll
+	predictions *ports.Predictions
 
 	root ports.Command
 }
@@ -115,16 +124,19 @@ type CompositeCommand struct {
 	cursor      int
 }
 
-func New(log logger.Logger, manager *config.Manager, stream ports.StreamPort, api ports.APIPort, template ports.TemplatePort, fs ports.FileServerPort, timers ports.TimersPort, messages ports.StorePort[storage.Message]) *Admin {
+func New(log logger.Logger, manager *config.Manager, stream ports.StreamPort, trusts ports.TrustsPort, api ports.APIPort, template ports.TemplatePort, fs ports.FileServerPort, timers ports.TimersPort, messages ports.StorePort[storage.Message]) *Admin {
 	a := &Admin{
-		log:      log,
-		manager:  manager,
-		stream:   stream,
-		fs:       fs,
-		api:      api,
-		template: template,
-		timers:   timers,
-		messages: messages,
+		log:         log,
+		manager:     manager,
+		stream:      stream,
+		trusts:      trusts,
+		api:         api,
+		template:    template,
+		fs:          fs,
+		timers:      timers,
+		messages:    messages,
+		poll:        &ports.Poll{},
+		predictions: &ports.Predictions{},
 	}
 	a.root = a.buildCommandTree()
 
@@ -141,12 +153,11 @@ func (a *Admin) FindMessages(msg *message.ChatMessage) *ports.AnswerType {
 		slog.Bool("is_mod", msg.Chatter.IsMod),
 	)
 
-	if (!msg.Chatter.IsBroadcaster && !msg.Chatter.IsMod) || !strings.HasPrefix(msg.Message.Text.Text(message.LowerOption), "!am") {
-		a.log.Debug("Skipping message: user not authorized or command prefix missing",
+	if !strings.HasPrefix(msg.Message.Text.Text(message.LowerOption), "!am") {
+		a.log.Debug("Skipping message: command prefix missing",
 			slog.String("user", msg.Chatter.Username),
 			slog.String("message", msg.Message.Text.Text()),
 		)
-
 		return nil
 	}
 
@@ -156,12 +167,9 @@ func (a *Admin) FindMessages(msg *message.ChatMessage) *ports.AnswerType {
 		return notFoundCmd
 	}
 
-	// дикий костыль, не смотреть - есть шанс лишиться зрения
-	markCmd := a.root.(*CompositeCommand).subcommands["mark"].(*CompositeCommand)
-	markCmd.defaultCmd.(*AddMarker).username = msg.Chatter.Username
-	markCmd.subcommands["add"].(*AddMarker).username = msg.Chatter.Username
-	markCmd.subcommands["clear"].(*ClearMarker).username = msg.Chatter.Username
-	markCmd.subcommands["list"].(*ListMarker).username = msg.Chatter.Username
+	if !a.checkPermissions(msg.Chatter.UserID, strings.ToLower(words[1]), msg.Chatter.IsMod, msg.Chatter.IsBroadcaster) {
+		return &ports.AnswerType{Text: []string{"у вас нет прав на выполнение этой команды!"}, IsReply: true}
+	}
 
 	var result *ports.AnswerType
 	if err := a.manager.Update(func(cfg *config.Config) {
@@ -169,7 +177,7 @@ func (a *Admin) FindMessages(msg *message.ChatMessage) *ports.AnswerType {
 			slog.String("user", msg.Chatter.Username),
 			slog.String("message", msg.Message.Text.Text()),
 		)
-		result = a.root.Execute(cfg, msg.Broadcaster.Login, &msg.Message.Text)
+		result = a.root.Execute(cfg, msg.Broadcaster.Login, msg)
 	}); err != nil {
 		a.log.Error("Failed to update config", err, slog.String("user", msg.Chatter.Username), slog.String("message", msg.Message.Text.Text()))
 		return unknownError
@@ -178,22 +186,22 @@ func (a *Admin) FindMessages(msg *message.ChatMessage) *ports.AnswerType {
 	return result
 }
 
-func (c *CompositeCommand) Execute(cfg *config.Config, channel string, text *message.Text) *ports.AnswerType {
-	words := text.Words(message.LowerOption)
+func (c *CompositeCommand) Execute(cfg *config.Config, channel string, msg *message.ChatMessage) *ports.AnswerType {
+	words := msg.Message.Text.Words(message.LowerOption)
 	if c.cursor >= len(words) {
 		if c.defaultCmd != nil {
-			return c.defaultCmd.Execute(cfg, channel, text)
+			return c.defaultCmd.Execute(cfg, channel, msg)
 		}
 		return notFoundCmd
 	}
 
 	cmdName := words[c.cursor]
 	if cmd, ok := c.subcommands[cmdName]; ok {
-		return cmd.Execute(cfg, channel, text)
+		return cmd.Execute(cfg, channel, msg)
 	}
 
 	if c.defaultCmd != nil {
-		return c.defaultCmd.Execute(cfg, channel, text)
+		return c.defaultCmd.Execute(cfg, channel, msg)
 	}
 	return notFoundCmd
 }
@@ -206,11 +214,9 @@ func (a *Admin) buildCommandTree() ports.Command {
 		Api:    a.api,
 	}
 
-	pred := &ports.Predictions{}
-	poll := &ports.Poll{}
-
 	return &CompositeCommand{
 		subcommands: map[string]ports.Command{
+			"auth": &Auth{log: a.log, stream: a.stream, api: a.api},
 			"ping": &Ping{},
 			"main": &CompositeCommand{
 				subcommands: map[string]ports.Command{
@@ -236,8 +242,6 @@ func (a *Admin) buildCommandTree() ports.Command {
 				defaultCmd: &PauseAntispam{re: regexp.MustCompile(`(?i)^!am\s+as\s+(.+)$`), template: a.template},
 				cursor:     2,
 			},
-			"add":  &AddAntispam{re: regexp.MustCompile(`(?i)^!am\s+add\s+(.+)$`)},
-			"del":  &DelAntispam{re: regexp.MustCompile(`(?i)^!am\s+del\s+(.+)$`)},
 			"sim":  &SimAntispam{re: regexp.MustCompile(`(?i)^!am\s+sim\s+(.+)$`), template: a.template, messages: a.messages, typeSpam: "default"},
 			"msg":  &MsgAntispam{re: regexp.MustCompile(`(?i)^!am\s+msg\s+(.+)$`), template: a.template, messages: a.messages, typeSpam: "default"},
 			"p":    &PunishmentsAntispam{re: regexp.MustCompile(`(?i)^!am\s+p\s+(.+)$`), template: a.template, typeSpam: "default"},
@@ -402,25 +406,67 @@ func (a *Admin) buildCommandTree() ports.Command {
 			"title": &SetTitle{re: regexp.MustCompile(`(?i)^!am\s+title\s+(.+)$`), log: a.log, stream: a.stream, api: a.api},
 			"pred": &CompositeCommand{
 				subcommands: map[string]ports.Command{
-					"end":  &EndPrediction{re: regexp.MustCompile(`(?i)^!am\s+pred\s+(end)(?:\s+(\d+))?$`), stream: a.stream, api: a.api, template: a.template, pred: pred},
-					"lock": &EndPrediction{re: regexp.MustCompile(`(?i)^!am\s+pred\s+(lock)`), stream: a.stream, api: a.api, template: a.template, pred: pred},
-					"del":  &EndPrediction{re: regexp.MustCompile(`(?i)^!am\s+pred\s+(del)`), stream: a.stream, api: a.api, template: a.template, pred: pred},
-					"re":   &RePrediction{stream: a.stream, api: a.api, template: a.template, pred: pred},
+					"end":  &EndPrediction{re: regexp.MustCompile(`(?i)^!am\s+pred\s+(end)(?:\s+(\d+))?$`), stream: a.stream, api: a.api, template: a.template, pred: a.predictions},
+					"lock": &EndPrediction{re: regexp.MustCompile(`(?i)^!am\s+pred\s+(lock)`), stream: a.stream, api: a.api, template: a.template, pred: a.predictions},
+					"del":  &EndPrediction{re: regexp.MustCompile(`(?i)^!am\s+pred\s+(del)`), stream: a.stream, api: a.api, template: a.template, pred: a.predictions},
+					"re":   &RePrediction{stream: a.stream, api: a.api, template: a.template, pred: a.predictions},
 				},
-				defaultCmd: &CreatePrediction{re: regexp.MustCompile(`(?i)^!am\s+pred\s+(?:(\d+)\s+)?([^/]+)(?:/(.*))?$`), stream: a.stream, api: a.api, template: a.template, pred: pred},
+				defaultCmd: &CreatePrediction{re: regexp.MustCompile(`(?i)^!am\s+pred\s+(?:(\d+)\s+)?([^/]+)(?:/(.*))?$`), stream: a.stream, api: a.api, template: a.template, pred: a.predictions},
 				cursor:     2,
 			},
 			"poll": &CompositeCommand{
 				subcommands: map[string]ports.Command{
-					"end": &EndPoll{re: regexp.MustCompile(`(?i)^!am\s+poll\s+(end)`), stream: a.stream, api: a.api, template: a.template, poll: poll},
-					"del": &EndPoll{re: regexp.MustCompile(`(?i)^!am\s+poll\s+(del)`), stream: a.stream, api: a.api, template: a.template, poll: poll},
-					"re":  &RePoll{stream: a.stream, api: a.api, template: a.template, poll: poll},
+					"end": &EndPoll{re: regexp.MustCompile(`(?i)^!am\s+poll\s+(end)`), stream: a.stream, api: a.api, template: a.template, poll: a.poll},
+					"del": &EndPoll{re: regexp.MustCompile(`(?i)^!am\s+poll\s+(del)`), stream: a.stream, api: a.api, template: a.template, poll: a.poll},
+					"re":  &RePoll{stream: a.stream, api: a.api, template: a.template, poll: a.poll},
 				},
-				defaultCmd: &CreatePoll{re: regexp.MustCompile(`(?i)^!am\s+poll\s+(?:(\d+)\s+)?(?:(\d+)\s+)?([^/]+)(?:/(.*))?$`), stream: a.stream, api: a.api, template: a.template, poll: poll},
+				defaultCmd: &CreatePoll{re: regexp.MustCompile(`(?i)^!am\s+poll\s+(?:(\d+)\s+)?(?:(\d+)\s+)?([^/]+)(?:/(.*))?$`), stream: a.stream, api: a.api, template: a.template, poll: a.poll},
+				cursor:     2,
+			},
+			"ban":       &BanUser{re: regexp.MustCompile(`(?i)^!am\s+ban\s+(\S+)(?:\s+(.+))?$`), log: a.log, stream: a.stream, api: a.api},
+			"unban":     &UnbanUser{re: regexp.MustCompile(`(?i)^!am\s+unban\s+(\S+)`), log: a.log, stream: a.stream, api: a.api},
+			"warn":      &WarnUser{re: regexp.MustCompile(`(?i)^!am\s+warn\s+(\S+)\s+(\S+)`), log: a.log, stream: a.stream, api: a.api},
+			"timeout":   &TimeoutUser{re: regexp.MustCompile(`(?i)^!am\s+timeout\s+(\S+)(?:\s+(\S+))?(?:\s+(.+))?$`), log: a.log, stream: a.stream, api: a.api},
+			"untimeout": &UnbanUser{re: regexp.MustCompile(`(?i)^!am\s+untimeout\s+(\S+)`), log: a.log, stream: a.stream, api: a.api},
+			"role": &CompositeCommand{
+				subcommands: map[string]ports.Command{
+					"add":     &AddRole{re: regexp.MustCompile(`(?i)^!am\s+role\s+add\s+(\S+)\s+(.+)$`), trusts: a.trusts},
+					"del":     &DelRole{re: regexp.MustCompile(`(?i)^!am\s+role\s+del\s+(\S+)(?:\s+(.+))?$`), trusts: a.trusts},
+					"trust":   &TrustRole{re: regexp.MustCompile(`(?i)^!am\s+role\s+trust\s+(\S+)\s+(.+)$`), trusts: a.trusts, api: a.api},
+					"untrust": &UntrustRole{re: regexp.MustCompile(`(?i)^!am\s+role\s+untrust\s+(\S+)\s+(.+)$`), trusts: a.trusts, api: a.api},
+					"list":    &ListRole{re: regexp.MustCompile(`(?i)^!am\s+role\s+list(?:\s+(.+))?$`), fs: a.fs},
+				},
+				cursor: 2,
+			},
+			"trust": &CompositeCommand{
+				subcommands: map[string]ports.Command{
+					"del":  &Untrust{re: regexp.MustCompile(`(?i)^!am\s+trust\s+del\s+(\S+)\s+(.+)$`), trusts: a.trusts, api: a.api},
+					"list": &ListTrust{re: regexp.MustCompile(`(?i)^!am\s+trust\s+list(?:\s+(.+))?$`), fs: a.fs},
+				},
+				defaultCmd: &Trust{re: regexp.MustCompile(`(?i)^!am\s+trust\s+(\S+)\s+(.+)$`), trusts: a.trusts, api: a.api},
 				cursor:     2,
 			},
 		},
 		cursor: 1,
+	}
+}
+
+func (a *Admin) checkPermissions(user string, cmd string, isMod, isBroadcaster bool) bool {
+	if isMod || isBroadcaster {
+		return true
+	}
+
+	switch cmd {
+	case "nuke":
+		return a.trusts.HasScope(user, trusts.ScopeNuke)
+	case "poll":
+		return a.trusts.HasScope(user, trusts.ScopePolls)
+	case "pred":
+		return a.trusts.HasScope(user, trusts.ScopePredictions)
+	case "ban", "unban", "warn", "unwarn", "timeout", "untimeout":
+		return a.trusts.HasScope(user, trusts.ScopeModActions)
+	default:
+		return false
 	}
 }
 

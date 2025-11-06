@@ -15,14 +15,10 @@ type AddCommandLimiter struct {
 	re *regexp.Regexp
 }
 
-func (c *AddCommandLimiter) Execute(cfg *config.Config, channel string, text *message.Text) *ports.AnswerType {
-	return c.handleCommandLimiterAdd(cfg, channel, text)
-}
-
-func (c *AddCommandLimiter) handleCommandLimiterAdd(cfg *config.Config, channel string, text *message.Text) *ports.AnswerType {
+func (c *AddCommandLimiter) Execute(cfg *config.Config, channel string, msg *message.ChatMessage) *ports.AnswerType {
 	// !am cmd lim <кол-во запросов> <интервал в секундах> <команды через запятую>
 	// или !am cmd lim add <кол-во запросов> <интервал в секундах> <команды через запятую>
-	matches := c.re.FindStringSubmatch(text.Text())
+	matches := c.re.FindStringSubmatch(msg.Message.Text.Text())
 	if len(matches) != 4 {
 		return nonParametr
 	}
@@ -70,12 +66,8 @@ type SetCommandLimiter struct {
 	re *regexp.Regexp
 }
 
-func (c *SetCommandLimiter) Execute(cfg *config.Config, channel string, text *message.Text) *ports.AnswerType {
-	return c.handleCommandLimiterSet(cfg, channel, text)
-}
-
-func (c *SetCommandLimiter) handleCommandLimiterSet(cfg *config.Config, channel string, text *message.Text) *ports.AnswerType {
-	matches := c.re.FindStringSubmatch(text.Text()) // !am cmd lim set <кол-во запросов> <интервал в секундах> <команды через запятую>
+func (c *SetCommandLimiter) Execute(cfg *config.Config, channel string, msg *message.ChatMessage) *ports.AnswerType {
+	matches := c.re.FindStringSubmatch(msg.Message.Text.Text()) // !am cmd lim set <кол-во запросов> <интервал в секундах> <команды через запятую>
 	if len(matches) != 4 {
 		return nonParametr
 	}
@@ -122,12 +114,8 @@ type DelCommandLimiter struct {
 	re *regexp.Regexp
 }
 
-func (c *DelCommandLimiter) Execute(cfg *config.Config, channel string, text *message.Text) *ports.AnswerType {
-	return c.handleCommandLimiterDel(cfg, channel, text)
-}
-
-func (c *DelCommandLimiter) handleCommandLimiterDel(cfg *config.Config, channel string, text *message.Text) *ports.AnswerType {
-	matches := c.re.FindStringSubmatch(text.Text()) // !am cmd lim del <команды через запятую>
+func (c *DelCommandLimiter) Execute(cfg *config.Config, channel string, msg *message.ChatMessage) *ports.AnswerType {
+	matches := c.re.FindStringSubmatch(msg.Message.Text.Text()) // !am cmd lim del <команды через запятую>
 	if len(matches) != 2 {
 		return nonParametr
 	}

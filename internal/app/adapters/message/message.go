@@ -13,6 +13,7 @@ import (
 	"twitchspam/internal/app/adapters/metrics"
 	"twitchspam/internal/app/domain/message"
 	"twitchspam/internal/app/domain/template"
+	"twitchspam/internal/app/domain/trusts"
 	"twitchspam/internal/app/infrastructure/config"
 	"twitchspam/internal/app/infrastructure/storage"
 	"twitchspam/internal/app/infrastructure/timers"
@@ -25,6 +26,7 @@ type Message struct {
 	cfg         *config.Config
 	api         ports.APIPort
 	stream      ports.StreamPort
+	trusts      ports.TrustsPort
 	template    ports.TemplatePort
 	admin, user ports.CommandPort
 	checker     ports.CheckerPort
@@ -42,6 +44,7 @@ func New(log logger.Logger, manager *config.Manager, stream ports.StreamPort, ap
 		log:    log,
 		cfg:    cfg,
 		api:    api,
+		trusts: trusts.New(cfg.Channels[stream.ChannelName()].Roles, cfg.GlobalRoles, cfg.Channels[stream.ChannelName()].Trusts),
 		stream: stream,
 		template: template.New(
 			template.WithAliases(cfg.Channels[stream.ChannelName()].Aliases, cfg.Channels[stream.ChannelName()].AliasGroups, cfg.GlobalAliases),
@@ -52,9 +55,9 @@ func New(log logger.Logger, manager *config.Manager, stream ports.StreamPort, ap
 		messages: storage.New[storage.Message](50, time.Duration(cfg.Channels[stream.ChannelName()].WindowSecs)*time.Second),
 		timeouts: storage.New[int](15, 0),
 	}
-	m.admin = admin.New(log, manager, stream, api, m.template, fs, timer, m.messages)
+	m.admin = admin.New(log, manager, stream, m.trusts, api, m.template, fs, timer, m.messages)
 	m.user = user.New(log, manager, stream, m.template, fs, api)
-	m.checker = checker.NewCheck(log, cfg, stream, m.template, m.messages, m.timeouts, client)
+	m.checker = checker.NewCheck(log, cfg, stream, m.trusts, m.template, m.messages, m.timeouts, client)
 
 	for cmd, data := range cfg.Channels[m.stream.ChannelName()].Commands {
 		if data.Timer == nil {

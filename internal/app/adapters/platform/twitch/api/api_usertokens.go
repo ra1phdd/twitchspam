@@ -13,6 +13,46 @@ import (
 	"twitchspam/internal/app/infrastructure/config"
 )
 
+type ValidateResponse struct {
+	ClientID  string   `json:"client_id"`
+	Login     string   `json:"login"`
+	Scopes    []string `json:"scopes"`
+	UserID    string   `json:"user_id"`
+	ExpiresIn int      `json:"expires_in"`
+}
+
+func (t *Twitch) ValidateToken(ctx context.Context, accessToken string) error {
+	if accessToken == "" {
+		return errors.New("empty access token")
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://id.twitch.tv/oauth2/validate", nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "OAuth "+accessToken)
+
+	resp, err := t.client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	switch resp.StatusCode {
+	case http.StatusOK:
+		var v ValidateResponse
+		if err := json.NewDecoder(resp.Body).Decode(&v); err != nil {
+			return err
+		}
+		return nil
+	case http.StatusUnauthorized:
+		return ErrUserAuthNotCompleted
+	default:
+		raw, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("validate request failed: %s", string(raw))
+	}
+}
+
 func (t *Twitch) ensureUserToken(ctx context.Context, broadcasterID string) (*config.UserTokens, error) {
 	token, ok := t.cfg.UsersTokens[broadcasterID]
 	if !ok {
@@ -20,9 +60,9 @@ func (t *Twitch) ensureUserToken(ctx context.Context, broadcasterID string) (*co
 	}
 
 	if time.Now().After(token.ObtainedAt.Add(time.Duration(token.ExpiresIn-300) * time.Second)) {
-		resp, err := t.refreshUserToken(ctx, token)
+		resp, err := t.RefreshToken(ctx, broadcasterID, token)
 		if err != nil {
-			return nil, fmt.Errorf("failed to refresh user token: %w", err)
+			return nil, err
 		}
 
 		newToken := &config.UserTokens{
@@ -45,9 +85,9 @@ type TokenResponse struct {
 	ExpiresIn    int    `json:"expires_in"`
 }
 
-func (t *Twitch) refreshUserToken(ctx context.Context, token *config.UserTokens) (*TokenResponse, error) {
+func (t *Twitch) RefreshToken(ctx context.Context, broadcasterID string, token *config.UserTokens) (*config.UserTokens, error) {
 	if token == nil {
-		return nil, errors.New("token is nil")
+		return nil, ErrUserAuthNotCompleted
 	}
 
 	data := url.Values{}
@@ -58,15 +98,20 @@ func (t *Twitch) refreshUserToken(ctx context.Context, token *config.UserTokens)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://id.twitch.tv/oauth2/token", strings.NewReader(data.Encode()))
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
+		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 	resp, err := t.client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to send refresh request: %w", err)
+		return nil, err
 	}
 	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusBadRequest {
+		delete(t.cfg.UsersTokens, broadcasterID)
+		return nil, ErrUserAuthNotCompleted
+	}
 
 	if resp.StatusCode != http.StatusOK {
 		raw, _ := io.ReadAll(resp.Body)
@@ -78,5 +123,9 @@ func (t *Twitch) refreshUserToken(ctx context.Context, token *config.UserTokens)
 		return nil, err
 	}
 
-	return &tokenResp, nil
+	return &config.UserTokens{
+		AccessToken:  tokenResp.AccessToken,
+		RefreshToken: tokenResp.RefreshToken,
+		ExpiresIn:    tokenResp.ExpiresIn,
+	}, nil
 }

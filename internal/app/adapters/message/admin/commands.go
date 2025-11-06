@@ -14,11 +14,7 @@ type ListCommand struct {
 	fs ports.FileServerPort
 }
 
-func (c *ListCommand) Execute(cfg *config.Config, channel string, _ *message.Text) *ports.AnswerType {
-	return c.handleCommandList(cfg, channel)
-}
-
-func (c *ListCommand) handleCommandList(cfg *config.Config, channel string) *ports.AnswerType {
+func (c *ListCommand) Execute(cfg *config.Config, channel string, _ *message.ChatMessage) *ports.AnswerType {
 	return buildList(cfg.Channels[channel].Commands, "команды", "команды не найдены!",
 		func(key string, cmd *config.Commands) string {
 			return fmt.Sprintf("- %s -> %s", key, cmd.Text)
@@ -30,12 +26,8 @@ type AddCommand struct {
 	template ports.TemplatePort
 }
 
-func (c *AddCommand) Execute(cfg *config.Config, channel string, text *message.Text) *ports.AnswerType {
-	return c.handleCommandAdd(cfg, channel, text)
-}
-
-func (c *AddCommand) handleCommandAdd(cfg *config.Config, channel string, text *message.Text) *ports.AnswerType {
-	textWithoutOpts, opts := c.template.Options().ParseAll(text.Text(), template.CommandOptions)
+func (c *AddCommand) Execute(cfg *config.Config, channel string, msg *message.ChatMessage) *ports.AnswerType {
+	textWithoutOpts, opts := c.template.Options().ParseAll(msg.Message.Text.Text(), template.CommandOptions)
 
 	matches := c.re.FindStringSubmatch(textWithoutOpts) // !am cmd add <команда> <текст>
 	if len(matches) != 3 {
@@ -60,12 +52,8 @@ type SetCommand struct {
 	template ports.TemplatePort
 }
 
-func (c *SetCommand) Execute(cfg *config.Config, channel string, text *message.Text) *ports.AnswerType {
-	return c.handleCommandSet(cfg, channel, text)
-}
-
-func (c *SetCommand) handleCommandSet(cfg *config.Config, channel string, text *message.Text) *ports.AnswerType {
-	textWithoutOpts, opts := c.template.Options().ParseAll(text.Text(), template.CommandOptions)
+func (c *SetCommand) Execute(cfg *config.Config, channel string, msg *message.ChatMessage) *ports.AnswerType {
+	textWithoutOpts, opts := c.template.Options().ParseAll(msg.Message.Text.Text(), template.CommandOptions)
 
 	matches := c.re.FindStringSubmatch(textWithoutOpts) // !am cmd set <команда> <*текст>
 	if len(matches) != 3 {
@@ -97,12 +85,8 @@ type DelCommand struct {
 	re *regexp.Regexp
 }
 
-func (c *DelCommand) Execute(cfg *config.Config, channel string, text *message.Text) *ports.AnswerType {
-	return c.handleCommandDel(cfg, channel, text)
-}
-
-func (c *DelCommand) handleCommandDel(cfg *config.Config, channel string, text *message.Text) *ports.AnswerType {
-	matches := c.re.FindStringSubmatch(text.Text()) // !am word del <команды через запятую>
+func (c *DelCommand) Execute(cfg *config.Config, channel string, msg *message.ChatMessage) *ports.AnswerType {
+	matches := c.re.FindStringSubmatch(msg.Message.Text.Text()) // !am word del <команды через запятую>
 	if len(matches) != 2 {
 		return nonParametr
 	}
@@ -140,12 +124,8 @@ type AliasesCommand struct {
 	re *regexp.Regexp
 }
 
-func (c *AliasesCommand) Execute(cfg *config.Config, channel string, text *message.Text) *ports.AnswerType {
-	return c.handleCommandAliases(cfg, channel, text)
-}
-
-func (c *AliasesCommand) handleCommandAliases(cfg *config.Config, channel string, text *message.Text) *ports.AnswerType {
-	matches := c.re.FindStringSubmatch(text.Text()) // !am cmd aliases <команда>
+func (c *AliasesCommand) Execute(cfg *config.Config, channel string, msg *message.ChatMessage) *ports.AnswerType {
+	matches := c.re.FindStringSubmatch(msg.Message.Text.Text()) // !am cmd aliases <команда>
 	if len(matches) != 2 {
 		return nonParametr
 	}

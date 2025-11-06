@@ -13,33 +13,24 @@ import (
 )
 
 type AddMarker struct {
-	re       *regexp.Regexp
-	log      logger.Logger
-	stream   ports.StreamPort
-	api      ports.APIPort
-	username string
+	re     *regexp.Regexp
+	log    logger.Logger
+	stream ports.StreamPort
+	api    ports.APIPort
 }
 
-func (m *AddMarker) Execute(cfg *config.Config, channel string, text *message.Text) *ports.AnswerType {
-	return m.handleMarkersAdd(cfg, channel, text)
-}
-
-func (m *AddMarker) SetUsername(username string) {
-	m.username = username
-}
-
-func (m *AddMarker) handleMarkersAdd(cfg *config.Config, channel string, text *message.Text) *ports.AnswerType {
+func (m *AddMarker) Execute(cfg *config.Config, channel string, msg *message.ChatMessage) *ports.AnswerType {
 	if !m.stream.IsLive() {
 		return streamOff
 	}
 
 	// !am mark <имя маркера> или !am mark add <имя маркера>
-	matches := m.re.FindStringSubmatch(text.Text())
+	matches := m.re.FindStringSubmatch(msg.Message.Text.Text())
 	if len(matches) != 2 {
 		return nonParametr
 	}
 
-	userKey := m.username + "_" + m.stream.ChannelID()
+	userKey := msg.Chatter.Login + "_" + m.stream.ChannelID()
 	if _, ok := cfg.Channels[channel].Markers[userKey]; !ok {
 		cfg.Channels[channel].Markers[userKey] = make(map[string][]*config.Markers)
 	}
@@ -66,26 +57,17 @@ func (m *AddMarker) handleMarkersAdd(cfg *config.Config, channel string, text *m
 }
 
 type ClearMarker struct {
-	re       *regexp.Regexp
-	stream   ports.StreamPort
-	username string
+	re     *regexp.Regexp
+	stream ports.StreamPort
 }
 
-func (m *ClearMarker) Execute(cfg *config.Config, channel string, text *message.Text) *ports.AnswerType {
-	return m.handleMarkersClear(cfg, channel, text)
-}
-
-func (m *ClearMarker) SetUsername(username string) {
-	m.username = username
-}
-
-func (m *ClearMarker) handleMarkersClear(cfg *config.Config, channel string, text *message.Text) *ports.AnswerType {
-	matches := m.re.FindStringSubmatch(text.Text()) // !am mark clear <имя маркера> или !am mark clear
+func (m *ClearMarker) Execute(cfg *config.Config, channel string, msg *message.ChatMessage) *ports.AnswerType {
+	matches := m.re.FindStringSubmatch(msg.Message.Text.Text()) // !am mark clear <имя маркера> или !am mark clear
 	if len(matches) != 2 {
 		return nonParametr
 	}
 
-	userKey := m.username + "_" + m.stream.ChannelID()
+	userKey := msg.Chatter.Login + "_" + m.stream.ChannelID()
 	if matches[1] == "" {
 		delete(cfg.Channels[channel].Markers, userKey)
 		return success
@@ -104,23 +86,14 @@ func (m *ClearMarker) handleMarkersClear(cfg *config.Config, channel string, tex
 }
 
 type ListMarker struct {
-	re       *regexp.Regexp
-	stream   ports.StreamPort
-	api      ports.APIPort
-	fs       ports.FileServerPort
-	username string
+	re     *regexp.Regexp
+	stream ports.StreamPort
+	api    ports.APIPort
+	fs     ports.FileServerPort
 }
 
-func (m *ListMarker) Execute(cfg *config.Config, channel string, text *message.Text) *ports.AnswerType {
-	return m.handleMarkersList(cfg, channel, text)
-}
-
-func (m *ListMarker) SetUsername(username string) {
-	m.username = username
-}
-
-func (m *ListMarker) handleMarkersList(cfg *config.Config, channel string, text *message.Text) *ports.AnswerType {
-	userMarkers, ok := cfg.Channels[channel].Markers[m.username+"_"+m.stream.ChannelID()]
+func (m *ListMarker) Execute(cfg *config.Config, channel string, msg *message.ChatMessage) *ports.AnswerType {
+	userMarkers, ok := cfg.Channels[channel].Markers[msg.Chatter.Login+"_"+m.stream.ChannelID()]
 	if !ok || len(userMarkers) == 0 {
 		return &ports.AnswerType{
 			Text:    []string{"маркеры не найдены!"},
@@ -154,7 +127,7 @@ func (m *ListMarker) handleMarkersList(cfg *config.Config, channel string, text 
 		return nil
 	}
 
-	matches := m.re.FindStringSubmatch(text.Text()) // !am mark list <имя маркера> или !am mark list
+	matches := m.re.FindStringSubmatch(msg.Message.Text.Text()) // !am mark list <имя маркера> или !am mark list
 	if len(matches) < 1 || len(matches) > 2 {
 		return nonParametr
 	}
@@ -178,8 +151,8 @@ func (m *ListMarker) handleMarkersList(cfg *config.Config, channel string, text 
 		}
 	}
 
-	msg := strings.Join(parts, "\n")
-	key, err := m.fs.UploadToHaste(msg)
+	answer := strings.Join(parts, "\n")
+	key, err := m.fs.UploadToHaste(answer)
 	if err != nil {
 		return unknownError
 	}

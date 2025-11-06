@@ -19,11 +19,7 @@ type CreatePrediction struct {
 	pred     *ports.Predictions
 }
 
-func (p *CreatePrediction) Execute(_ *config.Config, _ string, text *message.Text) *ports.AnswerType {
-	return p.handleCreatePrediction(text)
-}
-
-func (p *CreatePrediction) handleCreatePrediction(text *message.Text) *ports.AnswerType {
+func (p *CreatePrediction) Execute(_ *config.Config, _ string, msg *message.ChatMessage) *ports.AnswerType {
 	if p.pred != nil && p.pred.Status != "RESOLVED" && p.pred.Status != "CANCELED" {
 		return &ports.AnswerType{
 			Text:    []string{"перед открытием ставки нужно закрыть предыдущую!"},
@@ -31,7 +27,7 @@ func (p *CreatePrediction) handleCreatePrediction(text *message.Text) *ports.Ans
 		}
 	}
 
-	matches := p.re.FindStringSubmatch(text.Text()) // !am pred <*длительность> <заголовок> / <исход> / <исход> / <исход> / ... (до 10 вариантов)
+	matches := p.re.FindStringSubmatch(msg.Message.Text.Text()) // !am pred <*длительность> <заголовок> / <исход> / <исход> / <исход> / ... (до 10 вариантов)
 	if len(matches) != 4 {
 		return incorrectSyntax
 	}
@@ -99,11 +95,7 @@ type EndPrediction struct {
 	pred     *ports.Predictions
 }
 
-func (p *EndPrediction) Execute(_ *config.Config, _ string, text *message.Text) *ports.AnswerType {
-	return p.handleEndPrediction(text)
-}
-
-func (p *EndPrediction) handleEndPrediction(text *message.Text) *ports.AnswerType {
+func (p *EndPrediction) Execute(_ *config.Config, _ string, msg *message.ChatMessage) *ports.AnswerType {
 	if p.pred == nil || p.pred.ID == "" {
 		return &ports.AnswerType{
 			Text:    []string{"ставка не найдена!"},
@@ -113,7 +105,7 @@ func (p *EndPrediction) handleEndPrediction(text *message.Text) *ports.AnswerTyp
 
 	// !am pred end <номер варианта>
 	// !am pred del/lock
-	matches := p.re.FindStringSubmatch(text.Text())
+	matches := p.re.FindStringSubmatch(msg.Message.Text.Text())
 	if len(matches) < 2 || len(matches) > 3 {
 		return incorrectSyntax
 	}
@@ -178,11 +170,7 @@ type RePrediction struct {
 	pred     *ports.Predictions
 }
 
-func (p *RePrediction) Execute(_ *config.Config, _ string, _ *message.Text) *ports.AnswerType {
-	return p.handleRePrediction()
-}
-
-func (p *RePrediction) handleRePrediction() *ports.AnswerType {
+func (p *RePrediction) Execute(_ *config.Config, _ string, _ *message.ChatMessage) *ports.AnswerType {
 	if p.pred == nil || p.pred.ID == "" {
 		return &ports.AnswerType{
 			Text:    []string{"предыдущая ставка не найдена!"},

@@ -12,11 +12,7 @@ type ListTimers struct {
 	fs ports.FileServerPort
 }
 
-func (t *ListTimers) Execute(cfg *config.Config, channel string, _ *message.Text) *ports.AnswerType {
-	return t.handleTimersList(cfg, channel)
-}
-
-func (t *ListTimers) handleTimersList(cfg *config.Config, channel string) *ports.AnswerType {
+func (t *ListTimers) Execute(cfg *config.Config, channel string, _ *message.ChatMessage) *ports.AnswerType {
 	timers := make(map[string]*config.Timers)
 	for _, cmd := range cfg.Channels[channel].Commands {
 		if cmd.Timer == nil {

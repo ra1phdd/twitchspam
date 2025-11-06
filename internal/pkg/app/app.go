@@ -88,11 +88,12 @@ func New() error {
 			st := stream.NewStream(channel.Name, fs, cacheStats)
 
 			if channel.ID == "" {
-				channel.ID, err = t.API().GetChannelID(channel.Name)
+				IDs, err := t.API().GetChannelIDs([]string{channel.Name})
 				if err != nil {
 					log.Error("Error getting live stream", err)
 					return
 				}
+				channel.ID = IDs[channel.Name]
 
 				if err := manager.Update(func(cfg *config.Config) {
 					cfg.Channels[strings.ToLower(channel.Name)].ID = channel.ID

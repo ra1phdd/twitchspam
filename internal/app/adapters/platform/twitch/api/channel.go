@@ -5,26 +5,37 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
 	"net/url"
+	"strings"
 )
 
-func (t *Twitch) GetChannelID(username string) (string, error) {
+func (t *Twitch) GetChannelIDs(usernames []string) (map[string]string, error) {
+	if len(usernames) == 0 {
+		return nil, errors.New("no usernames provided")
+	}
+
+	params := url.Values{}
+	for _, u := range usernames {
+		params.Add("login", strings.TrimPrefix(u, "@"))
+	}
+
 	var userResp UserResponse
 	if _, err := t.doTwitchRequest(context.Background(), twitchRequest{
 		Method: http.MethodGet,
-		URL:    "https://api.twitch.tv/helix/users?login=" + username,
+		URL:    "https://api.twitch.tv/helix/users?" + params.Encode(),
 		Token:  nil,
 		Body:   nil,
 	}, &userResp); err != nil {
-		return "", err
+		return nil, err
 	}
 
-	if len(userResp.Data) == 0 {
-		return "", fmt.Errorf("user %s not found", username)
+	result := make(map[string]string, len(userResp.Data))
+	for _, u := range userResp.Data {
+		result[u.Login] = u.ID
 	}
-	return userResp.Data[0].ID, nil
+
+	return result, nil
 }
 
 func (t *Twitch) UpdateChannelCategoryID(broadcasterID string, categoryID string) error {

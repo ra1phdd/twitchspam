@@ -1,6 +1,7 @@
 package ports
 
 import (
+	"context"
 	"time"
 	"twitchspam/internal/app/infrastructure/config"
 )
@@ -12,7 +13,7 @@ type APIPollPort interface {
 
 type APIPort interface {
 	Pool() APIPollPort
-	GetChannelID(username string) (string, error)
+	GetChannelIDs(usernames []string) (map[string]string, error)
 	GetLiveStreams(channelIDs []string) ([]*Stream, error)
 	GetUrlVOD(channelID string, streams []*config.Markers) (map[string]string, error)
 	SendChatMessages(channelID string, msgs *AnswerType)
@@ -23,6 +24,7 @@ type APIPort interface {
 	TimeoutUser(channelName, channelID, userID string, duration int, reason string)
 	WarnUser(channelName, broadcasterID, userID, reason string) error
 	BanUser(channelName, channelID, userID string, reason string)
+	UnbanUser(channelID, userID string)
 	SearchCategory(gameName string) (string, string, error)
 	UpdateChannelCategoryID(broadcasterID string, gameID string) error
 	UpdateChannelTitle(broadcasterID string, title string) error
@@ -31,6 +33,8 @@ type APIPort interface {
 	EndPrediction(broadcasterID, predictionID, status, winningOutcomeID string) error
 	CreatePoll(broadcasterID, title string, choices []string, duration int, enablePoints bool, pointsPerVote int) (*Poll, error)
 	EndPoll(broadcasterID, pollID, status string) error
+	ValidateToken(ctx context.Context, accessToken string) error
+	RefreshToken(ctx context.Context, broadcasterID string, token *config.UserTokens) (*config.UserTokens, error)
 }
 
 type IRCPort interface {
