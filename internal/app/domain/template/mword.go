@@ -187,10 +187,6 @@ func (t *MwordTemplate) Check(msg *message.ChatMessage, isLive bool) (string, []
 }
 
 func (t *MwordTemplate) matchMwordRule(msg *message.ChatMessage, word string, re *regexp.Regexp, opts *config.MwordOptions, isLive bool) bool {
-	if word == "" {
-		return false
-	}
-
 	mode := config.OnlineMode
 	if opts != nil && opts.Mode != nil {
 		mode = *opts.Mode

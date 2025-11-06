@@ -640,10 +640,6 @@ func (c *Checker) handleExceptions(msg *message.ChatMessage, countSpam int, type
 }
 
 func (c *Checker) matchExceptRule(msg *message.ChatMessage, word string, re *regexp.Regexp, opts *config.ExceptOptions) bool {
-	if word == "" {
-		return false
-	}
-
 	text := msg.Message.Text.Text(message.LowerOption, message.RemovePunctuationOption, message.RemoveDuplicateLettersOption)
 	words := msg.Message.Text.Words(message.LowerOption, message.RemovePunctuationOption, message.RemoveDuplicateLettersOption)
 
