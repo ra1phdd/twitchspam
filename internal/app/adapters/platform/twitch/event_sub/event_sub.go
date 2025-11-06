@@ -201,10 +201,13 @@ func (es *EventSub) handleMessage(ctx context.Context, msgBytes []byte) {
 
 			msg := &message.ChatMessage{
 				Broadcaster: message.Broadcaster{
-					UserID: am.UserID,
+					UserID:   am.BroadcasterUserID,
+					Login:    am.BroadcasterUserLogin,
+					Username: am.BroadcasterUserName,
 				},
 				Chatter: message.Chatter{
 					UserID:   am.UserID,
+					Login:    am.UserLogin,
 					Username: am.UserName,
 				},
 				Message: message.Message{
