@@ -98,11 +98,7 @@ func newStats(channelName string, fs ports.FileServerPort, cache ports.CachePort
 	go func() {
 		ticker := time.NewTicker(1 * time.Minute)
 		for range ticker.C {
-			s.mu.Lock()
-			stats := s.stats
-			s.mu.Unlock()
-
-			s.cache.Set(s.channelName, stats)
+			s.cache.Set(s.channelName, s.getStatsCopy())
 		}
 	}()
 
@@ -452,4 +448,28 @@ func (s *Stats) GetTopStats(count int) *ports.AnswerType {
 		Text:    []string{msg},
 		IsReply: false,
 	}
+}
+
+func (s *Stats) getStatsCopy() SessionStats {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	copyMap := func(orig map[string]int) map[string]int {
+		newMap := make(map[string]int, len(orig))
+		for k, v := range orig {
+			newMap[k] = v
+		}
+		return newMap
+	}
+
+	statsCopy := s.stats
+	statsCopy.CountMessages = copyMap(s.stats.CountMessages)
+	statsCopy.CountDeletes = copyMap(s.stats.CountDeletes)
+	statsCopy.CountTimeouts = copyMap(s.stats.CountTimeouts)
+	statsCopy.CountWarns = copyMap(s.stats.CountWarns)
+	statsCopy.CountBans = copyMap(s.stats.CountBans)
+
+	statsCopy.CategoryHistory = append([]CategoryInterval(nil), s.stats.CategoryHistory...)
+
+	return statsCopy
 }

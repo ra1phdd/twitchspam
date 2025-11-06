@@ -12,6 +12,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 	"twitchspam/internal/app/domain/message"
 	"twitchspam/internal/app/infrastructure/config"
@@ -28,7 +29,7 @@ type EventSub struct {
 
 	mu        sync.Mutex
 	channels  map[string]channel
-	sessionID string
+	sessionID atomic.Value
 
 	client *http.Client
 }
@@ -48,9 +49,10 @@ func NewTwitch(log logger.Logger, cfg *config.Config, api ports.APIPort, irc por
 		client:   client,
 		channels: make(map[string]channel),
 	}
-	go es.runEventLoop()
+	es.sessionID.Store("")
 
-	for es.sessionID == "" {
+	go es.runEventLoop()
+	for es.sessionID.Load().(string) == "" {
 		time.Sleep(time.Millisecond)
 	}
 
@@ -71,7 +73,7 @@ func (es *EventSub) AddChannel(channelID, channelName string, stream ports.Strea
 	}
 	es.mu.Unlock()
 
-	es.subscribeEvents(context.Background(), es.sessionID, channelID)
+	es.subscribeEvents(context.Background(), es.sessionID.Load().(string), channelID)
 }
 
 func (es *EventSub) runEventLoop() {
@@ -160,13 +162,13 @@ func (es *EventSub) handleMessage(ctx context.Context, msgBytes []byte) {
 			es.log.Error("Failed to decode session_welcome payload", err, slog.String("event", string(msgBytes)))
 			return
 		}
-		es.sessionID = payload.Session.ID
+		es.sessionID.Store(payload.Session.ID)
 
 		es.mu.Lock()
 		defer es.mu.Unlock()
 
 		for id := range es.channels {
-			es.subscribeEvents(ctx, es.sessionID, id)
+			es.subscribeEvents(ctx, es.sessionID.Load().(string), id)
 		}
 	case "session_keepalive":
 		es.log.Trace("Received session_keepalive on EventSub")

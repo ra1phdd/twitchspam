@@ -53,7 +53,6 @@ func New() error {
 	fs := file_server.New(log, client)
 	log.SetLogLevel(cfg.App.LogLevel)
 	gin.SetMode(cfg.App.GinMode)
-
 	prometheus.MustRegister(metrics.MessageProcessingTime, metrics.ModulesProcessingTime)
 
 	if err := os.MkdirAll("cache", 0700); err != nil {
@@ -71,18 +70,19 @@ func New() error {
 	var mu sync.Mutex
 	for _, channel := range cfg.Channels {
 		wg.Add(1)
-		go func() {
+		go func(channel *config.Channel) {
 			defer wg.Done()
 
-			metrics.BotEnabled.With(prometheus.Labels{"channel": channel.Name}).Set(map[bool]float64{true: 1, false: 0}[channel.Enabled])
+			labels := prometheus.Labels{"channel": channel.Name}
+			metrics.BotEnabled.With(labels).Set(map[bool]float64{true: 1, false: 0}[channel.Enabled])
 			metrics.AntiSpamEnabled.With(prometheus.Labels{"channel": channel.Name, "type": "default"}).Set(map[bool]float64{true: 1, false: 0}[channel.Spam.SettingsDefault.Enabled])
 			metrics.AntiSpamEnabled.With(prometheus.Labels{"channel": channel.Name, "type": "vip"}).Set(map[bool]float64{true: 1, false: 0}[channel.Spam.SettingsVIP.Enabled])
 			metrics.AntiSpamEnabled.With(prometheus.Labels{"channel": channel.Name, "type": "emote"}).Set(map[bool]float64{true: 1, false: 0}[channel.Spam.SettingsEmotes.Enabled])
-			metrics.MessagesPerStream.With(prometheus.Labels{"channel": channel.Name}).Add(0)
-			metrics.ModerationActions.With(prometheus.Labels{"channel": channel.Name, "action": "delete"}).Set(0)
-			metrics.ModerationActions.With(prometheus.Labels{"channel": channel.Name, "action": "timeout"}).Set(0)
-			metrics.ModerationActions.With(prometheus.Labels{"channel": channel.Name, "action": "warn"}).Set(0)
-			metrics.ModerationActions.With(prometheus.Labels{"channel": channel.Name, "action": "ban"}).Set(0)
+
+			metrics.MessagesPerStream.With(labels).Add(0)
+			for _, action := range []string{"delete", "timeout", "warn", "ban"} {
+				metrics.ModerationActions.With(prometheus.Labels{"channel": channel.Name, "action": action}).Set(0)
+			}
 
 			prefixedLog := logger.NewPrefixedLogger(log, channel.Name)
 			st := stream.NewStream(channel.Name, fs, cacheStats)
@@ -114,7 +114,7 @@ func New() error {
 			mu.Unlock()
 
 			log.Info(fmt.Sprintf("[%s] Chatbot started", channel.Name))
-		}()
+		}(channel)
 	}
 
 	wg.Wait()
