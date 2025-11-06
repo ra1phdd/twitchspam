@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 	"twitchspam/internal/app/adapters/metrics"
 	"twitchspam/internal/app/domain"
@@ -19,10 +20,10 @@ type Stats struct {
 	fs          ports.FileServerPort
 	cache       ports.CachePort[SessionStats]
 	mu          sync.RWMutex
+	lastActive  atomic.Int64
 }
 
 type SessionStats struct {
-	StartTime       time.Time
 	StartStreamTime time.Time
 	EndStreamTime   time.Time
 	Online          struct {
@@ -30,19 +31,24 @@ type SessionStats struct {
 		SumViewers int64
 		Count      int
 	}
-	CountMessages map[string]int
-	CountDeletes  map[string]int
-	CountTimeouts map[string]int
-	CountWarns    map[string]int
-	CountBans     map[string]int
-
+	CountMessages   map[string]int
+	CountDeletes    map[string]int
+	CountTimeouts   map[string]int
+	CountWarns      map[string]int
+	CountBans       map[string]int
 	CategoryHistory []CategoryInterval
+	StatIntervals   []TimeInterval
 }
 
 type CategoryInterval struct {
 	Name      string
 	StartTime time.Time
 	EndTime   time.Time
+}
+
+type TimeInterval struct {
+	Start time.Time
+	End   time.Time
 }
 
 func newStats(channelName string, fs ports.FileServerPort, cache ports.CachePort[SessionStats]) *Stats {
@@ -57,6 +63,7 @@ func newStats(channelName string, fs ports.FileServerPort, cache ports.CachePort
 			CountWarns:      make(map[string]int),
 			CountBans:       make(map[string]int),
 			CategoryHistory: make([]CategoryInterval, 0),
+			StatIntervals:   make([]TimeInterval, 0),
 		},
 	}
 
@@ -108,7 +115,6 @@ func newStats(channelName string, fs ports.FileServerPort, cache ports.CachePort
 func (s *Stats) Reset() {
 	s.mu.Lock()
 
-	s.stats.StartTime = time.Time{}
 	s.stats.StartStreamTime = time.Time{}
 	s.stats.EndStreamTime = time.Time{}
 	s.stats.Online.MaxViewers = 0
@@ -119,10 +125,11 @@ func (s *Stats) Reset() {
 	s.stats.CountTimeouts = make(map[string]int)
 	s.stats.CountBans = make(map[string]int)
 	s.stats.CategoryHistory = make([]CategoryInterval, 0)
+	s.stats.StatIntervals = make([]TimeInterval, 0)
 
 	s.cache.Set(s.channelName, s.stats)
 	metrics.StreamStartTime.With(prometheus.Labels{"channel": s.channelName}).Set(float64(s.stats.StartStreamTime.Unix()))
-	metrics.StreamEndTime.With(prometheus.Labels{"channel": s.channelName}).Set(float64(s.stats.StartStreamTime.Unix()))
+	metrics.StreamEndTime.With(prometheus.Labels{"channel": s.channelName}).Set(float64(s.stats.EndStreamTime.Unix()))
 	metrics.OnlineViewers.With(prometheus.Labels{"channel": s.channelName}).Set(0)
 	metrics.MessagesPerStream.Delete(prometheus.Labels{"channel": s.channelName})
 	metrics.ModerationActions.With(prometheus.Labels{"channel": s.channelName, "action": "delete"}).Set(0)
@@ -136,7 +143,6 @@ func (s *Stats) Reset() {
 
 func (s *Stats) SetStartTime(t time.Time) {
 	s.mu.Lock()
-	s.stats.StartTime = time.Now()
 	s.stats.StartStreamTime = t
 	s.stats.EndStreamTime = t
 	s.mu.Unlock()
@@ -176,6 +182,7 @@ func (s *Stats) SetOnline(viewers int) {
 	s.stats.Online.SumViewers += int64(viewers)
 	s.stats.Online.Count++
 
+	s.markActive(time.Now())
 	metrics.OnlineViewers.With(prometheus.Labels{"channel": s.channelName}).Set(float64(viewers))
 	s.mu.Unlock()
 }
@@ -188,6 +195,7 @@ func (s *Stats) AddMessage(username string) {
 		return
 	}
 
+	s.markActive(time.Now())
 	s.stats.CountMessages[strings.ToLower(username)]++
 	metrics.MessagesPerStream.With(prometheus.Labels{"channel": s.channelName}).Inc()
 }
@@ -200,6 +208,7 @@ func (s *Stats) AddDeleted(username string) {
 		return
 	}
 
+	s.markActive(time.Now())
 	s.stats.CountDeletes[strings.ToLower(username)]++
 }
 
@@ -211,6 +220,7 @@ func (s *Stats) AddTimeout(username string) {
 		return
 	}
 
+	s.markActive(time.Now())
 	s.stats.CountTimeouts[strings.ToLower(username)]++
 }
 
@@ -222,6 +232,7 @@ func (s *Stats) AddWarn(username string) {
 		return
 	}
 
+	s.markActive(time.Now())
 	s.stats.CountWarns[strings.ToLower(username)]++
 }
 
@@ -233,6 +244,7 @@ func (s *Stats) AddBan(username string) {
 		return
 	}
 
+	s.markActive(time.Now())
 	s.stats.CountBans[strings.ToLower(username)]++
 }
 
@@ -242,6 +254,7 @@ func (s *Stats) AddCategoryChange(category string, t time.Time) {
 		s.stats.CategoryHistory[n-1].EndTime = t
 	}
 
+	s.markActive(time.Now())
 	s.stats.CategoryHistory = append(s.stats.CategoryHistory, CategoryInterval{
 		Name:      category,
 		StartTime: t,
@@ -251,16 +264,133 @@ func (s *Stats) AddCategoryChange(category string, t time.Time) {
 
 func (s *Stats) GetStats() *ports.AnswerType {
 	s.mu.RLock()
+	defer s.mu.RUnlock()
+
 	if s.stats.StartStreamTime.IsZero() {
-		s.mu.RUnlock()
 		return &ports.AnswerType{
 			Text:    []string{"нет данных за последний стрим!"},
 			IsReply: false,
 		}
 	}
 
-	combined := make(map[string]int)
-	var countBans, countTimeouts, countDeletes, countMessages int
+	countMessages, countDeletes, countTimeouts, countBans, combined := s.aggregateStats()
+
+	avgViewers := 0.0
+	if s.stats.Online.Count > 0 {
+		avgViewers = math.Round(float64(s.stats.Online.SumViewers) / float64(s.stats.Online.Count))
+	}
+
+	msg := fmt.Sprintf(
+		"длительность стрима: %s • средний онлайн: %.0f • максимальный онлайн: %d • всего сообщений: %d • кол-во чаттеров: %d • скорость сообщений: %.1f/сек • кол-во банов: %d • кол-во мутов: %d • кол-во удаленных сообщений: %d • топ 3 модератора за стрим: %s • посмотреть свою стату - !stats",
+		domain.FormatDuration(s.stats.EndStreamTime.Sub(s.stats.StartStreamTime)),
+		avgViewers,
+		s.stats.Online.MaxViewers,
+		countMessages,
+		len(s.stats.CountMessages),
+		float64(countMessages)/s.stats.EndStreamTime.Sub(s.stats.StartStreamTime).Seconds(),
+		countBans,
+		countTimeouts,
+		countDeletes,
+		topN(combined, 3),
+	)
+
+	if gaps := s.formatGaps(); gaps != "" {
+		msg += fmt.Sprintf(" (статистика отсутствовала %s)", gaps)
+	}
+
+	return &ports.AnswerType{Text: []string{msg}, IsReply: false}
+}
+
+func (s *Stats) GetUserStats(username string) *ports.AnswerType {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if s.stats.StartStreamTime.IsZero() || len(s.stats.CountMessages) == 0 {
+		return &ports.AnswerType{Text: []string{"нет данных за последний стрим!"}, IsReply: false}
+	}
+
+	username = strings.ToLower(strings.TrimPrefix(username, "@"))
+	position := 1
+	for _, v := range s.stats.CountMessages {
+		if v > s.stats.CountMessages[username] {
+			position++
+		}
+	}
+
+	msg := fmt.Sprintf(
+		"статистика %s - кол-во сообщений за стрим: %d • топ-%d чаттер",
+		username, s.stats.CountMessages[username], position,
+	)
+
+	if s.stats.CountBans[username] > 0 || s.stats.CountTimeouts[username] > 0 || s.stats.CountDeletes[username] > 0 {
+		msg += fmt.Sprintf(" • кол-во банов: %d • кол-во мутов: %d • кол-во удаленных сообщений: %d",
+			s.stats.CountBans[username], s.stats.CountTimeouts[username], s.stats.CountDeletes[username])
+	}
+
+	if gaps := s.formatGaps(); gaps != "" {
+		msg += fmt.Sprintf(" (статистика отсутствовала %s)", gaps)
+	}
+
+	return &ports.AnswerType{Text: []string{msg}, IsReply: false}
+}
+
+func (s *Stats) GetTopStats(count int) *ports.AnswerType {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if s.stats.StartStreamTime.IsZero() || len(s.stats.CountMessages) == 0 {
+		return &ports.AnswerType{Text: []string{"нет данных за последний стрим!"}, IsReply: false}
+	}
+
+	switch {
+	case count <= 0:
+		count = 10
+	case count > 100:
+		count = 100
+	}
+
+	pairs := make([]struct {
+		Key string
+		Val int
+	}, 0, len(s.stats.CountMessages))
+	for k, v := range s.stats.CountMessages {
+		pairs = append(pairs, struct {
+			Key string
+			Val int
+		}{k, v})
+	}
+	sort.Slice(pairs, func(i, j int) bool { return pairs[i].Val > pairs[j].Val })
+
+	sep := ", "
+	if count > 10 {
+		sep = "\n"
+	}
+
+	msg := fmt.Sprintf("топ-%d чаттеров по кол-ву сообщений за стрим: ", count)
+	for i := 0; i < count && i < len(pairs); i++ {
+		if i > 0 {
+			msg += sep
+		}
+		msg += fmt.Sprintf("%s (%d)", pairs[i].Key, pairs[i].Val)
+	}
+
+	if gaps := s.formatGaps(); gaps != "" {
+		msg += fmt.Sprintf(" (статистика отсутствовала %s)", gaps)
+	}
+
+	if count > 10 {
+		key, err := s.fs.UploadToHaste(msg)
+		if err != nil {
+			return &ports.AnswerType{Text: []string{"неизвестная ошибка!"}, IsReply: true}
+		}
+		msg = s.fs.GetURL(key)
+	}
+
+	return &ports.AnswerType{Text: []string{msg}, IsReply: false}
+}
+
+func (s *Stats) aggregateStats() (countMessages, countDeletes, countTimeouts, countBans int, combined map[string]int) {
+	combined = make(map[string]int)
 	for _, v := range s.stats.CountMessages {
 		countMessages += v
 	}
@@ -276,178 +406,49 @@ func (s *Stats) GetStats() *ports.AnswerType {
 		countBans += v
 		combined[k] += v
 	}
+	return
+}
 
+func (s *Stats) formatGaps() string {
+	if len(s.stats.StatIntervals) <= 1 {
+		return ""
+	}
+	var gaps []string
+	start := s.stats.StartStreamTime
+	for _, interval := range s.stats.StatIntervals {
+		if interval.Start.Sub(start) >= 5*time.Minute {
+			gaps = append(gaps, fmt.Sprintf("с %s по %s", start.Format("15:04"), interval.Start.Format("15:04")))
+		}
+		start = interval.End
+	}
+	return strings.Join(gaps, ", ")
+}
+
+func topN(m map[string]int, n int) string {
 	type kv struct {
 		key   string
 		value int
 	}
-
-	list := make([]kv, 0, len(combined))
-	for k, v := range combined {
+	list := make([]kv, 0, len(m))
+	for k, v := range m {
 		list = append(list, kv{k, v})
 	}
+	sort.Slice(list, func(i, j int) bool { return list[i].value > list[j].value })
 
-	sort.Slice(list, func(i, j int) bool {
-		return list[i].value > list[j].value
-	})
-
-	var avgViewers float64
-	if s.stats.Online.Count > 0 {
-		avgViewers = math.Round(float64(s.stats.Online.SumViewers) / float64(s.stats.Online.Count))
-	}
-
-	msg := fmt.Sprintf("длительность стрима: %s • средний онлайн: %.0f • максимальный онлайн: %d • всего сообщений: %d • кол-во чаттеров: %d • скорость сообщений: %.1f/сек • кол-во банов: %d • кол-во мутов: %d • кол-во удаленных сообщений: %d • топ 3 модератора за стрим: ",
-		domain.FormatDuration(s.stats.EndStreamTime.Sub(s.stats.StartStreamTime)), math.Round(avgViewers), s.stats.Online.MaxViewers,
-		countMessages, len(s.stats.CountMessages), float64(countMessages)/s.stats.EndStreamTime.Sub(s.stats.StartStreamTime).Seconds(), countBans, countTimeouts, countDeletes)
-
-	top := 3
-	if len(list) < 3 {
+	top := n
+	if len(list) < n {
 		top = len(list)
 	}
 
-	if top != 0 {
-		for i, item := range list[:top] {
-			if i > 0 {
-				msg += ", "
-			}
-			msg += fmt.Sprintf("%s (%d)", item.key, item.value)
-		}
-	} else {
-		msg += "не найдены"
+	if top == 0 {
+		return "не найдены"
 	}
 
-	msg += " • посмотреть свою стату - !stats"
-	diff := s.stats.StartTime.Sub(s.stats.StartStreamTime)
-	if diff >= 5*time.Minute {
-		msg += fmt.Sprintf(" (статистика велась с %s)", s.stats.StartTime.Format("15:04:05"))
+	var parts []string
+	for i := 0; i < top; i++ {
+		parts = append(parts, fmt.Sprintf("%s (%d)", list[i].key, list[i].value))
 	}
-	s.mu.RUnlock()
-
-	return &ports.AnswerType{
-		Text:    []string{msg},
-		IsReply: false,
-	}
-}
-
-func (s *Stats) GetUserStats(username string) *ports.AnswerType {
-	s.mu.RLock()
-
-	if s.stats.StartStreamTime.IsZero() || len(s.stats.CountMessages) == 0 {
-		s.mu.RUnlock()
-		return &ports.AnswerType{
-			Text:    []string{"нет данных за последний стрим!"},
-			IsReply: false,
-		}
-	}
-
-	username = strings.TrimPrefix(username, "@")
-	usernameLower := strings.ToLower(username)
-
-	position := 1
-	for _, v := range s.stats.CountMessages {
-		if v > s.stats.CountMessages[usernameLower] {
-			position++
-		}
-	}
-
-	msg := fmt.Sprintf("статистика %s - кол-во сообщений за стрим: %d • топ-%d чаттер", username, s.stats.CountMessages[usernameLower], position)
-	if s.stats.CountBans[usernameLower] > 0 || s.stats.CountTimeouts[usernameLower] > 0 || s.stats.CountDeletes[usernameLower] > 0 {
-		msg += fmt.Sprintf(" • кол-во банов: %d • кол-во мутов: %d • кол-во удаленных сообщений: %d",
-			s.stats.CountBans[usernameLower], s.stats.CountTimeouts[usernameLower], s.stats.CountDeletes[usernameLower])
-	}
-
-	diff := s.stats.StartTime.Sub(s.stats.StartStreamTime)
-	if diff >= 5*time.Minute {
-		msg += fmt.Sprintf(" (статистика велась с %s)", s.stats.StartTime.Format("15:04:05"))
-	}
-	s.mu.RUnlock()
-
-	return &ports.AnswerType{
-		Text:    []string{msg},
-		IsReply: false,
-	}
-}
-
-func (s *Stats) GetTopStats(count int) *ports.AnswerType {
-	s.mu.RLock()
-
-	if s.stats.StartStreamTime.IsZero() || len(s.stats.CountMessages) == 0 {
-		s.mu.RUnlock()
-		return &ports.AnswerType{
-			Text:    []string{"нет данных за последний стрим!"},
-			IsReply: false,
-		}
-	}
-
-	switch {
-	case count < 0:
-		return &ports.AnswerType{
-			Text:    []string{"не может быть меньше 1 записи!"},
-			IsReply: false,
-		}
-	case count == 0:
-		count = 10
-	case count > 100:
-		return &ports.AnswerType{
-			Text:    []string{"максимум 100 записей!"},
-			IsReply: false,
-		}
-	}
-
-	pairs := make([]struct {
-		Key string
-		Val int
-	}, 0, len(s.stats.CountMessages))
-
-	for k, v := range s.stats.CountMessages {
-		pairs = append(pairs, struct {
-			Key string
-			Val int
-		}{k, v})
-	}
-
-	sort.Slice(pairs, func(i, j int) bool {
-		return pairs[i].Val > pairs[j].Val
-	})
-
-	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("топ-%d чаттеров по кол-ву сообщений за стрим: ", count))
-
-	sep := ", "
-	if count > 10 {
-		sep = "\n"
-	}
-
-	for i := 0; i < count && i < len(pairs); i++ {
-		if i > 0 {
-			sb.WriteString(sep)
-		}
-		sb.WriteString(fmt.Sprintf("%s (%d)", pairs[i].Key, pairs[i].Val))
-	}
-
-	diff := s.stats.StartTime.Sub(s.stats.StartStreamTime)
-	if diff >= 5*time.Minute {
-		sb.WriteString(fmt.Sprintf(" (статистика велась с %s)", s.stats.StartTime.Format("15:04:05")))
-	}
-	s.mu.RUnlock()
-
-	msg := sb.String()
-	if count > 10 {
-		key, err := s.fs.UploadToHaste(msg)
-		if err != nil {
-			return &ports.AnswerType{
-				Text:    []string{"неизвестная ошибка!"},
-				IsReply: true,
-			}
-		}
-
-		msg = s.fs.GetURL(key)
-	}
-
-	return &ports.AnswerType{
-		Text:    []string{msg},
-		IsReply: false,
-	}
+	return strings.Join(parts, ", ")
 }
 
 func (s *Stats) getStatsCopy() SessionStats {
@@ -470,6 +471,19 @@ func (s *Stats) getStatsCopy() SessionStats {
 	statsCopy.CountBans = copyMap(s.stats.CountBans)
 
 	statsCopy.CategoryHistory = append([]CategoryInterval(nil), s.stats.CategoryHistory...)
+	statsCopy.StatIntervals = append([]TimeInterval(nil), s.stats.StatIntervals...)
 
 	return statsCopy
+}
+
+func (s *Stats) markActive(t time.Time) {
+	n := len(s.stats.StatIntervals)
+	if n == 0 || t.Sub(s.stats.StatIntervals[n-1].End) > 5*time.Minute {
+		s.stats.StatIntervals = append(s.stats.StatIntervals, TimeInterval{
+			Start: t,
+			End:   t,
+		})
+	} else {
+		s.stats.StatIntervals[n-1].End = t
+	}
 }

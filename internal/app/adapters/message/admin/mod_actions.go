@@ -150,5 +150,5 @@ func (d *DeleteUser) Execute(_ *config.Config, _ string, msg *message.ChatMessag
 		return unknownError
 	}
 
-	return &ports.AnswerType{Text: []string{fmt.Sprintf("сообщение пользователя %s удалено!", msg.Reply.ParentChatter.Username)}, IsReply: true}
+	return nil
 }
