@@ -22,6 +22,11 @@ func (r *AddRole) Execute(cfg *config.Config, channel string, msg *message.ChatM
 		return nonParametr
 	}
 
+	name := strings.TrimSpace(matches[1])
+	if _, ok := cfg.GlobalRoles[name]; ok {
+		return existsRole
+	}
+
 	scopes := strings.Split(strings.TrimSpace(strings.ToLower(matches[2])), ",")
 	found, notFound := make([]string, 0, len(scopes)), make([]string, 0, len(scopes))
 	for _, scope := range scopes {
@@ -40,8 +45,6 @@ func (r *AddRole) Execute(cfg *config.Config, channel string, msg *message.ChatM
 	if len(found) == 0 && len(notFound) == 0 {
 		return nonParametr
 	}
-
-	name := strings.TrimSpace(matches[1])
 	current := cfg.Channels[channel].Roles[name]
 
 	exists := make(map[string]struct{}, len(current))
@@ -78,6 +81,13 @@ func (r *DelRole) Execute(cfg *config.Config, channel string, msg *message.ChatM
 	}
 
 	name := strings.TrimSpace(matches[1])
+	if _, ok := cfg.GlobalRoles[name]; ok {
+		return &ports.AnswerType{
+			Text:    []string{"данную роль нельзя удалить!"},
+			IsReply: true,
+		}
+	}
+
 	scopes := strings.Split(strings.TrimSpace(strings.ToLower(matches[2])), ",")
 	if len(scopes) == 0 {
 		delete(cfg.Channels[channel].Roles, name)
@@ -140,13 +150,19 @@ func (r *TrustRole) Execute(cfg *config.Config, channel string, msg *message.Cha
 		return nonParametr
 	}
 
+	name := strings.TrimSpace(matches[1])
+	if _, ok := cfg.Channels[channel].Roles[name]; !ok {
+		if _, ok := cfg.GlobalRoles[name]; !ok {
+			return notFoundRole
+		}
+	}
+
 	users := strings.Split(strings.ToLower(strings.TrimSpace(matches[2])), " ")
 	ids, err := r.api.GetChannelIDs(users)
 	if err != nil {
 		return unknownError
 	}
 
-	name := strings.TrimSpace(matches[1])
 	found := make([]string, 0, len(ids))
 	for user, id := range ids {
 		user = strings.TrimSpace(user)
@@ -185,13 +201,19 @@ func (r *UntrustRole) Execute(cfg *config.Config, channel string, msg *message.C
 		return nonParametr
 	}
 
+	name := strings.TrimSpace(matches[1])
+	if _, ok := cfg.Channels[channel].Roles[name]; !ok {
+		if _, ok := cfg.GlobalRoles[name]; !ok {
+			return notFoundRole
+		}
+	}
+
 	users := strings.Split(strings.ToLower(strings.TrimSpace(matches[2])), " ")
 	ids, err := r.api.GetChannelIDs(users)
 	if err != nil {
 		return unknownError
 	}
 
-	name := strings.TrimSpace(matches[1])
 	removed, notFound := make([]string, 0, len(ids)), make([]string, 0, len(ids))
 	for user, id := range ids {
 		user = strings.TrimSpace(user)
@@ -246,6 +268,25 @@ func (r *ListRole) Execute(cfg *config.Config, channel string, msg *message.Chat
 	roles := make(map[string]*Role)
 	nameRole := strings.ToLower(strings.TrimPrefix(strings.TrimSpace(matches[1]), "@"))
 	for role, scopes := range cfg.Channels[channel].Roles {
+		if strings.TrimSpace(nameRole) != "" && role != nameRole {
+			continue
+		}
+
+		if _, ok := roles[role]; !ok {
+			roles[role] = &Role{
+				Scopes: scopes,
+			}
+		}
+
+		for _, trust := range cfg.Channels[channel].Trusts {
+			if !slices.Contains(trust.Roles, role) {
+				continue
+			}
+
+			roles[role].Users = append(roles[role].Users, trust.Username)
+		}
+	}
+	for role, scopes := range cfg.GlobalRoles {
 		if strings.TrimSpace(nameRole) != "" && role != nameRole {
 			continue
 		}

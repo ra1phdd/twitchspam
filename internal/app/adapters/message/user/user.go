@@ -12,6 +12,7 @@ import (
 	"twitchspam/internal/app/adapters/metrics"
 	"twitchspam/internal/app/domain/message"
 	"twitchspam/internal/app/domain/template"
+	"twitchspam/internal/app/domain/trusts"
 	"twitchspam/internal/app/infrastructure/config"
 	"twitchspam/internal/app/ports"
 	"twitchspam/pkg/logger"
@@ -21,6 +22,7 @@ type User struct {
 	log          logger.Logger
 	manager      *config.Manager
 	stream       ports.StreamPort
+	trusts       ports.TrustsPort
 	template     ports.TemplatePort
 	fs           ports.FileServerPort
 	api          ports.APIPort
@@ -28,11 +30,12 @@ type User struct {
 	usersLimiter map[string]*rate.Limiter
 }
 
-func New(log logger.Logger, manager *config.Manager, stream ports.StreamPort, template ports.TemplatePort, fs ports.FileServerPort, api ports.APIPort) *User {
+func New(log logger.Logger, manager *config.Manager, stream ports.StreamPort, trusts ports.TrustsPort, template ports.TemplatePort, fs ports.FileServerPort, api ports.APIPort) *User {
 	return &User{
 		log:          log,
 		manager:      manager,
 		stream:       stream,
+		trusts:       trusts,
 		template:     template,
 		fs:           fs,
 		api:          api,
@@ -94,12 +97,14 @@ func (u *User) handleStats(msg *message.ChatMessage) *ports.AnswerType {
 		return nil
 	}
 
-	if u.stream.IsLive() {
+	if !msg.Chatter.IsBroadcaster && !msg.Chatter.IsMod && !u.trusts.HasScope(msg.Chatter.UserID, trusts.ScopeModActions) &&
+		u.stream.IsLive() {
 		u.log.Debug("Stream is live, stats command not allowed", slog.String("username", msg.Chatter.Username))
 		return nil
 	}
 
-	if !msg.Chatter.IsMod && !msg.Chatter.IsBroadcaster && !u.allowUser(msg.Chatter.Username) {
+	if !msg.Chatter.IsMod && !msg.Chatter.IsBroadcaster && !u.trusts.HasScope(msg.Chatter.UserID, trusts.ScopeModActions) &&
+		!u.allowUser(msg.Chatter.Username) {
 		u.log.Debug("User not allowed to access stats due to limiter", slog.String("username", msg.Chatter.Username))
 		return nil
 	}
@@ -136,8 +141,8 @@ func (u *User) handleGame(msg *message.ChatMessage) *ports.AnswerType {
 		return nil
 	}
 
-	if u.stream.IsLive() {
-		u.log.Debug("Stream is live, game command not allowed", slog.String("username", msg.Chatter.Username))
+	if !u.stream.IsLive() {
+		u.log.Debug("Stream is not live, game command not allowed", slog.String("username", msg.Chatter.Username))
 		return nil
 	}
 
@@ -146,7 +151,8 @@ func (u *User) handleGame(msg *message.ChatMessage) *ports.AnswerType {
 		return nil
 	}
 
-	if !msg.Chatter.IsMod && !msg.Chatter.IsBroadcaster && !u.allowUser(msg.Chatter.Username) {
+	if !msg.Chatter.IsMod && !msg.Chatter.IsBroadcaster && !u.trusts.HasScope(msg.Chatter.UserID, trusts.ScopeModActions) &&
+		!u.allowUser(msg.Chatter.Username) {
 		u.log.Debug("User not allowed to access game due to limiter", slog.String("username", msg.Chatter.Username))
 		return nil
 	}
@@ -206,7 +212,8 @@ func (u *User) handleCommands(msg *message.ChatMessage) *ports.AnswerType {
 			continue
 		}
 
-		if cmd.Options != nil && cmd.Options.IsPrivate != nil && *cmd.Options.IsPrivate && !msg.Chatter.IsBroadcaster && !msg.Chatter.IsMod {
+		if cmd.Options != nil && cmd.Options.IsPrivate != nil && *cmd.Options.IsPrivate &&
+			!msg.Chatter.IsBroadcaster && !msg.Chatter.IsMod && !u.trusts.HasScope(msg.Chatter.UserID, trusts.ScopeModActions) {
 			u.log.Warn("Private command attempted by unauthorized user",
 				slog.String("username", msg.Chatter.Username),
 				slog.String("command", word))
@@ -241,7 +248,8 @@ func (u *User) handleCommands(msg *message.ChatMessage) *ports.AnswerType {
 			mode = *cmd.Options.Mode
 		}
 
-		if !msg.Chatter.IsMod && !msg.Chatter.IsBroadcaster && ((mode == config.OnlineMode && !u.stream.IsLive()) || (mode == config.OfflineMode && u.stream.IsLive())) {
+		if !msg.Chatter.IsMod && !msg.Chatter.IsBroadcaster && !u.trusts.HasScope(msg.Chatter.UserID, trusts.ScopeModActions) &&
+			((mode == config.OnlineMode && !u.stream.IsLive()) || (mode == config.OfflineMode && u.stream.IsLive())) {
 			u.log.Trace("Command mode does not match stream status, skipping",
 				slog.String("command", word),
 				slog.Int("option_mode", mode),
@@ -250,12 +258,14 @@ func (u *User) handleCommands(msg *message.ChatMessage) *ports.AnswerType {
 			return nil
 		}
 
-		if !msg.Chatter.IsMod && !msg.Chatter.IsBroadcaster && !u.allowUser(msg.Chatter.Username) {
+		if !msg.Chatter.IsMod && !msg.Chatter.IsBroadcaster && !u.trusts.HasScope(msg.Chatter.UserID, trusts.ScopeModActions) &&
+			!u.allowUser(msg.Chatter.Username) {
 			u.log.Debug("User not allowed to access command due to limiter", slog.String("username", msg.Chatter.Username))
 			return nil
 		}
 
-		if !msg.Chatter.IsMod && !msg.Chatter.IsBroadcaster && !u.allowCommand(word, cmd.Limiter) {
+		if !msg.Chatter.IsMod && !msg.Chatter.IsBroadcaster && !u.trusts.HasScope(msg.Chatter.UserID, trusts.ScopeModActions) &&
+			!u.allowCommand(word, cmd.Limiter) {
 			u.log.Warn("Command blocked by limiter", slog.String("username", msg.Chatter.Username), slog.String("command", word))
 			return nil
 		}
@@ -295,7 +305,7 @@ func (u *User) handleCommands(msg *message.ChatMessage) *ports.AnswerType {
 		return nil
 	}
 
-	noReply := ((msg.Chatter.IsBroadcaster || msg.Chatter.IsMod) && replyUsername == "") || count > 1
+	noReply := ((msg.Chatter.IsBroadcaster || msg.Chatter.IsMod || u.trusts.HasScope(msg.Chatter.UserID, trusts.ScopeModActions)) && replyUsername == "") || count > 1
 	return &ports.AnswerType{
 		Text:          msgs,
 		IsReply:       !noReply,

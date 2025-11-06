@@ -303,7 +303,7 @@ func (m *AddMwordGroup) Execute(cfg *config.Config, channel string, msg *message
 		return success
 	}
 
-	words := strings.Split(strings.TrimSpace(matches[6]), ",")
+	words := strings.Split(strings.TrimSpace(matches[5]), ",")
 	added, exists := make([]string, 0, len(words)), make([]string, 0, len(words))
 	for _, word := range words {
 		word = strings.TrimSpace(word)

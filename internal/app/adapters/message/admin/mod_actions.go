@@ -129,3 +129,26 @@ func (t *TimeoutUser) Execute(_ *config.Config, _ string, msg *message.ChatMessa
 	t.api.TimeoutUser(t.stream.ChannelName(), t.stream.ChannelID(), ids[strings.ToLower(username)], duration, reason)
 	return &ports.AnswerType{Text: []string{fmt.Sprintf("пользователь %s отправлен в таймаут на %d сек!", username, duration)}, IsReply: true}
 }
+
+type DeleteUser struct {
+	log    logger.Logger
+	stream ports.StreamPort
+	api    ports.APIPort
+}
+
+func (d *DeleteUser) Execute(_ *config.Config, _ string, msg *message.ChatMessage) *ports.AnswerType {
+	if msg.Reply == nil {
+		return &ports.AnswerType{
+			Text:    []string{"вызови команду ответом на сообщение!"},
+			IsReply: true,
+		}
+	}
+	d.log.Info("Delete command received", slog.String("username", msg.Reply.ParentChatter.Username), slog.String("text", msg.Reply.ParentMessage.Text.Text()))
+
+	if err := d.api.DeleteChatMessage(d.stream.ChannelName(), d.stream.ChannelID(), msg.Reply.ParentMessage.ID); err != nil {
+		d.log.Error("Failed to delete user", err)
+		return unknownError
+	}
+
+	return &ports.AnswerType{Text: []string{fmt.Sprintf("сообщение пользователя %s удалено!", msg.Reply.ParentChatter.Username)}, IsReply: true}
+}

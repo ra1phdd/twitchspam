@@ -49,7 +49,7 @@ type Text struct {
 }
 
 func (t *Text) ReplaceOriginal(text string) {
-	t.Original = text
+	t.Original = strings.TrimSpace(text)
 	t.cacheText = make(map[uint64]string)
 	t.cacheWords = make(map[uint64][]string)
 }

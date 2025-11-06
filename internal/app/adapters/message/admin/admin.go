@@ -95,6 +95,14 @@ var (
 		Text:    []string{"мворд группа уже существует!"},
 		IsReply: true,
 	}
+	notFoundRole = &ports.AnswerType{
+		Text:    []string{"роль не найдена!"},
+		IsReply: true,
+	}
+	existsRole = &ports.AnswerType{
+		Text:    []string{"роль уже существует!"},
+		IsReply: true,
+	}
 	unknownUser = &ports.AnswerType{
 		Text:    []string{"пользователь не найден!"},
 		IsReply: true,
@@ -152,6 +160,12 @@ func (a *Admin) FindMessages(msg *message.ChatMessage) *ports.AnswerType {
 		slog.Bool("is_broadcaster", msg.Chatter.IsBroadcaster),
 		slog.Bool("is_mod", msg.Chatter.IsMod),
 	)
+
+	if strings.HasPrefix(msg.Message.Text.Text(), "@") {
+		if i := strings.IndexAny(msg.Message.Text.Text(), " ,"); i != -1 {
+			msg.Message.Text.ReplaceOriginal(msg.Message.Text.Text()[i+1:])
+		}
+	}
 
 	if !strings.HasPrefix(msg.Message.Text.Text(message.LowerOption), "!am") {
 		a.log.Debug("Skipping message: command prefix missing",
@@ -342,7 +356,7 @@ func (a *Admin) buildCommandTree() ports.Command {
 					"off":    &OnOffMwordGroup{re: regexp.MustCompile(`(?i)^!am\s+mwg\s+(off)\s+(.+)$`), template: a.template},
 					"create": &CreateMwordGroup{re: regexp.MustCompile(`(?i)^!am\s+mwg\s+create\s+(\S+)\s+(.+)$`), template: a.template},
 					"set":    &SetMwordGroup{re: regexp.MustCompile(`(?i)^!am\s+mwg\s+set\s+(\S+)\s+(\S+)(?:\s+(.+))?$`), template: a.template},
-					"glset":  &SetMwordGroup{re: regexp.MustCompile(`(?i)^!am\s+mwg\s+glset\s+(\S+)(?:\s+(.+))?$`), template: a.template},
+					"glset":  &GlobalSetMwordGroup{re: regexp.MustCompile(`(?i)^!am\s+mwg\s+glset\s+(\S+)(?:\s+(.+))?$`), template: a.template},
 					"add":    &AddMwordGroup{re: regexp.MustCompile(`(?i)^!am\s+mwg(?:\s+add)?\s+(\S+)\s*(?:(re)\s+(\S+)\s+(.+)|(.+))$`), template: a.template},
 					"del":    &DelMwordGroup{re: regexp.MustCompile(`(?i)^!am\s+mwg\s+del\s+(\S+)(?:\s+(.+))?$`), template: a.template},
 					"list":   &ListMwordGroup{template: a.template, fs: a.fs},
@@ -425,9 +439,10 @@ func (a *Admin) buildCommandTree() ports.Command {
 			},
 			"ban":       &BanUser{re: regexp.MustCompile(`(?i)^!am\s+ban\s+(\S+)(?:\s+(.+))?$`), log: a.log, stream: a.stream, api: a.api},
 			"unban":     &UnbanUser{re: regexp.MustCompile(`(?i)^!am\s+unban\s+(\S+)`), log: a.log, stream: a.stream, api: a.api},
-			"warn":      &WarnUser{re: regexp.MustCompile(`(?i)^!am\s+warn\s+(\S+)\s+(\S+)`), log: a.log, stream: a.stream, api: a.api},
+			"warn":      &WarnUser{re: regexp.MustCompile(`(?i)^!am\s+warn\s+(\S+)\s+(.+)$`), log: a.log, stream: a.stream, api: a.api},
 			"timeout":   &TimeoutUser{re: regexp.MustCompile(`(?i)^!am\s+timeout\s+(\S+)(?:\s+(\S+))?(?:\s+(.+))?$`), log: a.log, stream: a.stream, api: a.api},
 			"untimeout": &UnbanUser{re: regexp.MustCompile(`(?i)^!am\s+untimeout\s+(\S+)`), log: a.log, stream: a.stream, api: a.api},
+			"delete":    &DeleteUser{log: a.log, stream: a.stream, api: a.api},
 			"role": &CompositeCommand{
 				subcommands: map[string]ports.Command{
 					"add":     &AddRole{re: regexp.MustCompile(`(?i)^!am\s+role\s+add\s+(\S+)\s+(.+)$`), trusts: a.trusts},
