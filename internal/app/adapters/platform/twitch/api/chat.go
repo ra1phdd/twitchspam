@@ -117,7 +117,7 @@ func (t *Twitch) DeleteChatMessage(channelName, channelID, messageID string) err
 	return nil
 }
 
-func (t *Twitch) TimeoutUser(channelName, channelID, userID string, duration int, reason string) {
+func (t *Twitch) TimeoutUser(channelName, channelID, userID string, duration int, reason string) error {
 	reqBody := TimeoutRequest{
 		Data: TimeoutData{
 			UserID:   userID,
@@ -129,7 +129,7 @@ func (t *Twitch) TimeoutUser(channelName, channelID, userID string, duration int
 	bodyBytes, err := json.Marshal(reqBody)
 	if err != nil {
 		t.log.Error("Failed to marshel body", err)
-		return
+		return err
 	}
 
 	params := url.Values{}
@@ -143,11 +143,37 @@ func (t *Twitch) TimeoutUser(channelName, channelID, userID string, duration int
 		Body:   bytes.NewReader(bodyBytes),
 	}, nil); err != nil {
 		t.log.Error("Failed to timeout user", err, slog.Any("data", reqBody.Data))
-		return
+		return err
 	}
 
 	t.log.Info("Timeout applied successfully", slog.String("user_id", userID), slog.Int("duration", duration), slog.String("reason", reason))
-	metrics.ModerationActions.With(prometheus.Labels{"channel": channelName, "action": "timeout"}).Inc()
+
+	action := "timeout"
+	if duration == 0 {
+		action = "ban"
+	}
+	metrics.ModerationActions.With(prometheus.Labels{"channel": channelName, "action": action}).Inc()
+	return nil
+}
+
+func (t *Twitch) UntimeoutUser(channelID, userID string) error {
+	params := url.Values{}
+	params.Set("broadcaster_id", channelID)
+	params.Set("moderator_id", t.cfg.App.UserID)
+	params.Set("user_id", userID)
+
+	if _, err := t.doTwitchRequest(context.Background(), twitchRequest{
+		Method: http.MethodDelete,
+		URL:    "https://api.twitch.tv/helix/moderation/bans?" + params.Encode(),
+		Token:  nil,
+		Body:   nil,
+	}, nil); err != nil {
+		t.log.Error("Failed to unban user", err, slog.String("user_id", userID))
+		return err
+	}
+
+	t.log.Info("User unbanned successfully", slog.String("user_id", userID))
+	return nil
 }
 
 func (t *Twitch) WarnUser(channelName, broadcasterID, userID, reason string) error {
@@ -198,30 +224,4 @@ func (t *Twitch) WarnUser(channelName, broadcasterID, userID, reason string) err
 
 	metrics.ModerationActions.With(prometheus.Labels{"channel": channelName, "action": "warn"}).Inc()
 	return nil
-}
-
-func (t *Twitch) BanUser(channelName, channelID, userID string, reason string) {
-	t.TimeoutUser(channelName, channelID, userID, 0, reason)
-
-	metrics.ModerationActions.With(prometheus.Labels{"channel": channelName, "action": "ban"}).Inc()
-	metrics.ModerationActions.With(prometheus.Labels{"channel": channelName, "action": "timeout"}).Dec()
-}
-
-func (t *Twitch) UnbanUser(channelID, userID string) {
-	params := url.Values{}
-	params.Set("broadcaster_id", channelID)
-	params.Set("moderator_id", t.cfg.App.UserID)
-	params.Set("user_id", userID)
-
-	if _, err := t.doTwitchRequest(context.Background(), twitchRequest{
-		Method: http.MethodDelete,
-		URL:    "https://api.twitch.tv/helix/moderation/bans?" + params.Encode(),
-		Token:  nil,
-		Body:   nil,
-	}, nil); err != nil {
-		t.log.Error("Failed to unban user", err, slog.String("user_id", userID))
-		return
-	}
-
-	t.log.Info("User unbanned successfully", slog.String("user_id", userID))
 }

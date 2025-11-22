@@ -52,20 +52,18 @@ func New(log logger.Logger, manager *config.Manager, stream ports.StreamPort, ap
 			template.WithBanwords(cfg.Banwords),
 			template.WithMword(cfg.Channels[stream.ChannelName()].Mword, cfg.Channels[stream.ChannelName()].MwordGroup),
 		),
-		messages: storage.New[storage.Message](50, time.Duration(cfg.Channels[stream.ChannelName()].WindowSecs)*time.Second),
-		timeouts: storage.New[int](15, 0),
+		messages: storage.NewV2[storage.Message](
+			storage.WithSubCapacity[storage.Message](50),
+			storage.WithMode[storage.Message](storage.ExpireAfterAccess),
+			storage.WithSubTTL[storage.Message](5*time.Minute),
+		),
+		timeouts: storage.NewV2[int](
+			storage.WithSubCapacity[int](15),
+		),
 	}
 	m.admin = admin.New(log, manager, stream, m.trusts, api, m.template, fs, timer, m.messages)
 	m.user = user.New(log, manager, stream, m.trusts, m.template, fs, api)
 	m.checker = checker.NewCheck(log, cfg, stream, m.trusts, m.template, m.messages, m.timeouts, client)
-
-	for cmd, data := range cfg.Channels[m.stream.ChannelName()].Commands {
-		if data.Timer == nil {
-			continue
-		}
-
-		(&admin.AddTimer{Cfg: cfg, Timers: timer, Stream: stream, Api: api}).AddTimer(cmd, data)
-	}
 
 	return m
 }
@@ -138,7 +136,7 @@ func (m *Message) Check(msg *message.ChatMessage) {
 	endProcessing := time.Since(startProcessing).Seconds()
 	metrics.MessageProcessingTime.Observe(endProcessing)
 
-	m.getAction(action, msg)
+	admin.ExecuteModAction(m.log, m.api, m.stream, action, msg.Chatter.UserID, msg.Chatter.Username, msg.Message.ID, msg.Message.Text.Text())
 }
 
 func (m *Message) CheckAutomod(msg *message.ChatMessage) {
@@ -166,31 +164,5 @@ func (m *Message) CheckAutomod(msg *message.ChatMessage) {
 	endProcessing := time.Since(startProcessing).Seconds()
 	metrics.MessageProcessingTime.Observe(endProcessing)
 
-	m.getAction(action, msg)
-}
-
-func (m *Message) getAction(action *ports.CheckerAction, msg *message.ChatMessage) {
-	switch action.Type {
-	case checker.None:
-		return
-	case checker.Ban:
-		m.log.Warn("Ban user", slog.String("username", msg.Chatter.Username), slog.String("text", msg.Message.Text.Text()))
-		m.api.BanUser(m.stream.ChannelName(), m.stream.ChannelID(), msg.Chatter.UserID, action.ReasonMod)
-	case checker.Timeout:
-		m.log.Warn("Timeout user", slog.String("username", msg.Chatter.Username), slog.String("text", msg.Message.Text.Text()), slog.Int("duration", int(action.Duration.Seconds())))
-		m.api.TimeoutUser(m.stream.ChannelName(), m.stream.ChannelID(), msg.Chatter.UserID, int(action.Duration.Seconds()), action.ReasonMod)
-	case checker.Warn:
-		m.log.Warn("Warn user", slog.String("username", msg.Chatter.Username), slog.String("text", msg.Message.Text.Text()))
-		if err := m.api.WarnUser(m.stream.ChannelName(), m.stream.ChannelID(), msg.Chatter.UserID, action.ReasonUser); err != nil {
-			m.log.Error("Failed to warn message on chat", err)
-		}
-		if err := m.api.DeleteChatMessage(m.stream.ChannelName(), m.stream.ChannelID(), msg.Message.ID); err != nil {
-			m.log.Error("Failed to delete message on chat", err)
-		}
-	case checker.Delete:
-		m.log.Warn("Delete message", slog.String("username", msg.Chatter.Username), slog.String("text", msg.Message.Text.Text()))
-		if err := m.api.DeleteChatMessage(m.stream.ChannelName(), m.stream.ChannelID(), msg.Message.ID); err != nil {
-			m.log.Error("Failed to delete message on chat", err)
-		}
-	}
+	admin.ExecuteModAction(m.log, m.api, m.stream, action, msg.Chatter.UserID, msg.Chatter.Username, msg.Message.ID, msg.Message.Text.Text())
 }

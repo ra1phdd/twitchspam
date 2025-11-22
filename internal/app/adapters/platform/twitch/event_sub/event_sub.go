@@ -1,12 +1,10 @@
 package event_sub
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"github.com/gorilla/websocket"
-	"io"
 	"log/slog"
 	"net/http"
 	"runtime"
@@ -290,45 +288,6 @@ func (es *EventSub) readMessages(ctx context.Context, ws *websocket.Conn, msgCha
 		case msgChan <- msgBytes:
 		}
 	}
-}
-
-func (es *EventSub) subscribeEvent(ctx context.Context, eventType, version string, condition map[string]string, sessionID string) error {
-	body := map[string]interface{}{
-		"type":      eventType,
-		"version":   version,
-		"condition": condition,
-		"transport": map[string]string{
-			"method":     "websocket",
-			"session_id": sessionID,
-		},
-	}
-
-	jsonBody, err := json.Marshal(body)
-	if err != nil {
-		return fmt.Errorf("marshal subscription body: %w", err)
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://api.twitch.tv/helix/eventsub/subscriptions", bytes.NewBuffer(jsonBody))
-	if err != nil {
-		return fmt.Errorf("create subscription request: %w", err)
-	}
-
-	req.Header.Set("Authorization", "Bearer "+es.cfg.App.OAuth)
-	req.Header.Set("Client-Id", es.cfg.App.ClientID)
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := es.client.Do(req)
-	if err != nil {
-		return fmt.Errorf("send subscription request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusAccepted {
-		raw, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("twitch returned %s: %s", resp.Status, string(raw))
-	}
-
-	return nil
 }
 
 func (es *EventSub) convertMap(msgEvent ChatMessageEvent) *message.ChatMessage {

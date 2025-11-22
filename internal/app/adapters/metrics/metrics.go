@@ -56,11 +56,20 @@ var (
 		[]string{"channel"},
 	)
 
-	// MessagesPerStream - количество сообщений за стрим по каналам.
-	MessagesPerStream = promauto.NewCounterVec(
+	// MessagesPerOnline - количество сообщений за стрим по каналам.
+	MessagesPerOnline = promauto.NewCounterVec(
 		prometheus.CounterOpts{
-			Name: "bot_messages_total",
-			Help: "Total number of messages per stream channel",
+			Name: "bot_messages_per_online",
+			Help: "Total number of messages per online stream channel",
+		},
+		[]string{"channel"},
+	)
+
+	// MessagesPerOffline - количество сообщений оффчата по каналам.
+	MessagesPerOffline = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "bot_messages_per_offline",
+			Help: "Total number of messages per offline stream channel",
 		},
 		[]string{"channel"},
 	)

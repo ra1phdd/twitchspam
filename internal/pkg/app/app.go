@@ -79,7 +79,8 @@ func New() error {
 			metrics.AntiSpamEnabled.With(prometheus.Labels{"channel": channel.Name, "type": "vip"}).Set(map[bool]float64{true: 1, false: 0}[channel.Spam.SettingsVIP.Enabled])
 			metrics.AntiSpamEnabled.With(prometheus.Labels{"channel": channel.Name, "type": "emote"}).Set(map[bool]float64{true: 1, false: 0}[channel.Spam.SettingsEmotes.Enabled])
 
-			metrics.MessagesPerStream.With(labels).Add(0)
+			metrics.MessagesPerOnline.With(labels).Add(0)
+			metrics.MessagesPerOffline.With(labels).Add(0)
 			for _, action := range []string{"delete", "timeout", "warn", "ban"} {
 				metrics.ModerationActions.With(prometheus.Labels{"channel": channel.Name, "action": action}).Set(0)
 			}

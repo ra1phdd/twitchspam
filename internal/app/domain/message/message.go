@@ -60,6 +60,7 @@ const (
 	LowerOption TextOption = iota + 1
 	RemovePunctuationOption
 	RemoveDuplicateLettersOption
+	NormalizeCommaSpacesOption
 )
 
 func (t *Text) Text(opts ...TextOption) string {
@@ -131,6 +132,12 @@ func parseOptions(opts []TextOption) map[TextOption]bool {
 }
 
 func normalizeText(original string, hashOpts map[TextOption]bool) string {
+	if hashOpts[NormalizeCommaSpacesOption] {
+		original = strings.TrimSpace(original)
+		original = strings.ReplaceAll(original, " ,", ",")
+		original = strings.ReplaceAll(original, ", ", ",")
+	}
+
 	var b strings.Builder
 	b.Grow(len(original))
 

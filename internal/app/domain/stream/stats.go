@@ -95,7 +95,7 @@ func newStats(channelName string, fs ports.FileServerPort, cache ports.CachePort
 		metrics.StreamStartTime.With(prometheus.Labels{"channel": s.channelName}).Set(float64(stats.StartStreamTime.Unix()))
 		metrics.StreamEndTime.With(prometheus.Labels{"channel": s.channelName}).Set(float64(stats.EndStreamTime.Unix()))
 		metrics.OnlineViewers.With(prometheus.Labels{"channel": s.channelName}).Set(avgViewers)
-		metrics.MessagesPerStream.With(prometheus.Labels{"channel": s.channelName}).Add(float64(countMessages))
+		metrics.MessagesPerOnline.With(prometheus.Labels{"channel": s.channelName}).Add(float64(countMessages))
 		metrics.ModerationActions.With(prometheus.Labels{"channel": s.channelName, "action": "delete"}).Add(float64(countDeletes))
 		metrics.ModerationActions.With(prometheus.Labels{"channel": s.channelName, "action": "timeout"}).Add(float64(countTimeouts))
 		metrics.ModerationActions.With(prometheus.Labels{"channel": s.channelName, "action": "warn"}).Add(float64(countWarns))
@@ -131,7 +131,7 @@ func (s *Stats) Reset() {
 	metrics.StreamStartTime.With(prometheus.Labels{"channel": s.channelName}).Set(float64(s.stats.StartStreamTime.Unix()))
 	metrics.StreamEndTime.With(prometheus.Labels{"channel": s.channelName}).Set(float64(s.stats.EndStreamTime.Unix()))
 	metrics.OnlineViewers.With(prometheus.Labels{"channel": s.channelName}).Set(0)
-	metrics.MessagesPerStream.Delete(prometheus.Labels{"channel": s.channelName})
+	metrics.MessagesPerOnline.Delete(prometheus.Labels{"channel": s.channelName})
 	metrics.ModerationActions.With(prometheus.Labels{"channel": s.channelName, "action": "delete"}).Set(0)
 	metrics.ModerationActions.With(prometheus.Labels{"channel": s.channelName, "action": "timeout"}).Set(0)
 	metrics.ModerationActions.With(prometheus.Labels{"channel": s.channelName, "action": "warn"}).Set(0)
@@ -197,7 +197,7 @@ func (s *Stats) AddMessage(username string) {
 
 	s.markActive(time.Now())
 	s.stats.CountMessages[strings.ToLower(username)]++
-	metrics.MessagesPerStream.With(prometheus.Labels{"channel": s.channelName}).Inc()
+	metrics.MessagesPerOnline.With(prometheus.Labels{"channel": s.channelName}).Inc()
 }
 
 func (s *Stats) AddDeleted(username string) {

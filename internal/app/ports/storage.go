@@ -2,11 +2,22 @@ package ports
 
 import (
 	"time"
-	"twitchspam/internal/app/infrastructure/storage"
 )
 
+type PushOption func(*PushConfig)
+
+type PushConfig struct {
+	Ttl *time.Duration
+}
+
+func WithTTL(ttl time.Duration) PushOption {
+	return func(pc *PushConfig) {
+		pc.Ttl = &ttl
+	}
+}
+
 type StorePort[T any] interface {
-	Push(key string, subKey string, val T, opts ...storage.PushOption)
+	Push(key string, subKey string, val T, options ...PushOption)
 	Update(key string, subKey string, updateFn func(current T, exists bool) T)
 	GetAllData() map[string]map[string]T
 	GetAll(key string) map[string]T

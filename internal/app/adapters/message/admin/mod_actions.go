@@ -36,7 +36,10 @@ func (b *BanUser) Execute(_ *config.Config, _ string, msg *message.ChatMessage) 
 	}
 	b.log.Info("Ban command received", slog.String("username", username), slog.String("reason", reason))
 
-	b.api.BanUser(b.stream.ChannelName(), b.stream.ChannelID(), ids[strings.ToLower(username)], reason)
+	err = b.api.TimeoutUser(b.stream.ChannelName(), b.stream.ChannelID(), ids[strings.ToLower(username)], 0, reason)
+	if err != nil {
+		return unknownError
+	}
 	return &ports.AnswerType{Text: []string{fmt.Sprintf("пользователь %s забанен!", username)}, IsReply: true}
 }
 
@@ -61,7 +64,9 @@ func (u *UnbanUser) Execute(_ *config.Config, _ string, msg *message.ChatMessage
 	}
 	u.log.Info("Unban command received", slog.String("username", username))
 
-	u.api.UnbanUser(u.stream.ChannelID(), ids[strings.ToLower(username)])
+	if err := u.api.UntimeoutUser(u.stream.ChannelID(), ids[strings.ToLower(username)]); err != nil {
+		return unknownError
+	}
 	return &ports.AnswerType{Text: []string{fmt.Sprintf("ограничения с пользователя %s сняты!", username)}, IsReply: true}
 }
 

@@ -6,7 +6,6 @@ import (
 	"regexp"
 	"strings"
 	"time"
-	"twitchspam/internal/app/adapters/message/checker"
 	"twitchspam/internal/app/domain/message"
 	"twitchspam/internal/app/infrastructure/config"
 	"twitchspam/internal/app/infrastructure/storage"
@@ -26,7 +25,7 @@ type Nuke struct {
 
 func (n *Nuke) Execute(_ *config.Config, _ string, msg *message.ChatMessage) *ports.AnswerType {
 	// !am nuke <*наказание> <*длительность> <*scrollback> <слова/фразы через запятую или regex>
-	matches := n.re.FindStringSubmatch(msg.Message.Text.Text())
+	matches := n.re.FindStringSubmatch(msg.Message.Text.Text(message.NormalizeCommaSpacesOption))
 	if len(matches) != 5 {
 		return nonParametr
 	}
@@ -37,11 +36,7 @@ func (n *Nuke) Execute(_ *config.Config, _ string, msg *message.ChatMessage) *po
 		Duration: 60,
 	}
 	duration := 5 * time.Minute
-
-	scrollback := n.messages.GetTTL()
-	if scrollback > 60*time.Second {
-		scrollback = 60 * time.Second
-	}
+	scrollback := 1 * time.Minute
 
 	if strings.TrimSpace(matches[1]) != "" {
 		p, err := n.template.Punishment().Parse(strings.TrimSpace(matches[1]), false)
@@ -61,6 +56,10 @@ func (n *Nuke) Execute(_ *config.Config, _ string, msg *message.ChatMessage) *po
 	if strings.TrimSpace(matches[3]) != "" {
 		if val, ok := n.template.Parser().ParseIntArg(strings.TrimSpace(matches[3]), 1, 180); ok {
 			scrollback = time.Duration(val) * time.Second
+
+			if scrollback > 180*time.Second {
+				scrollback = 180 * time.Second
+			}
 		}
 	}
 
@@ -97,7 +96,7 @@ func (n *Nuke) Execute(_ *config.Config, _ string, msg *message.ChatMessage) *po
 		}
 	}
 
-	n.template.Nuke().Start(punishment, duration, containsWords, words, re, func(ctx context.Context) {
+	n.template.Nuke().Start(punishment, duration, containsWords, words, re, msg.Chatter.Username, func(ctx context.Context) {
 		checkCtx := func() bool {
 			select {
 			case <-ctx.Done():
@@ -108,46 +107,18 @@ func (n *Nuke) Execute(_ *config.Config, _ string, msg *message.ChatMessage) *po
 			}
 		}
 
-		executeAction := func(username string, messageID string, msg storage.Message) {
-			err := n.api.Pool().Submit(func() {
-				if !checkCtx() {
-					return
-				}
-
-				switch punishment.Action {
-				case checker.Ban:
-					n.log.Warn("Ban user", slog.String("username", username), slog.String("text", msg.Data.Message.Text.Text()))
-					n.api.BanUser(n.stream.ChannelName(), n.stream.ChannelID(), msg.Data.Chatter.UserID, "массбан")
-				case checker.Timeout:
-					n.log.Warn("Timeout user", slog.String("username", username),
-						slog.String("text", msg.Data.Message.Text.Text()),
-						slog.Int("duration", int((time.Duration(punishment.Duration)*time.Second).Seconds())),
-					)
-					n.api.TimeoutUser(n.stream.ChannelName(), n.stream.ChannelID(), msg.Data.Chatter.UserID, punishment.Duration, "массбан")
-				case checker.Delete:
-					n.log.Warn("Delete message", slog.String("username", username), slog.String("text", msg.Data.Message.Text.Text()))
-					if err := n.api.DeleteChatMessage(n.stream.ChannelName(), n.stream.ChannelID(), messageID); err != nil {
-						n.log.Error("Failed to delete message on chat", err)
-					}
-				}
-			})
-			if err != nil {
-				n.log.Error("Failed to submit request", err)
-			}
-		}
-
 		now := time.Now()
-		for username, msgs := range n.messages.GetAllData() {
+		for username, messages := range n.messages.GetAllData() {
 			if !checkCtx() {
 				return
 			}
 
-			for messageID, msg := range msgs {
+			for messageID, item := range messages {
 				if !checkCtx() {
 					return
 				}
 
-				if now.Sub(msg.Time) >= scrollback {
+				if now.Sub(item.Time) >= scrollback {
 					continue
 				}
 
@@ -160,12 +131,19 @@ func (n *Nuke) Execute(_ *config.Config, _ string, msg *message.ChatMessage) *po
 					return cur
 				})
 
-				action := n.template.Nuke().Check(&msg.Data.Message.Text, msg.IgnoreNuke)
-				if action == nil || msg.Data.Chatter.IsBroadcaster || msg.Data.Chatter.IsMod {
+				action := n.template.Nuke().Check(&item.Data.Message.Text, item.IgnoreNuke)
+				if action == nil || item.Data.Chatter.IsBroadcaster || item.Data.Chatter.IsMod {
 					continue
 				}
 
-				executeAction(username, messageID, msg)
+				n.api.Pool().Submit(func() {
+					if !checkCtx() {
+						return
+					}
+
+					ExecuteModAction(n.log, n.api, n.stream, action, item.Data.Chatter.UserID, item.Data.Chatter.Username, item.Data.Message.ID, item.Data.Message.Text.Text())
+				})
+
 				if punishment.Action != "delete" {
 					break
 				}

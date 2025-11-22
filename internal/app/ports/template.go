@@ -71,8 +71,9 @@ type MwordPort interface {
 }
 
 type NukePort interface {
-	Start(punishment config.Punishment, duration time.Duration, containsWords, words []string, regexp *regexp.Regexp, startFn func(ctx context.Context))
+	Start(punishment config.Punishment, duration time.Duration, containsWords, words []string, regexp *regexp.Regexp, adminUsername string, startFn func(ctx context.Context))
 	Restart() error
 	Cancel()
 	Check(text *message.Text, ignoreNuke bool) *CheckerAction
+	GetAdminUsername() string
 }

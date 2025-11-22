@@ -275,7 +275,7 @@ func (u *User) handleCommands(msg *message.ChatMessage) *ports.AnswerType {
 			return nil
 		}
 
-		metrics.UserCommands.With(prometheus.Labels{"channel": msg.Broadcaster.Login, "command": strings.TrimSpace(word)}).Inc()
+		metrics.UserCommands.With(prometheus.Labels{"channel": msg.Broadcaster.Login, "command": strings.ToLower(strings.TrimSpace(word))}).Inc()
 		if replyUsername != "" {
 			break
 		}

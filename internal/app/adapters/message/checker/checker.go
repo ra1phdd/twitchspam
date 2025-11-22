@@ -231,7 +231,7 @@ func (c *Checker) checkMwords(msg *message.ChatMessage) *ports.CheckerAction {
 	countTimeouts, ok := c.timeouts.Get(msg.Chatter.Username, "mword")
 	if !ok {
 		c.log.Debug("Initializing muteword punishment counter", slog.String("user", msg.Chatter.Username), slog.String("message", msg.Message.Text.Text()))
-		c.timeouts.Push(msg.Chatter.Username, "mword", 0, storage.WithTTL(
+		c.timeouts.Push(msg.Chatter.Username, "mword", 0, ports.WithTTL(
 			time.Duration(c.cfg.Channels[msg.Broadcaster.Login].Spam.SettingsDefault.DurationResetPunishments)*time.Second),
 		)
 	}
@@ -359,7 +359,7 @@ func (c *Checker) checkSpam(msg *message.ChatMessage) *ports.CheckerAction {
 
 	countTimeouts, ok := c.timeouts.Get(msg.Chatter.Username, cacheKey)
 	if !ok {
-		c.timeouts.Push(msg.Chatter.Username, cacheKey, 0, storage.WithTTL(cacheTTL))
+		c.timeouts.Push(msg.Chatter.Username, cacheKey, 0, ports.WithTTL(cacheTTL))
 	}
 
 	action, dur := c.template.Punishment().Get(settings.Punishments, countTimeouts)
@@ -570,7 +570,7 @@ func (c *Checker) handleEmotes(msg *message.ChatMessage, countSpam int) *ports.C
 
 	countTimeouts, ok := c.timeouts.Get(msg.Chatter.Username, "spam_emote")
 	if !ok {
-		c.timeouts.Push(msg.Chatter.Username, "spam_emote", 0, storage.WithTTL(
+		c.timeouts.Push(msg.Chatter.Username, "spam_emote", 0, ports.WithTTL(
 			time.Duration(c.cfg.Channels[msg.Broadcaster.Login].Spam.SettingsDefault.DurationResetPunishments)*time.Second),
 		)
 	}
@@ -616,7 +616,7 @@ func (c *Checker) handleExceptions(msg *message.ChatMessage, countSpam int, type
 
 		countTimeouts, ok := c.timeouts.Get(msg.Chatter.Username, subKey)
 		if !ok {
-			c.timeouts.Push(msg.Chatter.Username, subKey, 0, storage.WithTTL(
+			c.timeouts.Push(msg.Chatter.Username, subKey, 0, ports.WithTTL(
 				time.Duration(c.cfg.Channels[msg.Broadcaster.Login].Spam.SettingsDefault.DurationResetPunishments)*time.Second),
 			)
 		}

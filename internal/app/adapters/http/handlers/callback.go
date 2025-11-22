@@ -119,11 +119,6 @@ func (h *Handlers) CallbackHandler(c *gin.Context) {
 
 func (h *Handlers) exchangeCodeForToken(code string) (*config.UserTokens, error) {
 	cfg := h.manager.Get()
-	h.log.Debug("Starting Twitch token exchange",
-		slog.String("client_id", cfg.UserAccess.ClientID),
-		slog.String("redirect_uri", cfg.UserAccess.RedirectURL),
-		slog.String("grant_type", "authorization_code"),
-	)
 
 	data := url.Values{}
 	data.Set("client_id", cfg.UserAccess.ClientID)

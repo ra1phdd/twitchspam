@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"strings"
 	"time"
+	"twitchspam/internal/app/adapters/message/checker"
 	"twitchspam/internal/app/domain/message"
 	"twitchspam/internal/app/domain/trusts"
 	"twitchspam/internal/app/infrastructure/config"
@@ -122,6 +123,7 @@ type Admin struct {
 
 	poll        *ports.Poll
 	predictions *ports.Predictions
+	timer       *AddTimer
 
 	root ports.Command
 }
@@ -146,7 +148,23 @@ func New(log logger.Logger, manager *config.Manager, stream ports.StreamPort, tr
 		poll:        &ports.Poll{},
 		predictions: &ports.Predictions{},
 	}
+
+	cfg := a.manager.Get()
+	a.timer = &AddTimer{
+		cfg:    cfg,
+		timers: a.timers,
+		stream: a.stream,
+		api:    a.api,
+	}
 	a.root = a.buildCommandTree()
+
+	for cmd, data := range cfg.Channels[a.stream.ChannelName()].Commands {
+		if data.Timer == nil {
+			continue
+		}
+
+		a.timer.AddTimer(cmd, data)
+	}
 
 	return a
 }
@@ -182,6 +200,10 @@ func (a *Admin) FindMessages(msg *message.ChatMessage) *ports.AnswerType {
 	}
 
 	if !a.checkPermissions(msg.Chatter.UserID, strings.ToLower(words[1]), msg.Chatter.IsMod, msg.Chatter.IsBroadcaster) {
+		if strings.ToLower(words[1]) == "cat" {
+			return nil
+		}
+
 		return &ports.AnswerType{Text: []string{"у вас нет прав на выполнение этой команды!"}, IsReply: true}
 	}
 
@@ -221,12 +243,6 @@ func (c *CompositeCommand) Execute(cfg *config.Config, channel string, msg *mess
 }
 
 func (a *Admin) buildCommandTree() ports.Command {
-	timer := &AddTimer{
-		Cfg:    a.manager.Get(),
-		Timers: a.timers,
-		Stream: a.stream,
-		Api:    a.api,
-	}
 
 	return &CompositeCommand{
 		subcommands: map[string]ports.Command{
@@ -373,13 +389,13 @@ func (a *Admin) buildCommandTree() ports.Command {
 					"aliases": &AliasesCommand{re: regexp.MustCompile(`(?i)^!am\s+cmd\s+aliases\s+(.+)$`)},
 					"timer": &CompositeCommand{
 						subcommands: map[string]ports.Command{
-							"on":  &OnOffCommandTimer{re: regexp.MustCompile(`(?i)^!am\s+cmd\s+timer\s+(on)\s+(.+)$`), template: a.template, timers: a.timers, t: timer},
-							"off": &OnOffCommandTimer{re: regexp.MustCompile(`(?i)^!am\s+cmd\s+timer\s+(off)\s+(.+)$`), template: a.template, timers: a.timers, t: timer},
-							"add": &AddCommandTimer{re: regexp.MustCompile(`(?i)^!am\s+cmd\s+timer(?:\s+add)?\s+(.+)\s+(.+)\s+(.+)$`), template: a.template, t: timer},
-							"set": &SetCommandTimer{re: regexp.MustCompile(`(?i)^!am\s+cmd\s+timer\s+set(?:\s+(\d*)\s+(\d*)\s+)?(.+)$`), template: a.template, timers: a.timers, t: timer},
+							"on":  &OnOffCommandTimer{re: regexp.MustCompile(`(?i)^!am\s+cmd\s+timer\s+(on)\s+(.+)$`), template: a.template, timers: a.timers, t: a.timer},
+							"off": &OnOffCommandTimer{re: regexp.MustCompile(`(?i)^!am\s+cmd\s+timer\s+(off)\s+(.+)$`), template: a.template, timers: a.timers, t: a.timer},
+							"add": &AddCommandTimer{re: regexp.MustCompile(`(?i)^!am\s+cmd\s+timer(?:\s+add)?\s+(.+)\s+(.+)\s+(.+)$`), template: a.template, t: a.timer},
+							"set": &SetCommandTimer{re: regexp.MustCompile(`(?i)^!am\s+cmd\s+timer\s+set(?:\s+(\d*)\s+(\d*)\s+)?(.+)$`), template: a.template, timers: a.timers, t: a.timer},
 							"del": &DelCommandTimer{re: regexp.MustCompile(`(?i)^!am\s+cmd\s+timer\s+del\s+(.+)$`), template: a.template, timers: a.timers},
 						},
-						defaultCmd: &AddCommandTimer{re: regexp.MustCompile(`(?i)^!am\s+cmd\s+timer(?:\s+add)?\s+(.+)\s+(.+)\s+(.+)$`), template: a.template, t: timer},
+						defaultCmd: &AddCommandTimer{re: regexp.MustCompile(`(?i)^!am\s+cmd\s+timer(?:\s+add)?\s+(.+)\s+(.+)\s+(.+)$`), template: a.template, t: a.timer},
 						cursor:     3,
 					},
 					"lim": &CompositeCommand{
@@ -541,5 +557,38 @@ func buildList[T any](
 	return &ports.AnswerType{
 		Text:    []string{fs.GetURL(key)},
 		IsReply: true,
+	}
+}
+
+func ExecuteModAction(log logger.Logger, api ports.APIPort, stream ports.StreamPort, action *ports.CheckerAction, userID, username, msgID, text string) {
+	switch action.Type {
+	case checker.None:
+		return
+	case checker.Ban:
+		log.Warn("Ban user", slog.String("username", username), slog.String("text", text))
+		err := api.TimeoutUser(stream.ChannelName(), stream.ChannelID(), userID, 0, action.ReasonMod)
+		if err != nil {
+			log.Error("Failed to ban user on chat", err, slog.String("username", username), slog.String("text", text))
+		}
+	case checker.Timeout:
+		log.Warn("Timeout user", slog.String("username", username),
+			slog.String("text", text),
+			slog.Duration("duration", action.Duration),
+		)
+		err := api.TimeoutUser(stream.ChannelName(), stream.ChannelID(), userID, int(action.Duration.Seconds()), action.ReasonMod)
+		if err != nil {
+			log.Error("Failed to timeout user on chat", err, slog.String("username", username), slog.Duration("duration", action.Duration), slog.String("text", text))
+		}
+	case checker.Warn:
+		log.Warn("Warn user", slog.String("username", username), slog.String("text", text))
+		if err := api.WarnUser(stream.ChannelName(), stream.ChannelID(), userID, action.ReasonUser); err != nil {
+			log.Error("Failed to warn message on chat", err)
+		}
+		fallthrough
+	case checker.Delete:
+		log.Warn("Delete message", slog.String("username", username), slog.String("text", text))
+		if err := api.DeleteChatMessage(stream.ChannelName(), stream.ChannelID(), msgID); err != nil {
+			log.Error("Failed to delete message on chat", err)
+		}
 	}
 }

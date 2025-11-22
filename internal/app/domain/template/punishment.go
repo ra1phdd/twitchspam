@@ -3,6 +3,7 @@ package template
 import (
 	"errors"
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -18,29 +19,80 @@ func NewPunishment() *PunishmentTemplate {
 
 func (p *PunishmentTemplate) Parse(punishment string, allowInherit bool) (config.Punishment, error) {
 	punishment = strings.TrimSpace(punishment)
+
 	if allowInherit && punishment == "*" {
 		return config.Punishment{Action: "inherit"}, nil
 	}
 
-	if punishment == "none" || punishment == "n" {
+	switch punishment {
+	case "none", "n":
 		return config.Punishment{Action: "none"}, nil
-	}
-
-	if punishment == "delete" || punishment == "d" {
+	case "delete", "d":
 		return config.Punishment{Action: "delete"}, nil
-	}
-
-	if punishment == "warn" || punishment == "w" {
+	case "warn", "w":
 		return config.Punishment{Action: "warn"}, nil
-	}
-
-	if punishment == "ban" || punishment == "b" || punishment == "0" {
+	case "ban", "b", "0":
 		return config.Punishment{Action: "ban"}, nil
 	}
 
+	units := map[string]int{
+		"s": 1,
+		"m": 60,
+		"h": 3600,
+		"d": 86400,
+		"w": 604800,
+
+		"с": 1,
+		"м": 60,
+		"ч": 3600,
+		"д": 86400,
+		"н": 604800,
+	}
+
+	re := regexp.MustCompile(`(?i)(\d+)([smhdwсмчдн])`)
+	matches := re.FindAllStringSubmatch(punishment, -1)
+
+	if len(matches) > 0 {
+		total := 0
+		for _, m := range matches {
+			valueStr := m[1]
+			unitStr := strings.ToLower(m[2])
+
+			value, err := strconv.Atoi(valueStr)
+			if err != nil {
+				return config.Punishment{}, errors.New("invalid numeric value")
+			}
+
+			multiplier, ok := units[unitStr]
+			if !ok {
+				return config.Punishment{}, errors.New("invalid time unit")
+			}
+
+			total += value * multiplier
+		}
+
+		if total < 1 {
+			total = 1
+		}
+
+		if total > 1209600 {
+			total = 1209600
+		}
+
+		return config.Punishment{Action: "timeout", Duration: total}, nil
+	}
+
 	duration, err := strconv.Atoi(punishment)
-	if err != nil || duration < 1 || duration > 1209600 {
-		return config.Punishment{}, errors.New("invalid timeout value")
+	if err != nil {
+		return config.Punishment{}, err
+	}
+
+	if duration < 1 {
+		duration = 1
+	}
+
+	if duration > 1209600 {
+		duration = 1209600
 	}
 
 	return config.Punishment{Action: "timeout", Duration: duration}, nil

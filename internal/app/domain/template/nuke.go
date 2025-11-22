@@ -3,6 +3,7 @@ package template
 import (
 	"context"
 	"errors"
+	"fmt"
 	"regexp"
 	"strings"
 	"sync"
@@ -26,6 +27,7 @@ type Nuke struct {
 	containsWords []string
 	words         []string
 	regexp        *regexp.Regexp
+	adminUsername string
 
 	cancel  context.CancelFunc
 	startFn func(ctx context.Context)
@@ -35,7 +37,7 @@ func NewNuke() *NukeTemplate {
 	return &NukeTemplate{}
 }
 
-func (n *NukeTemplate) Start(punishment config.Punishment, duration time.Duration, containsWords, words []string, regexp *regexp.Regexp, startFn func(ctx context.Context)) {
+func (n *NukeTemplate) Start(punishment config.Punishment, duration time.Duration, containsWords, words []string, regexp *regexp.Regexp, adminUsername string, startFn func(ctx context.Context)) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 
@@ -64,6 +66,10 @@ func (n *NukeTemplate) Start(punishment config.Punishment, duration time.Duratio
 		n.mu.Lock()
 		defer n.mu.Unlock()
 
+		if n.nuke != nil {
+			n.nuke.cancel()
+		}
+
 		n.oldNuke = n.nuke
 		n.nuke = nil
 		n.timer = nil
@@ -79,7 +85,7 @@ func (n *NukeTemplate) Restart() error {
 		return errors.New("a repeat of the previous nuke is not possible")
 	}
 
-	n.Start(n.oldNuke.punishment, n.oldNuke.duration, n.oldNuke.containsWords, n.oldNuke.words, n.oldNuke.regexp, n.oldNuke.startFn)
+	n.Start(n.oldNuke.punishment, n.oldNuke.duration, n.oldNuke.containsWords, n.oldNuke.words, n.oldNuke.regexp, n.oldNuke.adminUsername, n.oldNuke.startFn)
 	return nil
 }
 
@@ -105,6 +111,9 @@ func (n *NukeTemplate) Cancel() {
 }
 
 func (n *NukeTemplate) Check(text *message.Text, ignoreNuke bool) *ports.CheckerAction {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+
 	if n.nuke == nil || ignoreNuke {
 		return nil
 	}
@@ -112,7 +121,7 @@ func (n *NukeTemplate) Check(text *message.Text, ignoreNuke bool) *ports.Checker
 	apply := func() *ports.CheckerAction {
 		return &ports.CheckerAction{
 			Type:       n.nuke.punishment.Action,
-			ReasonMod:  "массбан",
+			ReasonMod:  fmt.Sprintf("массбан (начато %s)", n.nuke.adminUsername),
 			ReasonUser: "Не используй запрещенное слово!",
 			Duration:   time.Duration(n.nuke.punishment.Duration) * time.Second,
 		}
@@ -141,4 +150,15 @@ func (n *NukeTemplate) Check(text *message.Text, ignoreNuke bool) *ports.Checker
 	}
 
 	return nil
+}
+
+func (n *NukeTemplate) GetAdminUsername() string {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+
+	if n.nuke.adminUsername != "" {
+		return n.nuke.adminUsername
+	}
+
+	return "неизвестно"
 }

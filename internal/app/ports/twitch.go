@@ -7,7 +7,7 @@ import (
 )
 
 type APIPollPort interface {
-	Submit(task func()) error
+	Submit(task func())
 	Stop()
 }
 
@@ -21,10 +21,9 @@ type APIPort interface {
 	SendChatAnnouncements(channelID string, msgs *AnswerType, color string)
 	SendChatAnnouncement(channelID, message, color string) error
 	DeleteChatMessage(channelName, channelID, messageID string) error
-	TimeoutUser(channelName, channelID, userID string, duration int, reason string)
+	TimeoutUser(channelName, channelID, userID string, duration int, reason string) error
 	WarnUser(channelName, broadcasterID, userID, reason string) error
-	BanUser(channelName, channelID, userID string, reason string)
-	UnbanUser(channelID, userID string)
+	UntimeoutUser(channelID, userID string) error
 	SearchCategory(gameName string) (string, string, error)
 	UpdateChannelCategoryID(broadcasterID string, gameID string) error
 	UpdateChannelTitle(broadcasterID string, title string) error

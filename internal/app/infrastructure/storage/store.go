@@ -4,6 +4,7 @@ import (
 	"github.com/maypok86/otter/v2"
 	"sync/atomic"
 	"time"
+	"twitchspam/internal/app/ports"
 )
 
 type Store[T any] struct {
@@ -39,29 +40,17 @@ func (s *Store[T]) getInner(key string) *otter.Cache[string, T] {
 	return inner
 }
 
-type PushOption func(*pushConfig)
-
-type pushConfig struct {
-	ttl *time.Duration
-}
-
-func WithTTL(ttl time.Duration) PushOption {
-	return func(pc *pushConfig) {
-		pc.ttl = &ttl
-	}
-}
-
-func (s *Store[T]) Push(key string, subKey string, val T, opts ...PushOption) {
+func (s *Store[T]) Push(key string, subKey string, val T, opts ...ports.PushOption) {
 	inner := s.getInner(key)
 	inner.Set(subKey, val)
 
-	config := &pushConfig{}
+	config := &ports.PushConfig{}
 	for _, opt := range opts {
 		opt(config)
 	}
 
-	if config.ttl != nil && *config.ttl > 0 {
-		inner.SetExpiresAfter(subKey, *config.ttl)
+	if config.Ttl != nil && *config.Ttl > 0 {
+		inner.SetExpiresAfter(subKey, *config.Ttl)
 	}
 }
 
