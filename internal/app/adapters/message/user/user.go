@@ -354,12 +354,14 @@ func (u *User) allowCommand(command string, limiter *config.Limiter) bool {
 }
 
 func extractUsername(word string) string {
-	word = strings.TrimPrefix(word, "@")
-
-	if i := strings.IndexAny(word, " ,"); i != -1 {
-		word = word[:i]
-	} else if !strings.HasPrefix(word, "@") {
+	if !strings.HasPrefix(word, "@") {
 		return ""
 	}
+
+	word = word[1:]
+	if i := strings.IndexAny(word, " ,"); i != -1 {
+		word = word[:i]
+	}
+
 	return word
 }
