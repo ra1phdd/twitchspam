@@ -9,7 +9,7 @@ import (
 	"twitchspam/internal/app/ports"
 )
 
-type StoreV2[T any] struct {
+type Store[T any] struct {
 	cache sync.Map
 
 	mu         sync.RWMutex
@@ -36,53 +36,53 @@ type orderedEntry[T any] struct {
 	Value *T
 }
 
-type ExpirationMode int
+type ExpirationMode int32
 
 const (
 	ExpireAfterWrite ExpirationMode = iota
 	ExpireAfterAccess
 )
 
-type StoreOption[T any] func(*StoreV2[T])
+type StoreOption[T any] func(*Store[T])
 
 func WithTTLV2[T any](ttl time.Duration) StoreOption[T] {
-	return func(s *StoreV2[T]) {
+	return func(s *Store[T]) {
 		s.ttl.Store(ttl.Nanoseconds())
 	}
 }
 
-func WithCapacity[T any](cap int32) StoreOption[T] {
-	return func(s *StoreV2[T]) {
-		s.cap.Store(cap)
+func WithCapacity[T any](newCap int32) StoreOption[T] {
+	return func(s *Store[T]) {
+		s.cap.Store(newCap)
 	}
 }
 
 func WithSubTTL[T any](ttl time.Duration) StoreOption[T] {
-	return func(s *StoreV2[T]) {
+	return func(s *Store[T]) {
 		s.subTTL.Store(ttl.Nanoseconds())
 	}
 }
 
-func WithSubCapacity[T any](cap int32) StoreOption[T] {
-	return func(s *StoreV2[T]) {
-		s.subCap.Store(cap)
+func WithSubCapacity[T any](newCap int32) StoreOption[T] {
+	return func(s *Store[T]) {
+		s.subCap.Store(newCap)
 	}
 }
 
 func WithMode[T any](mode ExpirationMode) StoreOption[T] {
-	return func(s *StoreV2[T]) {
+	return func(s *Store[T]) {
 		s.mode.Store(int32(mode))
 	}
 }
 
 func WithSubMode[T any](mode ExpirationMode) StoreOption[T] {
-	return func(s *StoreV2[T]) {
+	return func(s *Store[T]) {
 		s.subMode.Store(int32(mode))
 	}
 }
 
-func NewV2[T any](opts ...StoreOption[T]) *StoreV2[T] {
-	s := &StoreV2[T]{
+func New[T any](opts ...StoreOption[T]) *Store[T] {
+	s := &Store[T]{
 		lastAccess: make(map[string]*atomic.Int64),
 		timers:     timers.NewTimingWheel(100*time.Millisecond, 600),
 	}
@@ -101,7 +101,12 @@ func NewV2[T any](opts ...StoreOption[T]) *StoreV2[T] {
 	return s
 }
 
-func (s *StoreV2[T]) Push(key, subKey string, val T, _ ...ports.PushOption) {
+func (s *Store[T]) Push(key, subKey string, val T, ttl *time.Duration) {
+	if ttl == nil {
+		d := time.Duration(s.ttl.Load())
+		ttl = &d
+	}
+
 	raw, ok := s.cache.Load(key)
 	if !ok || raw == nil {
 		ent := &entry[T]{
@@ -111,7 +116,7 @@ func (s *StoreV2[T]) Push(key, subKey string, val T, _ ...ports.PushOption) {
 			orderedRefs:  make(map[string]*list.Element),
 		}
 		s.cache.Store(key, ent)
-		s.addTimer(key, time.Duration(s.ttl.Load()), ExpirationMode(s.mode.Load()))
+		s.addTimer(key, *ttl, ExpirationMode(s.mode.Load()))
 		raw = ent
 
 		s.mu.Lock()
@@ -138,7 +143,7 @@ func (s *StoreV2[T]) Push(key, subKey string, val T, _ ...ports.PushOption) {
 	}
 	el.lastAccess[subKey].Store(time.Now().Unix())
 
-	if int32(el.OrderedValue.Len()) > s.subCap.Load() {
+	if el.OrderedValue.Len() > int(s.subCap.Load()) {
 		front := el.OrderedValue.Front()
 		if front != nil {
 			fk := front.Value.(*orderedEntry[T]).Key
@@ -150,62 +155,58 @@ func (s *StoreV2[T]) Push(key, subKey string, val T, _ ...ports.PushOption) {
 	}
 	el.mu.Unlock()
 
+	s.addSubTimer(key, subKey, *ttl, ExpirationMode(s.subMode.Load()))
+}
+
+func (s *Store[T]) Update(key string, subKey string, updateFn func(current *T, exists bool) *T) {
+	raw, ok := s.cache.Load(key)
+	if !ok || raw == nil {
+		return
+	}
+	el := raw.(*entry[T])
+
+	s.mu.Lock()
+	if _, exists := s.lastAccess[key]; !exists {
+		s.lastAccess[key] = &atomic.Int64{}
+	}
+	s.lastAccess[key].Store(time.Now().Unix())
+	s.mu.Unlock()
+
+	current, exists := el.Value[subKey]
+	el.mu.Lock()
+
+	newVal := updateFn(current, exists)
+	if newVal == nil {
+		if elem, ok := el.orderedRefs[subKey]; ok {
+			el.OrderedValue.Remove(elem)
+			delete(el.orderedRefs, subKey)
+		}
+		delete(el.Value, subKey)
+		delete(el.lastAccess, subKey)
+		return
+	}
+
+	el.Value[subKey] = newVal
+
+	if elem, ok := el.orderedRefs[subKey]; ok {
+		elem.Value.(*orderedEntry[T]).Value = newVal
+		el.OrderedValue.MoveToBack(elem)
+	} else {
+		elem = el.OrderedValue.PushBack(&orderedEntry[T]{Key: subKey, Value: newVal})
+		el.orderedRefs[subKey] = elem
+	}
+
+	if _, exists := el.lastAccess[subKey]; !exists {
+		el.lastAccess[subKey] = &atomic.Int64{}
+	}
+	el.lastAccess[subKey].Store(time.Now().Unix())
+	el.mu.Unlock()
+
+	s.timers.RemoveTimer(key + subKey)
 	s.addSubTimer(key, subKey, time.Duration(s.subTTL.Load()), ExpirationMode(s.subMode.Load()))
 }
 
-func (s *StoreV2[T]) Update(key string, subKey string, updateFn func(current T, exists bool) T) {
-	return
-}
-
-//func (s *StoreV2[T]) Update(key string, subKey string, updateFn func(current *T, exists bool) *T) {
-//	raw, ok := s.cache.Load(key)
-//	if !ok || raw == nil {
-//		return
-//	}
-//	el := raw.(*entry[T])
-//
-//	s.mu.Lock()
-//	if _, exists := s.lastAccess[key]; !exists {
-//		s.lastAccess[key] = &atomic.Int64{}
-//	}
-//	s.lastAccess[key].Store(time.Now().Unix())
-//	s.mu.Unlock()
-//
-//	current, exists := el.Value[subKey]
-//	el.mu.Lock()
-//
-//	newVal := updateFn(current, exists)
-//	if newVal == nil {
-//		if elem, ok := el.orderedRefs[subKey]; ok {
-//			el.OrderedValue.Remove(elem)
-//			delete(el.orderedRefs, subKey)
-//		}
-//		delete(el.Value, subKey)
-//		delete(el.lastAccess, subKey)
-//		return
-//	}
-//
-//	el.Value[subKey] = newVal
-//
-//	if elem, ok := el.orderedRefs[subKey]; ok {
-//		elem.Value.(*orderedEntry[T]).Value = newVal
-//		el.OrderedValue.MoveToBack(elem)
-//	} else {
-//		elem = el.OrderedValue.PushBack(&orderedEntry[T]{Key: subKey, Value: newVal})
-//		el.orderedRefs[subKey] = elem
-//	}
-//
-//	if _, exists := el.lastAccess[subKey]; !exists {
-//		el.lastAccess[subKey] = &atomic.Int64{}
-//	}
-//	el.lastAccess[subKey].Store(time.Now().Unix())
-//	el.mu.Unlock()
-//
-//	s.timers.RemoveTimer(key + subKey)
-//	s.addSubTimer(key, subKey, time.Duration(s.subTTL.Load()), ExpirationMode(s.subMode.Load()))
-//}
-
-func (s *StoreV2[T]) GetAllData() map[string]map[string]T {
+func (s *Store[T]) GetAllData() map[string]map[string]T {
 	result := make(map[string]map[string]T)
 
 	s.cache.Range(func(k, v any) bool {
@@ -228,7 +229,7 @@ func (s *StoreV2[T]) GetAllData() map[string]map[string]T {
 	return result
 }
 
-func (s *StoreV2[T]) GetAll(key string) map[string]T {
+func (s *Store[T]) GetAll(key string) map[string]T {
 	raw, ok := s.cache.Load(key)
 	if !ok || raw == nil {
 		return nil
@@ -248,7 +249,7 @@ func (s *StoreV2[T]) GetAll(key string) map[string]T {
 	return result
 }
 
-func (s *StoreV2[T]) Get(key, subKey string) (T, bool) {
+func (s *Store[T]) Get(key, subKey string) (T, bool) {
 	var zero T
 
 	raw, ok := s.cache.Load(key)
@@ -272,7 +273,7 @@ func (s *StoreV2[T]) Get(key, subKey string) (T, bool) {
 	return *val, true
 }
 
-func (s *StoreV2[T]) Len(key string) int {
+func (s *Store[T]) Len(key string) int {
 	raw, ok := s.cache.Load(key)
 	if !ok || raw == nil {
 		return 0
@@ -284,7 +285,7 @@ func (s *StoreV2[T]) Len(key string) int {
 	return len(ent.Value)
 }
 
-func (s *StoreV2[T]) ForEach(key string, fn func(val *T)) {
+func (s *Store[T]) ForEach(key string, fn func(val *T)) {
 	raw, ok := s.cache.Load(key)
 	if !ok || raw == nil {
 		return
@@ -300,7 +301,7 @@ func (s *StoreV2[T]) ForEach(key string, fn func(val *T)) {
 	ent.mu.RUnlock()
 }
 
-func (s *StoreV2[T]) ClearKey(key string) {
+func (s *Store[T]) ClearKey(key string) {
 	raw, ok := s.cache.Load(key)
 	if ok && raw != nil {
 		s.cache.Delete(key)
@@ -311,7 +312,7 @@ func (s *StoreV2[T]) ClearKey(key string) {
 	s.mu.Unlock()
 }
 
-func (s *StoreV2[T]) ClearAll() {
+func (s *Store[T]) ClearAll() {
 	s.cache.Clear()
 
 	s.mu.Lock()
@@ -319,16 +320,16 @@ func (s *StoreV2[T]) ClearAll() {
 	s.mu.Unlock()
 }
 
-func (s *StoreV2[T]) SetCapacity(newCap int32) {
+func (s *Store[T]) SetCapacity(newCap int32) {
 	s.cap.Store(newCap)
 	s.subCap.Store(newCap)
 }
 
-func (s *StoreV2[T]) GetCapacity() int32 {
+func (s *Store[T]) GetCapacity() int32 {
 	return s.cap.Load()
 }
 
-func (s *StoreV2[T]) SetTTL(newTTL time.Duration) {
+func (s *Store[T]) SetTTL(newTTL time.Duration) {
 	oldTTL := time.Duration(s.ttl.Load())
 	s.ttl.Store(newTTL.Nanoseconds())
 
@@ -339,11 +340,11 @@ func (s *StoreV2[T]) SetTTL(newTTL time.Duration) {
 	}
 }
 
-func (s *StoreV2[T]) GetTTL() time.Duration {
+func (s *Store[T]) GetTTL() time.Duration {
 	return time.Duration(s.ttl.Load())
 }
 
-func (s *StoreV2[T]) addTimer(key string, ttl time.Duration, mode ExpirationMode) {
+func (s *Store[T]) addTimer(key string, ttl time.Duration, mode ExpirationMode) {
 	if ttl <= 0 {
 		return
 	}
@@ -373,7 +374,7 @@ func (s *StoreV2[T]) addTimer(key string, ttl time.Duration, mode ExpirationMode
 	})
 }
 
-func (s *StoreV2[T]) addSubTimer(key, subKey string, ttl time.Duration, mode ExpirationMode) {
+func (s *Store[T]) addSubTimer(key, subKey string, ttl time.Duration, mode ExpirationMode) {
 	if ttl <= 0 {
 		return
 	}

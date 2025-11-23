@@ -231,17 +231,17 @@ func (c *Checker) checkMwords(msg *message.ChatMessage) *ports.CheckerAction {
 	countTimeouts, ok := c.timeouts.Get(msg.Chatter.Username, "mword")
 	if !ok {
 		c.log.Debug("Initializing muteword punishment counter", slog.String("user", msg.Chatter.Username), slog.String("message", msg.Message.Text.Text()))
-		c.timeouts.Push(msg.Chatter.Username, "mword", 0, ports.WithTTL(
-			time.Duration(c.cfg.Channels[msg.Broadcaster.Login].Spam.SettingsDefault.DurationResetPunishments)*time.Second),
-		)
+		ttl := time.Duration(c.cfg.Channels[msg.Broadcaster.Login].Spam.SettingsDefault.DurationResetPunishments) * time.Second
+		c.timeouts.Push(msg.Chatter.Username, "mword", 0, &ttl)
 	}
 
 	action, dur := c.template.Punishment().Get(punishments, countTimeouts)
-	c.timeouts.Update(msg.Chatter.Username, "mword", func(cur int, exists bool) int {
-		if !exists {
-			return 1
+	c.timeouts.Update(msg.Chatter.Username, "mword", func(cur *int, exists bool) *int {
+		val := 1
+		if exists {
+			val = *cur + 1
 		}
-		return cur + 1
+		return &val
 	})
 
 	c.log.Info("Applying muteword punishment",
@@ -359,15 +359,16 @@ func (c *Checker) checkSpam(msg *message.ChatMessage) *ports.CheckerAction {
 
 	countTimeouts, ok := c.timeouts.Get(msg.Chatter.Username, cacheKey)
 	if !ok {
-		c.timeouts.Push(msg.Chatter.Username, cacheKey, 0, ports.WithTTL(cacheTTL))
+		c.timeouts.Push(msg.Chatter.Username, cacheKey, 0, &cacheTTL)
 	}
 
 	action, dur := c.template.Punishment().Get(settings.Punishments, countTimeouts)
-	c.timeouts.Update(msg.Chatter.Username, cacheKey, func(cur int, exists bool) int {
-		if !exists {
-			return 1
+	c.timeouts.Update(msg.Chatter.Username, cacheKey, func(cur *int, exists bool) *int {
+		val := 1
+		if exists {
+			val = *cur + 1
 		}
-		return cur + 1
+		return &val
 	})
 
 	c.log.Warn("Spam detected and punishment applied",
@@ -570,17 +571,17 @@ func (c *Checker) handleEmotes(msg *message.ChatMessage, countSpam int) *ports.C
 
 	countTimeouts, ok := c.timeouts.Get(msg.Chatter.Username, "spam_emote")
 	if !ok {
-		c.timeouts.Push(msg.Chatter.Username, "spam_emote", 0, ports.WithTTL(
-			time.Duration(c.cfg.Channels[msg.Broadcaster.Login].Spam.SettingsDefault.DurationResetPunishments)*time.Second),
-		)
+		ttl := time.Duration(c.cfg.Channels[msg.Broadcaster.Login].Spam.SettingsDefault.DurationResetPunishments) * time.Second
+		c.timeouts.Push(msg.Chatter.Username, "spam_emote", 0, &ttl)
 	}
 
 	action, dur := c.template.Punishment().Get(c.cfg.Channels[msg.Broadcaster.Login].Spam.SettingsEmotes.Punishments, countTimeouts)
-	c.timeouts.Update(msg.Chatter.Username, "spam_emote", func(cur int, exists bool) int {
-		if !exists {
-			return 1
+	c.timeouts.Update(msg.Chatter.Username, "spam_emote", func(cur *int, exists bool) *int {
+		val := 1
+		if exists {
+			val = *cur + 1
 		}
-		return cur + 1
+		return &val
 	})
 
 	c.log.Info("Emote spam action applied",
@@ -616,16 +617,17 @@ func (c *Checker) handleExceptions(msg *message.ChatMessage, countSpam int, type
 
 		countTimeouts, ok := c.timeouts.Get(msg.Chatter.Username, subKey)
 		if !ok {
-			c.timeouts.Push(msg.Chatter.Username, subKey, 0, ports.WithTTL(
-				time.Duration(c.cfg.Channels[msg.Broadcaster.Login].Spam.SettingsDefault.DurationResetPunishments)*time.Second),
-			)
+			ttl := time.Duration(c.cfg.Channels[msg.Broadcaster.Login].Spam.SettingsDefault.DurationResetPunishments) * time.Second
+			c.timeouts.Push(msg.Chatter.Username, subKey, 0, &ttl)
 		}
+
 		action, dur := c.template.Punishment().Get(ex.Punishments, countTimeouts)
-		c.timeouts.Update(msg.Chatter.Username, subKey, func(cur int, exists bool) int {
-			if !exists {
-				return 1
+		c.timeouts.Update(msg.Chatter.Username, subKey, func(cur *int, exists bool) *int {
+			val := 1
+			if exists {
+				val = *cur + 1
 			}
-			return cur + 1
+			return &val
 		})
 
 		return &ports.CheckerAction{

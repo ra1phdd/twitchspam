@@ -19,6 +19,8 @@ type StreamPort interface {
 
 type StatsPort interface {
 	Reset()
+	ResetOfflineMessages()
+	SetIsOnline(isOnline bool)
 	SetStartTime(t time.Time)
 	GetStartTime() time.Time
 	SetEndTime(t time.Time)

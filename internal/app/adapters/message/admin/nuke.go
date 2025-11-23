@@ -122,7 +122,7 @@ func (n *Nuke) Execute(_ *config.Config, _ string, msg *message.ChatMessage) *po
 					continue
 				}
 
-				n.messages.Update(username, messageID, func(cur storage.Message, exists bool) storage.Message {
+				n.messages.Update(username, messageID, func(cur *storage.Message, exists bool) *storage.Message {
 					if !exists {
 						return cur
 					}

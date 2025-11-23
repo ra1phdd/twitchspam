@@ -7,7 +7,6 @@ import (
 	"sort"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 	"twitchspam/internal/app/adapters/metrics"
 	"twitchspam/internal/app/domain"
@@ -16,11 +15,12 @@ import (
 
 type Stats struct {
 	channelName string
-	stats       SessionStats
-	fs          ports.FileServerPort
-	cache       ports.CachePort[SessionStats]
-	mu          sync.RWMutex
-	lastActive  atomic.Int64
+	isOnline    bool
+
+	stats SessionStats
+	fs    ports.FileServerPort
+	cache ports.CachePort[SessionStats]
+	mu    sync.RWMutex
 }
 
 type SessionStats struct {
@@ -31,13 +31,14 @@ type SessionStats struct {
 		SumViewers int64
 		Count      int
 	}
-	CountMessages   map[string]int
-	CountDeletes    map[string]int
-	CountTimeouts   map[string]int
-	CountWarns      map[string]int
-	CountBans       map[string]int
-	CategoryHistory []CategoryInterval
-	StatIntervals   []TimeInterval
+	CountOnlineMessages  map[string]int
+	CountOfflineMessages map[string]int
+	CountDeletes         map[string]int
+	CountTimeouts        map[string]int
+	CountWarns           map[string]int
+	CountBans            map[string]int
+	CategoryHistory      []CategoryInterval
+	StatIntervals        []TimeInterval
 }
 
 type CategoryInterval struct {
@@ -57,22 +58,26 @@ func newStats(channelName string, fs ports.FileServerPort, cache ports.CachePort
 		fs:          fs,
 		cache:       cache,
 		stats: SessionStats{
-			CountMessages:   make(map[string]int),
-			CountDeletes:    make(map[string]int),
-			CountTimeouts:   make(map[string]int),
-			CountWarns:      make(map[string]int),
-			CountBans:       make(map[string]int),
-			CategoryHistory: make([]CategoryInterval, 0),
-			StatIntervals:   make([]TimeInterval, 0),
+			CountOnlineMessages:  make(map[string]int),
+			CountOfflineMessages: make(map[string]int),
+			CountDeletes:         make(map[string]int),
+			CountTimeouts:        make(map[string]int),
+			CountWarns:           make(map[string]int),
+			CountBans:            make(map[string]int),
+			CategoryHistory:      make([]CategoryInterval, 0),
+			StatIntervals:        make([]TimeInterval, 0),
 		},
 	}
 
 	if stats, ok := cache.Get(channelName); ok {
 		s.stats = stats
 
-		var countBans, countWarns, countTimeouts, countDeletes, countMessages int
-		for _, v := range stats.CountMessages {
-			countMessages += v
+		var countBans, countWarns, countTimeouts, countDeletes, countOnlineMessages, countOfflineMessages int
+		for _, v := range stats.CountOnlineMessages {
+			countOnlineMessages += v
+		}
+		for _, v := range stats.CountOfflineMessages {
+			countOfflineMessages += v
 		}
 		for _, v := range stats.CountDeletes {
 			countDeletes += v
@@ -95,7 +100,8 @@ func newStats(channelName string, fs ports.FileServerPort, cache ports.CachePort
 		metrics.StreamStartTime.With(prometheus.Labels{"channel": s.channelName}).Set(float64(stats.StartStreamTime.Unix()))
 		metrics.StreamEndTime.With(prometheus.Labels{"channel": s.channelName}).Set(float64(stats.EndStreamTime.Unix()))
 		metrics.OnlineViewers.With(prometheus.Labels{"channel": s.channelName}).Set(avgViewers)
-		metrics.MessagesPerOnline.With(prometheus.Labels{"channel": s.channelName}).Add(float64(countMessages))
+		metrics.MessagesPerOnline.With(prometheus.Labels{"channel": s.channelName}).Add(float64(countOnlineMessages))
+		metrics.MessagesPerOffline.With(prometheus.Labels{"channel": s.channelName}).Add(float64(countOfflineMessages))
 		metrics.ModerationActions.With(prometheus.Labels{"channel": s.channelName, "action": "delete"}).Add(float64(countDeletes))
 		metrics.ModerationActions.With(prometheus.Labels{"channel": s.channelName, "action": "timeout"}).Add(float64(countTimeouts))
 		metrics.ModerationActions.With(prometheus.Labels{"channel": s.channelName, "action": "warn"}).Add(float64(countWarns))
@@ -120,7 +126,7 @@ func (s *Stats) Reset() {
 	s.stats.Online.MaxViewers = 0
 	s.stats.Online.SumViewers = 0
 	s.stats.Online.Count = 0
-	s.stats.CountMessages = make(map[string]int)
+	s.stats.CountOnlineMessages = make(map[string]int)
 	s.stats.CountDeletes = make(map[string]int)
 	s.stats.CountTimeouts = make(map[string]int)
 	s.stats.CountBans = make(map[string]int)
@@ -139,6 +145,15 @@ func (s *Stats) Reset() {
 	metrics.UserCommands.Delete(prometheus.Labels{"channel": s.channelName})
 
 	s.mu.Unlock()
+}
+
+func (s *Stats) ResetOfflineMessages() {
+	s.stats.CountOfflineMessages = make(map[string]int)
+	metrics.MessagesPerOffline.Delete(prometheus.Labels{"channel": s.channelName})
+}
+
+func (s *Stats) SetIsOnline(isOnline bool) {
+	s.isOnline = isOnline
 }
 
 func (s *Stats) SetStartTime(t time.Time) {
@@ -189,15 +204,17 @@ func (s *Stats) SetOnline(viewers int) {
 
 func (s *Stats) AddMessage(username string) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if s.stats.CountMessages == nil {
-		return
-	}
 
 	s.markActive(time.Now())
-	s.stats.CountMessages[strings.ToLower(username)]++
-	metrics.MessagesPerOnline.With(prometheus.Labels{"channel": s.channelName}).Inc()
+	if s.isOnline {
+		s.stats.CountOnlineMessages[strings.ToLower(username)]++
+		metrics.MessagesPerOnline.With(prometheus.Labels{"channel": s.channelName}).Inc()
+	} else {
+		s.stats.CountOfflineMessages[strings.ToLower(username)]++
+		metrics.MessagesPerOffline.With(prometheus.Labels{"channel": s.channelName}).Inc()
+	}
+
+	s.mu.Unlock()
 }
 
 func (s *Stats) AddDeleted(username string) {
@@ -286,7 +303,7 @@ func (s *Stats) GetStats() *ports.AnswerType {
 		avgViewers,
 		s.stats.Online.MaxViewers,
 		countMessages,
-		len(s.stats.CountMessages),
+		len(s.stats.CountOnlineMessages),
 		float64(countMessages)/s.stats.EndStreamTime.Sub(s.stats.StartStreamTime).Seconds(),
 		countBans,
 		countTimeouts,
@@ -305,21 +322,21 @@ func (s *Stats) GetUserStats(username string) *ports.AnswerType {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	if s.stats.StartStreamTime.IsZero() || len(s.stats.CountMessages) == 0 {
+	if s.stats.StartStreamTime.IsZero() || len(s.stats.CountOnlineMessages) == 0 {
 		return &ports.AnswerType{Text: []string{"нет данных за последний стрим!"}, IsReply: false}
 	}
 
 	username = strings.ToLower(strings.TrimPrefix(username, "@"))
 	position := 1
-	for _, v := range s.stats.CountMessages {
-		if v > s.stats.CountMessages[username] {
+	for _, v := range s.stats.CountOnlineMessages {
+		if v > s.stats.CountOnlineMessages[username] {
 			position++
 		}
 	}
 
 	msg := fmt.Sprintf(
 		"статистика %s - кол-во сообщений за стрим: %d • топ-%d чаттер",
-		username, s.stats.CountMessages[username], position,
+		username, s.stats.CountOnlineMessages[username], position,
 	)
 
 	if s.stats.CountBans[username] > 0 || s.stats.CountTimeouts[username] > 0 || s.stats.CountDeletes[username] > 0 {
@@ -338,7 +355,7 @@ func (s *Stats) GetTopStats(count int) *ports.AnswerType {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	if s.stats.StartStreamTime.IsZero() || len(s.stats.CountMessages) == 0 {
+	if s.stats.StartStreamTime.IsZero() || len(s.stats.CountOnlineMessages) == 0 {
 		return &ports.AnswerType{Text: []string{"нет данных за последний стрим!"}, IsReply: false}
 	}
 
@@ -352,8 +369,8 @@ func (s *Stats) GetTopStats(count int) *ports.AnswerType {
 	pairs := make([]struct {
 		Key string
 		Val int
-	}, 0, len(s.stats.CountMessages))
-	for k, v := range s.stats.CountMessages {
+	}, 0, len(s.stats.CountOnlineMessages))
+	for k, v := range s.stats.CountOnlineMessages {
 		pairs = append(pairs, struct {
 			Key string
 			Val int
@@ -391,7 +408,7 @@ func (s *Stats) GetTopStats(count int) *ports.AnswerType {
 
 func (s *Stats) aggregateStats() (countMessages, countDeletes, countTimeouts, countBans int, combined map[string]int) {
 	combined = make(map[string]int)
-	for _, v := range s.stats.CountMessages {
+	for _, v := range s.stats.CountOnlineMessages {
 		countMessages += v
 	}
 	for k, v := range s.stats.CountDeletes {
@@ -444,8 +461,8 @@ func topN(m map[string]int, n int) string {
 		return "не найдены"
 	}
 
-	var parts []string
-	for i := 0; i < top; i++ {
+	parts := make([]string, 0, top)
+	for i := range top {
 		parts = append(parts, fmt.Sprintf("%s (%d)", list[i].key, list[i].value))
 	}
 	return strings.Join(parts, ", ")
@@ -464,7 +481,8 @@ func (s *Stats) getStatsCopy() SessionStats {
 	}
 
 	statsCopy := s.stats
-	statsCopy.CountMessages = copyMap(s.stats.CountMessages)
+	statsCopy.CountOnlineMessages = copyMap(s.stats.CountOnlineMessages)
+	statsCopy.CountOfflineMessages = copyMap(s.stats.CountOfflineMessages)
 	statsCopy.CountDeletes = copyMap(s.stats.CountDeletes)
 	statsCopy.CountTimeouts = copyMap(s.stats.CountTimeouts)
 	statsCopy.CountWarns = copyMap(s.stats.CountWarns)

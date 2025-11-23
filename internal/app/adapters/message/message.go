@@ -52,12 +52,12 @@ func New(log logger.Logger, manager *config.Manager, stream ports.StreamPort, ap
 			template.WithBanwords(cfg.Banwords),
 			template.WithMword(cfg.Channels[stream.ChannelName()].Mword, cfg.Channels[stream.ChannelName()].MwordGroup),
 		),
-		messages: storage.NewV2[storage.Message](
+		messages: storage.New[storage.Message](
 			storage.WithSubCapacity[storage.Message](50),
 			storage.WithMode[storage.Message](storage.ExpireAfterAccess),
 			storage.WithSubTTL[storage.Message](5*time.Minute),
 		),
-		timeouts: storage.NewV2[int](
+		timeouts: storage.New[int](
 			storage.WithSubCapacity[int](15),
 		),
 	}
@@ -81,7 +81,7 @@ func (m *Message) Check(msg *message.ChatMessage) {
 		Data:           msg,
 		Time:           time.Now(),
 		IgnoreAntispam: !m.cfg.Channels[m.stream.ChannelName()].Enabled || !m.template.SpamPause().CanProcess() || !m.cfg.Channels[m.stream.ChannelName()].Spam.SettingsDefault.Enabled,
-	})
+	}, nil)
 	endModuleProcessing := time.Since(startModuleProcessing).Seconds()
 	metrics.ModulesProcessingTime.With(prometheus.Labels{"module": "push_message"}).Observe(endModuleProcessing)
 	m.log.Trace("Message pushed to storage", slog.String("username", msg.Chatter.Username), slog.String("message_id", msg.Message.ID))

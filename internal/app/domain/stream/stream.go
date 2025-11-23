@@ -40,6 +40,7 @@ func (s *Stream) IsLive() bool {
 
 func (s *Stream) SetIslive(v bool) {
 	s.isLive.Store(v)
+	s.Stats().SetIsOnline(v)
 	metrics.StreamActive.With(prometheus.Labels{"channel": s.channelName}).Set(map[bool]float64{true: 1, false: 0}[v])
 }
 

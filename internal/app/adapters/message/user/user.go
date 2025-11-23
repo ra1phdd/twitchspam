@@ -178,10 +178,12 @@ func (u *User) handleGame(msg *message.ChatMessage) *ports.AnswerType {
 		if username != "" {
 			u.log.Debug("Detected reply username from @ mention", slog.String("reply_username", replyUsername))
 			replyUsername = username
+			break
 		}
 	}
 
-	return &ports.AnswerType{Text: []string{fmt.Sprintf("игра - %s!", u.stream.Category())}, IsReply: true, ReplyUsername: replyUsername}
+	noReply := replyUsername == "" && (msg.Chatter.IsBroadcaster || msg.Chatter.IsMod || u.trusts.HasScope(msg.Chatter.UserID, trusts.ScopeModActions))
+	return &ports.AnswerType{Text: []string{fmt.Sprintf("игра - %s", u.stream.Category())}, IsReply: !noReply, ReplyUsername: replyUsername}
 }
 
 func (u *User) handleCommands(msg *message.ChatMessage) *ports.AnswerType {
@@ -354,12 +356,14 @@ func (u *User) allowCommand(command string, limiter *config.Limiter) bool {
 }
 
 func extractUsername(word string) string {
-	word = strings.TrimPrefix(word, "@")
-
-	if i := strings.IndexAny(word, " ,"); i != -1 {
-		word = word[:i]
-	} else if !strings.HasPrefix(word, "@") {
+	if !strings.HasPrefix(word, "@") {
 		return ""
 	}
+
+	word = word[1:]
+	if i := strings.IndexAny(word, " ,"); i != -1 {
+		word = word[:i]
+	}
+
 	return word
 }

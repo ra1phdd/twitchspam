@@ -243,7 +243,6 @@ func (c *CompositeCommand) Execute(cfg *config.Config, channel string, msg *mess
 }
 
 func (a *Admin) buildCommandTree() ports.Command {
-
 	return &CompositeCommand{
 		subcommands: map[string]ports.Command{
 			"auth": &Auth{log: a.log, stream: a.stream, api: a.api},

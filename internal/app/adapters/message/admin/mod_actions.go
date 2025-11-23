@@ -131,7 +131,10 @@ func (t *TimeoutUser) Execute(_ *config.Config, _ string, msg *message.ChatMessa
 	}
 	t.log.Info("Timeout command received", slog.String("username", username), slog.Int("duration", duration), slog.String("reason", reason))
 
-	t.api.TimeoutUser(t.stream.ChannelName(), t.stream.ChannelID(), ids[strings.ToLower(username)], duration, reason)
+	err = t.api.TimeoutUser(t.stream.ChannelName(), t.stream.ChannelID(), ids[strings.ToLower(username)], duration, reason)
+	if err != nil {
+		return unknownError
+	}
 	return &ports.AnswerType{Text: []string{fmt.Sprintf("пользователь %s отправлен в таймаут на %d сек!", username, duration)}, IsReply: true}
 }
 

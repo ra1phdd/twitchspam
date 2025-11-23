@@ -16,7 +16,6 @@ import (
 	"twitchspam/internal/app/adapters/platform/twitch/api"
 	"twitchspam/internal/app/domain"
 	"twitchspam/internal/app/domain/message"
-	"twitchspam/internal/app/domain/template"
 	"twitchspam/internal/app/infrastructure/config"
 	"twitchspam/internal/app/infrastructure/storage"
 	"twitchspam/internal/app/ports"
@@ -219,10 +218,7 @@ func (c *SetCategory) Execute(_ *config.Config, _ string, msg *message.ChatMessa
 
 	match := strings.TrimSpace(matches[1])
 	if match == "" {
-		if _, ok := template.NonGameCategories[c.stream.Category()]; ok {
-			return nil
-		}
-		return &ports.AnswerType{Text: []string{fmt.Sprintf("игра - %s!", c.stream.Category())}, IsReply: true}
+		return nil
 	}
 
 	if match == "-" {

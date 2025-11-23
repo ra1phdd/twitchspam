@@ -6,6 +6,7 @@ import (
 )
 
 func TestParsePunishment(t *testing.T) {
+	t.Parallel()
 	p := template.NewPunishment()
 
 	tests := []struct {
@@ -52,8 +53,9 @@ func TestParsePunishment(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := p.Parse(tt.input, tt.inherit)
+			t.Parallel()
 
+			got, err := p.Parse(tt.input, tt.inherit)
 			if tt.wantErr {
 				if err == nil {
 					t.Fatalf("ожидалась ошибка, но её нет")

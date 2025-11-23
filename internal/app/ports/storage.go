@@ -4,21 +4,9 @@ import (
 	"time"
 )
 
-type PushOption func(*PushConfig)
-
-type PushConfig struct {
-	Ttl *time.Duration
-}
-
-func WithTTL(ttl time.Duration) PushOption {
-	return func(pc *PushConfig) {
-		pc.Ttl = &ttl
-	}
-}
-
 type StorePort[T any] interface {
-	Push(key string, subKey string, val T, options ...PushOption)
-	Update(key string, subKey string, updateFn func(current T, exists bool) T)
+	Push(key string, subKey string, val T, ttl *time.Duration)
+	Update(key string, subKey string, updateFn func(current *T, exists bool) *T)
 	GetAllData() map[string]map[string]T
 	GetAll(key string) map[string]T
 	Get(key string, subKey string) (T, bool)

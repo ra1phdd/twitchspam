@@ -111,10 +111,10 @@ type AutomodHoldEvent struct {
 	Message              struct {
 		Text      string `json:"text"`
 		Fragments []struct {
-			Type string `json:"type"`
-			Text string `json:"text"`
-			//Cheermote *string `json:"cheermote"`
-			Emote *struct {
+			Type      string  `json:"type"`
+			Text      string  `json:"text"`
+			Cheermote *string `json:"cheermote"`
+			Emote     *struct {
 				ID         string   `json:"id"`
 				EmoteSetID string   `json:"emote_set_id"`
 				OwnerID    string   `json:"owner_id"`
